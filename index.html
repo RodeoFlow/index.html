@@ -1831,13 +1831,129 @@
     <!-- ═══ NUTRICIÓN ═══ -->
     <div id="page-nutricion" class="page">
       <div class="page-header"><div class="page-title">🌾 Nutrición</div></div>
-      <div class="toolbar">
-        <div class="toolbar-right">
-          <button class="btn-primary" onclick="openModal('modal-nutricion')">＋ Plan nutricional</button>
+
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('nutricion','nutri-plan')">Plan nutricional</div>
+        <div class="tab" onclick="switchTab('nutricion','nutri-formulacion')">⚗️ Formulación de ración</div>
+      </div>
+
+      <!-- Plan nutricional (registro) -->
+      <div class="tab-content active">
+        <div class="toolbar">
+          <div class="toolbar-right">
+            <button class="btn-primary" onclick="openModal('modal-nutricion')">＋ Plan nutricional</button>
+          </div>
+        </div>
+        <div class="tbl-wrap"><table><thead><tr><th>Lote</th><th>RP</th><th>Categoría</th><th>Forraje</th><th>Suplemento kg</th><th>GDP g/d</th><th>Inicio</th><th>Observaciones</th><th>Acciones</th></tr></thead>
+        <tbody id="nutricion-tbody"></tbody></table></div>
+      </div>
+
+      <!-- Formulación de ración (optimizador) -->
+      <div class="tab-content">
+        <div class="card" style="margin-bottom:12px">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Categoría</label>
+              <select id="form-rac-categoria" onchange="actualizarRequerimientosUI()">
+                <option value="recria">Recría (200-300kg)</option>
+                <option value="engorde">Engorde (300-400kg)</option>
+                <option value="terminacion">Terminación (400-500kg)</option>
+                <option value="destete_precoz">Destete precoz (&lt;150kg)</option>
+                <option value="vaca_manten">Vaca de cría (mantenimiento)</option>
+                <option value="vaca_prena_temprana">Vaca preñada (1er-2do tercio)</option>
+                <option value="vaca_prena_tardia">Vaca preñada (último tercio)</option>
+                <option value="vaca_lactando">Vaca de cría + ternero al pie</option>
+                <option value="toro">Toro (servicio)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Peso vivo (kg)</label>
+              <input type="number" id="form-rac-peso" value="350" oninput="actualizarConsumoMS(); actualizarRequerimientosUI()">
+            </div>
+            <div class="form-group">
+              <label>Consumo MS estimado (kg/día)</label>
+              <input type="number" id="form-rac-consumo" value="7.7" step="0.1">
+            </div>
+            <div class="form-group">
+              <label>Cabezas del lote</label>
+              <input type="number" id="form-rac-cabezas" value="1" min="1" step="1">
+            </div>
+          </div>
+
+          <div class="form-grid" style="margin-top:8px">
+            <div class="form-group">
+              <label>Categoría de animales (RodeoFlow)</label>
+              <select id="form-rac-categoria-rodeo"></select>
+            </div>
+            <div class="form-group" style="align-self:flex-end">
+              <button class="btn-secondary" onclick="traerDatosRodeo()">📥 Traer peso y cabezas reales del rodeo</button>
+            </div>
+          </div>
+
+          <div class="form-grid" style="margin-top:8px">
+            <div class="form-group">
+              <label>GDP objetivo: <span id="form-rac-gdp-valor">1.0</span> kg/día</label>
+              <input type="range" id="form-rac-gdp" min="0" max="1.8" value="1.0" step="0.05"
+                oninput="document.getElementById('form-rac-gdp-valor').textContent=this.value; actualizarRequerimientosUI()">
+            </div>
+            <div class="form-group">
+              <label>Condición climática</label>
+              <select id="form-rac-clima" onchange="actualizarRequerimientosUI()">
+                <option value="normal">Normal</option>
+                <option value="frio">Frío extremo / barro</option>
+                <option value="calor">Estrés calórico</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Precio venta $/kg (opcional)</label>
+              <input type="number" id="form-rac-preciov" value="" step="1">
+            </div>
+          </div>
+
+          <div class="form-grid" style="margin-top:8px">
+            <div class="form-group">
+              <label>Mín. % forraje voluminoso (sobre MS)</label>
+              <input type="number" id="form-rac-minforraje" value="30" step="1">
+            </div>
+            <div class="form-group">
+              <label>Máx. FDN de la dieta % (opcional)</label>
+              <input type="number" id="form-rac-fdnmax" value="" step="1">
+            </div>
+            <div class="form-group">
+              <label>Relación Ca:P mín — máx</label>
+              <div style="display:flex;gap:6px">
+                <input type="number" id="form-rac-caprmin" value="1.5" step="0.1" style="width:70px">
+                <input type="number" id="form-rac-caprmax" value="2.0" step="0.1" style="width:70px">
+              </div>
+            </div>
+          </div>
+
+          <div id="rac-requerimientos" style="font-size:13px;color:#555;margin-top:6px"></div>
+          <div id="rac-verificacion" style="font-size:13px;margin-top:6px"></div>
+        </div>
+
+        <div class="toolbar">
+          <div class="toolbar-right">
+            <button class="btn-secondary" onclick="abrirModalIngredienteCustom()">＋ Ingrediente propio</button>
+            <button class="btn-primary" onclick="optimizarRacion()">⚙️ Optimizar ración</button>
+          </div>
+        </div>
+
+        <div class="tbl-wrap"><table><thead><tr>
+          <th>Incluir</th><th>Ingrediente</th><th>Tipo</th><th>%MS</th><th>PB%</th><th>EM Mcal/kgMS</th><th>FDN%</th><th>Ca%</th><th>P%</th><th>Mg%</th><th>K%</th><th>S%</th><th>Na%</th><th>Costo $/kg tal cual</th><th>Máx % inclusión (MS)</th><th></th>
+        </tr></thead>
+        <tbody id="ingredientes-tbody"></tbody></table></div>
+
+        <div id="rac-resultado" style="margin-top:16px"></div>
+
+        <div class="card" style="margin-top:20px">
+          <h3 style="margin-top:0">📊 Raciones guardadas (comparador)</h3>
+          <div class="tbl-wrap"><table><thead><tr>
+            <th>Fecha</th><th>Categoría</th><th>Costo/cab/día</th><th>PB%</th><th>EM</th><th>Activa p/categoría</th><th></th>
+          </tr></thead>
+          <tbody id="historial-raciones-tbody"></tbody></table></div>
         </div>
       </div>
-      <div class="tbl-wrap"><table><thead><tr><th>Lote</th><th>RP</th><th>Categoría</th><th>Forraje</th><th>Suplemento kg</th><th>GDP g/d</th><th>Inicio</th><th>Observaciones</th><th>Acciones</th></tr></thead>
-      <tbody id="nutricion-tbody"></tbody></table></div>
     </div>
 
     <!-- ═══ MOVIMIENTOS ═══ -->
@@ -3343,6 +3459,7 @@ window.DB = {
   traslados:[], muertes:[], historial:[], precios:{},
   transportistas:[], viajes:[], clientes:[], diario:[],
   insumos:[], insumoLotes:[],
+  formulacionRacion: { ingredientesCustom:[], historial:[], historialPrecios:{}, activaPorCategoria:{} },
   saldosPotreros:{},
   aguadas:[], precipitaciones:[],
   raspajes:[], sangrados:[],
@@ -3956,7 +4073,7 @@ function showPage(id) {
   if(id === 'reproduccion') { renderNacimientos(); renderPrenadas(); renderDestetes(); renderAbortos(); renderRecats(); renderRecria(); renderCalendarioReproductivoPotreroSelect(); renderCalendarioReproductivo(); }
   if(id === 'sanidad') { renderVacunas(); renderTratamientos(); renderEnfermedades(); renderRaspaje(); renderSangrado(); }
   if(id === 'tratamientos') { renderTratamientos(); renderEnfermedades(); }
-  if(id === 'nutricion') renderNutricion();
+  if(id === 'nutricion') { renderNutricion(); renderIngredientesTabla(); actualizarRequerimientosUI(); poblarCategoriasRodeo(); renderHistorialRaciones(); }
   if(id === 'movimientos') { renderCompras(); renderVentas(); renderTraslados(); }
   if(id === 'reportes') renderResumen();
   if(id === 'mortalidad') renderMuertes();
@@ -7971,6 +8088,482 @@ function renderNutricion(){
   tbody.innerHTML=DB.nutricion.map(n=>`<tr><td>${n.lote||'--'}</td><td class="td-mono">${n.rp||'--'}</td><td>${n.cat}</td><td>${n.foraje||'--'}</td><td class="td-mono">${n.suple||'--'} kg</td><td class="td-mono">${n.gdp||'--'} g/d</td><td class="td-mono">${n.inicio||'--'}</td><td>${n.obs||'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaNutricion(${n.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
 }
 
+// ═══ FORMULACIÓN DE RACIÓN (optimización por programación lineal) ═══
+
+const INGREDIENTES_BASE = [
+  // id, nombre, tipo, MS%, PB%, EM Mcal/kgMS, FDN%, Ca%, P%, Mg%, K%, S%, Na%, costo$/kg tal cual, maxIncl% (sobre MS de la dieta)
+  {id:'maiz',        nombre:'Maíz grano molido',        tipo:'concentrado', ms:88, pb:9,   em:3.3, fdn:9,  ca:0.02, p:0.28, mg:0.12, k:0.35, s:0.12, na:0.02, costo:250, maxIncl:70},
+  {id:'sorgo',       nombre:'Sorgo grano molido',        tipo:'concentrado', ms:88, pb:10,  em:3.1, fdn:11, ca:0.03, p:0.30, mg:0.15, k:0.35, s:0.12, na:0.02, costo:220, maxIncl:60},
+  {id:'maizhum',     nombre:'Grano húmedo de maíz',      tipo:'concentrado', ms:65, pb:9,   em:3.4, fdn:8,  ca:0.02, p:0.27, mg:0.11, k:0.33, s:0.11, na:0.02, costo:200, maxIncl:60},
+  {id:'cebada',      nombre:'Cebada grano',              tipo:'concentrado', ms:88, pb:11.5,em:2.9, fdn:15, ca:0.05, p:0.35, mg:0.14, k:0.55, s:0.15, na:0.02, costo:230, maxIncl:60},
+  {id:'avena',       nombre:'Grano de avena',            tipo:'concentrado', ms:88, pb:12,  em:2.7, fdn:25, ca:0.08, p:0.35, mg:0.15, k:0.45, s:0.20, na:0.02, costo:200, maxIncl:50},
+  {id:'silomaiz',    nombre:'Silaje de maíz',            tipo:'forraje',     ms:33, pb:8,   em:2.6, fdn:45, ca:0.25, p:0.22, mg:0.20, k:1.00, s:0.13, na:0.02, costo:45,  maxIncl:70},
+  {id:'silosorgo',   nombre:'Silaje de sorgo',           tipo:'forraje',     ms:30, pb:7,   em:2.3, fdn:55, ca:0.30, p:0.20, mg:0.22, k:1.30, s:0.14, na:0.02, costo:40,  maxIncl:70},
+  {id:'henoalfalfa', nombre:'Heno de alfalfa',           tipo:'forraje',     ms:88, pb:18,  em:2.2, fdn:45, ca:1.40, p:0.25, mg:0.30, k:2.20, s:0.25, na:0.08, costo:90,  maxIncl:40},
+  {id:'henopast',    nombre:'Heno de pastura',           tipo:'forraje',     ms:87, pb:9,   em:1.9, fdn:60, ca:0.40, p:0.20, mg:0.20, k:1.50, s:0.15, na:0.05, costo:60,  maxIncl:40},
+  {id:'rollopast',   nombre:'Rollo de pastura',          tipo:'forraje',     ms:85, pb:8,   em:1.8, fdn:62, ca:0.40, p:0.18, mg:0.20, k:1.40, s:0.15, na:0.04, costo:35,  maxIncl:40},
+  {id:'pastverde',   nombre:'Pastura verde (base)',      tipo:'forraje',     ms:22, pb:20,  em:2.5, fdn:40, ca:0.60, p:0.35, mg:0.25, k:2.50, s:0.25, na:0.05, costo:15,  maxIncl:100},
+  {id:'expgirasol',  nombre:'Expeller de girasol',       tipo:'concentrado', ms:90, pb:32,  em:2.4, fdn:35, ca:0.40, p:0.90, mg:0.65, k:1.10, s:0.35, na:0.03, costo:180, maxIncl:20},
+  {id:'expsoja',     nombre:'Expeller / harina de soja', tipo:'concentrado', ms:90, pb:44,  em:2.9, fdn:14, ca:0.30, p:0.65, mg:0.30, k:2.00, s:0.40, na:0.02, costo:350, maxIncl:20},
+  {id:'pelletgir',   nombre:'Pellet de girasol',         tipo:'concentrado', ms:90, pb:28,  em:2.2, fdn:30, ca:0.35, p:0.90, mg:0.60, k:1.10, s:0.35, na:0.03, costo:170, maxIncl:20},
+  {id:'afrechillo',  nombre:'Afrechillo de trigo',       tipo:'concentrado', ms:89, pb:16,  em:2.2, fdn:40, ca:0.13, p:1.00, mg:0.50, k:1.20, s:0.20, na:0.02, costo:140, maxIncl:25},
+  {id:'cascsoja',    nombre:'Cascarilla de soja',        tipo:'forraje',     ms:90, pb:12,  em:2.0, fdn:65, ca:0.50, p:0.15, mg:0.25, k:1.30, s:0.12, na:0.02, costo:90,  maxIncl:20},
+  {id:'wdgs',        nombre:'Burlanda húmeda (WDGS)',    tipo:'concentrado', ms:32, pb:28,  em:3.1, fdn:35, ca:0.05, p:0.75, mg:0.30, k:0.90, s:0.55, na:0.15, costo:60,  maxIncl:30},
+  {id:'ddgs',        nombre:'Burlanda seca (DDGS)',      tipo:'concentrado', ms:88, pb:28,  em:2.9, fdn:33, ca:0.06, p:0.75, mg:0.30, k:0.90, s:0.55, na:0.15, costo:150, maxIncl:30},
+  {id:'melaza',      nombre:'Melaza',                    tipo:'concentrado', ms:75, pb:5,   em:3.0, fdn:0,  ca:0.90, p:0.08, mg:0.35, k:3.00, s:0.40, na:0.10, costo:130, maxIncl:8},
+  {id:'urea',        nombre:'Urea (NNP)',                tipo:'mineral',     ms:99, pb:281, em:0,   fdn:0,  ca:0,    p:0,    mg:0,    k:0,    s:0,    na:0,    costo:400, maxIncl:1},
+  {id:'nucleo',      nombre:'Núcleo vitamínico-mineral', tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:12,   p:8,    mg:8,    k:2,    s:2,    na:5,    costo:500, maxIncl:3},
+  {id:'sal',         nombre:'Sal común',                 tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:0,    p:0,    mg:0,    k:0,    s:0,    na:39,   costo:80,  maxIncl:0.5},
+  {id:'carbcalcio',  nombre:'Carbonato de calcio',       tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:38,   p:0,    mg:2,    k:0,    s:0,    na:0,    costo:90,  maxIncl:1.5},
+  {id:'fosfbical',   nombre:'Fosfato bicálcico',         tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:23,   p:18,   mg:0.5,  k:0,    s:0,    na:0,    costo:600, maxIncl:1}
+];
+
+// Requerimientos base por categoría, definidos a un peso y GDP de referencia (refPeso/refGDP).
+// calcularRequerimientosDinamicos() los ajusta según el peso real y la GDP objetivo cargados.
+// Valores orientativos (aproximación práctica tipo NRC) — ajustables por el usuario en el resultado.
+const REQUERIMIENTOS_CATEGORIA = {
+  recria:               {nombre:'Recría',                            refPeso:250, refGDP:0.6, pb:13,   em:2.4, ca:0.35, p:0.22, fdn:20, mg:0.10, k:0.65, s:0.15, na:0.06},
+  engorde:              {nombre:'Engorde',                            refPeso:350, refGDP:1.0, pb:12,   em:2.7, ca:0.35, p:0.22, fdn:18, mg:0.10, k:0.60, s:0.15, na:0.06},
+  terminacion:          {nombre:'Terminación',                        refPeso:450, refGDP:1.3, pb:11.5, em:2.9, ca:0.30, p:0.20, fdn:15, mg:0.10, k:0.55, s:0.15, na:0.06},
+  destete_precoz:       {nombre:'Destete precoz (<150kg)',            refPeso:120, refGDP:0.7, pb:16,   em:2.8, ca:0.60, p:0.35, fdn:14, mg:0.12, k:0.70, s:0.18, na:0.08},
+  vaca_manten:          {nombre:'Vaca de cría (mantenimiento)',       refPeso:450, refGDP:0.0, pb:8,    em:2.0, ca:0.20, p:0.15, fdn:25, mg:0.10, k:0.60, s:0.12, na:0.06},
+  vaca_prena_temprana:  {nombre:'Vaca preñada (1er-2do tercio)',      refPeso:450, refGDP:0.1, pb:9,    em:2.1, ca:0.25, p:0.17, fdn:24, mg:0.10, k:0.60, s:0.13, na:0.06},
+  vaca_prena_tardia:    {nombre:'Vaca preñada (último tercio)',       refPeso:470, refGDP:0.2, pb:10,   em:2.3, ca:0.40, p:0.22, fdn:22, mg:0.12, k:0.65, s:0.15, na:0.07},
+  vaca_lactando:        {nombre:'Vaca de cría + ternero al pie',      refPeso:450, refGDP:0.3, pb:11,   em:2.3, ca:0.40, p:0.25, fdn:22, mg:0.12, k:0.70, s:0.16, na:0.08},
+  toro:                 {nombre:'Toro (servicio)',                    refPeso:600, refGDP:0.0, pb:9,    em:2.1, ca:0.25, p:0.18, fdn:22, mg:0.10, k:0.60, s:0.14, na:0.06}
+};
+
+// Ajusta el requerimiento base según peso real, GDP objetivo y condición climática.
+// Aproximación práctica (no una ecuación NRC exacta): a mayor GDP objetivo sube la exigencia
+// de energía y proteína; el frío extremo/barro y el estrés calórico suben el requerimiento de energía.
+function calcularRequerimientosDinamicos(cat, peso, gdp, clima){
+  const base = REQUERIMIENTOS_CATEGORIA[cat];
+  if(!base) return null;
+  const dGDP = gdp - base.refGDP;
+  const dPeso = peso - base.refPeso;
+  const climaFactor = clima==='frio' ? 1.12 : clima==='calor' ? 1.05 : 1.0;
+  const em = Math.max(1.6, (base.em + 0.9*dGDP + 0.0015*dPeso) * climaFactor);
+  const pb = Math.max(6, base.pb + 3.0*dGDP);
+  const ca = Math.max(0.15, base.ca + 0.05*dGDP);
+  const p  = Math.max(0.12, base.p + 0.03*dGDP);
+  return {nombre:base.nombre, pb, em, ca, p, fdn:base.fdn, mg:base.mg, k:base.k, s:base.s, na:base.na};
+}
+
+function ingredientesFormulacion(){
+  const custom = (DB.formulacionRacion && DB.formulacionRacion.ingredientesCustom) || [];
+  return [...INGREDIENTES_BASE, ...custom];
+}
+
+function actualizarConsumoMS(){
+  const peso = parseFloat(document.getElementById('form-rac-peso')?.value)||0;
+  const campo = document.getElementById('form-rac-consumo');
+  if(campo) campo.value = (peso*0.022).toFixed(1); // ~2.2% del peso vivo como estimación de consumo de MS
+}
+
+function actualizarRequerimientosUI(){
+  const cat = document.getElementById('form-rac-categoria')?.value;
+  const peso = parseFloat(document.getElementById('form-rac-peso')?.value)||0;
+  const gdp = parseFloat(document.getElementById('form-rac-gdp')?.value)||0;
+  const clima = document.getElementById('form-rac-clima')?.value||'normal';
+  const req = calcularRequerimientosDinamicos(cat, peso, gdp, clima);
+  const div = document.getElementById('rac-requerimientos');
+  if(!req || !div) return;
+  div.innerHTML = `Requerimiento mínimo estimado (base MS, para ${peso}kg y GDP ${gdp}kg/día${clima!=='normal'?', '+(clima==='frio'?'ajustado por frío/barro':'ajustado por estrés calórico'):''}):<br>
+  PB ≥ ${req.pb.toFixed(1)}% · EM ≥ ${req.em.toFixed(2)} Mcal/kgMS · Ca ≥ ${req.ca.toFixed(2)}% · P ≥ ${req.p.toFixed(2)}% · FDN ≥ ${req.fdn}% ·
+  Mg ≥ ${req.mg}% · K ≥ ${req.k}% · S ≥ ${req.s}% · Na ≥ ${req.na}%.<br>
+  <span style="color:#888">Valores orientativos (aproximación práctica, no reemplaza una fórmula NRC completa): ajustá costos e inclusiones según tu zona.</span>`;
+}
+
+function renderIngredientesTabla(){
+  const tbody = document.getElementById('ingredientes-tbody');
+  if(!tbody) return;
+  const lista = ingredientesFormulacion();
+  const etiquetaTipo = {forraje:'🌿 Forraje', concentrado:'🌽 Concentrado', mineral:'🧂 Mineral'};
+  tbody.innerHTML = lista.map(ing => `<tr data-ing="${ing.id}" data-tipo="${ing.tipo}">
+    <td><input type="checkbox" class="ing-incluir" checked></td>
+    <td>${ing.nombre}${ing.custom?' <span class="badge" style="font-size:10px">propio</span>':''}</td>
+    <td style="font-size:12px;white-space:nowrap">${etiquetaTipo[ing.tipo]||ing.tipo}</td>
+    <td class="td-mono">${ing.ms}</td>
+    <td class="td-mono">${ing.pb}</td>
+    <td class="td-mono">${ing.em}</td>
+    <td class="td-mono">${ing.fdn}</td>
+    <td class="td-mono">${ing.ca}</td>
+    <td class="td-mono">${ing.p}</td>
+    <td class="td-mono">${ing.mg}</td>
+    <td class="td-mono">${ing.k}</td>
+    <td class="td-mono">${ing.s}</td>
+    <td class="td-mono">${ing.na}</td>
+    <td><input type="number" class="ing-costo" value="${ing.costo}" style="width:80px" step="1"></td>
+    <td><input type="number" class="ing-maxincl" value="${ing.maxIncl}" style="width:70px" step="1"></td>
+    <td>${ing.custom?`<button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarIngredienteCustom('${ing.id}')">🗑</button>`:''}</td>
+  </tr>`).join('');
+}
+
+function abrirModalIngredienteCustom(){
+  const nombre = prompt('Nombre del ingrediente:');
+  if(!nombre) return;
+  const tipo = (prompt('Tipo: escribí "forraje", "concentrado" o "mineral":', 'concentrado')||'concentrado').toLowerCase().trim();
+  const tipoValido = ['forraje','concentrado','mineral'].includes(tipo) ? tipo : 'concentrado';
+  const num = (msg, def) => { const v = prompt(msg, def); return v===null? null : parseFloat(v)||0; };
+  const ms = num('% Materia seca (MS):', '90'); if(ms===null) return;
+  const pb = num('% Proteína bruta (base MS):', '10'); if(pb===null) return;
+  const em = num('Energía metabolizable (Mcal/kg MS):', '2.5'); if(em===null) return;
+  const fdn = num('% FDN (fibra, base MS):', '20'); if(fdn===null) return;
+  const ca = num('% Calcio (base MS):', '0.3'); if(ca===null) return;
+  const p = num('% Fósforo (base MS):', '0.2'); if(p===null) return;
+  const mg = num('% Magnesio (base MS):', '0.15'); if(mg===null) return;
+  const k = num('% Potasio (base MS):', '0.8'); if(k===null) return;
+  const s = num('% Azufre (base MS):', '0.15'); if(s===null) return;
+  const na = num('% Sodio (base MS):', '0.05'); if(na===null) return;
+  const costo = num('Costo $/kg tal cual:', '100'); if(costo===null) return;
+  const maxIncl = num('Máx % inclusión sobre MS de la dieta:', '20'); if(maxIncl===null) return;
+  const id = 'custom_'+Date.now();
+  if(!DB.formulacionRacion) DB.formulacionRacion = {ingredientesCustom:[], historial:[], historialPrecios:{}, activaPorCategoria:{}};
+  DB.formulacionRacion.ingredientesCustom.push({id, nombre, tipo:tipoValido, ms, pb, em, fdn, ca, p, mg, k, s, na, costo, maxIncl, custom:true});
+  saveToStorage();
+  renderIngredientesTabla();
+  toast('Ingrediente propio agregado ✅');
+}
+
+function eliminarIngredienteCustom(id){
+  if(!DB.formulacionRacion) return;
+  DB.formulacionRacion.ingredientesCustom = DB.formulacionRacion.ingredientesCustom.filter(i=>i.id!==id);
+  saveToStorage();
+  renderIngredientesTabla();
+}
+
+function poblarCategoriasRodeo(){
+  const sel = document.getElementById('form-rac-categoria-rodeo');
+  if(!sel) return;
+  const cats = [...new Set(DB.animales.filter(a=>a.activo).map(a=>a.categoria).filter(Boolean))].sort();
+  sel.innerHTML = cats.length
+    ? cats.map(c=>`<option value="${c}">${c}</option>`).join('')
+    : `<option value="">Sin animales activos cargados</option>`;
+}
+
+function traerDatosRodeo(){
+  const cat = document.getElementById('form-rac-categoria-rodeo')?.value;
+  if(!cat){ toast('No hay categorías de animales cargadas en el rodeo','err'); return; }
+  const animales = DB.animales.filter(a=>a.activo && a.categoria===cat && a.peso>0);
+  if(!animales.length){ toast('Sin pesadas registradas para esa categoría','err'); return; }
+  const pesoProm = animales.reduce((s,a)=>s+a.peso,0)/animales.length;
+  document.getElementById('form-rac-peso').value = pesoProm.toFixed(0);
+  document.getElementById('form-rac-cabezas').value = animales.length;
+  actualizarConsumoMS();
+
+  // Verificación contra pesadas reales: GDP observado en los últimos 2 registros de cada animal
+  const rps = new Set(animales.map(a=>a.rp));
+  const gdps = [];
+  const rangosAtipicos = RANGOS_PESO_CATEGORIA[cat];
+  let fueraDeRango = 0;
+  animales.forEach(a=>{
+    if(rangosAtipicos && (a.peso<rangosAtipicos[0]*0.85 || a.peso>rangosAtipicos[1]*1.15)) fueraDeRango++;
+    const historial = DB.pesadas.filter(p=>p.rp===a.rp).sort((x,y)=>new Date(x.fecha)-new Date(y.fecha));
+    if(historial.length>=2){
+      const primero = historial[0], ultimo = historial[historial.length-1];
+      const dias = (new Date(ultimo.fecha)-new Date(primero.fecha))/86400000;
+      if(dias>=7){
+        const gdp = (ultimo.peso-primero.peso)/dias;
+        if(isFinite(gdp)) gdps.push(gdp);
+      }
+    }
+  });
+
+  const divVer = document.getElementById('rac-verificacion');
+  if(!divVer){ actualizarRequerimientosUI(); return; }
+  if(gdps.length){
+    const gdpRealProm = gdps.reduce((s,v)=>s+v,0)/gdps.length;
+    const gdpObjetivo = parseFloat(document.getElementById('form-rac-gdp')?.value)||0;
+    const diff = gdpObjetivo>0 ? ((gdpRealProm-gdpObjetivo)/gdpObjetivo*100) : null;
+    const alerta = diff!==null && Math.abs(diff)>20;
+    divVer.innerHTML = `<div style="background:${alerta?'#fff3cd':'#eef7ee'};border-left:4px solid ${alerta?'#f0ad4e':'#5cb85c'};padding:8px 12px">
+      📈 GDP real observado (últimas pesadas, ${gdps.length} animales con historial): <b>${gdpRealProm.toFixed(2)} kg/día</b>
+      ${diff!==null?` — ${diff>=0?'+':''}${diff.toFixed(0)}% vs. objetivo cargado (${gdpObjetivo} kg/día)`:''}
+      ${alerta?'<br>⚠️ La ganancia real difiere bastante del objetivo — revisá la ración vigente o el objetivo cargado.':''}
+      ${fueraDeRango>0?`<br>⚠️ ${fueraDeRango} animal(es) con peso fuera del rango esperado para "${cat}" — verificar categorización.`:''}
+    </div>`;
+  } else {
+    divVer.innerHTML = fueraDeRango>0
+      ? `<div style="background:#fff3cd;border-left:4px solid #f0ad4e;padding:8px 12px">⚠️ ${fueraDeRango} animal(es) con peso fuera del rango esperado para "${cat}".</div>`
+      : '';
+  }
+
+  actualizarRequerimientosUI();
+  toast(`Traído del rodeo: ${animales.length} cabezas, peso promedio ${pesoProm.toFixed(0)}kg ✅`);
+}
+
+// Simplex (método de la Gran M) genérico para minimizar costo sujeto a restricciones
+// de igualdad, >= y <=. Tamaño del problema (ingredientes + nutrientes) es chico,
+// así que un tableau denso alcanza sobradamente.
+function resolverLP(numVars, restricciones, costos){
+  const M = 1e6;
+  let numSlack=0, numArt=0;
+  restricciones.forEach(c=>{
+    if(c.rel==='<=') numSlack++;
+    else if(c.rel==='>='){ numSlack++; numArt++; }
+    else numArt++;
+  });
+  const totalVars = numVars + numSlack + numArt;
+  const numRows = restricciones.length;
+  let tableau = [], basis = [];
+  let slackIdx = numVars, artIdx = numVars + numSlack;
+
+  restricciones.forEach(c=>{
+    const row = new Array(totalVars+1).fill(0);
+    for(let j=0;j<numVars;j++) row[j] = c.coefs[j]||0;
+    if(c.rel==='<='){
+      row[slackIdx]=1; basis.push(slackIdx); slackIdx++;
+    } else if(c.rel==='>='){
+      row[slackIdx]=-1; slackIdx++;
+      row[artIdx]=1; basis.push(artIdx); artIdx++;
+    } else {
+      row[artIdx]=1; basis.push(artIdx); artIdx++;
+    }
+    row[totalVars]=c.rhs;
+    tableau.push(row);
+  });
+
+  const obj = new Array(totalVars+1).fill(0);
+  for(let j=0;j<numVars;j++) obj[j]=costos[j]||0;
+  for(let j=numVars+numSlack;j<totalVars;j++) obj[j]=M;
+  for(let i=0;i<numRows;i++){
+    const cb = obj[basis[i]];
+    if(cb){ for(let j=0;j<=totalVars;j++) obj[j]-= cb*tableau[i][j]; }
+  }
+
+  let iter=800;
+  while(iter-->0){
+    let pivotCol=-1, minVal=-1e-6;
+    for(let j=0;j<totalVars;j++){ if(obj[j]<minVal){ minVal=obj[j]; pivotCol=j; } }
+    if(pivotCol===-1) break;
+    let pivotRow=-1, minRatio=Infinity;
+    for(let i=0;i<numRows;i++){
+      if(tableau[i][pivotCol]>1e-8){
+        const ratio = tableau[i][totalVars]/tableau[i][pivotCol];
+        if(ratio<minRatio-1e-9){ minRatio=ratio; pivotRow=i; }
+      }
+    }
+    if(pivotRow===-1) return {factible:false, motivo:'no_acotado'};
+    const pv = tableau[pivotRow][pivotCol];
+    for(let j=0;j<=totalVars;j++) tableau[pivotRow][j]/=pv;
+    for(let i=0;i<numRows;i++){
+      if(i===pivotRow) continue;
+      const factor = tableau[i][pivotCol];
+      if(factor) for(let j=0;j<=totalVars;j++) tableau[i][j]-=factor*tableau[pivotRow][j];
+    }
+    const fo = obj[pivotCol];
+    if(fo) for(let j=0;j<=totalVars;j++) obj[j]-=fo*tableau[pivotRow][j];
+    basis[pivotRow]=pivotCol;
+  }
+
+  for(let i=0;i<numRows;i++){
+    if(basis[i]>=numVars+numSlack && tableau[i][totalVars]>1e-5) return {factible:false, motivo:'sin_solucion'};
+  }
+  const x = new Array(numVars).fill(0);
+  for(let i=0;i<numRows;i++){ if(basis[i]<numVars) x[basis[i]]=tableau[i][totalVars]; }
+  return {factible:true, x};
+}
+
+function optimizarRacion(){
+  const cat = document.getElementById('form-rac-categoria')?.value;
+  const peso = parseFloat(document.getElementById('form-rac-peso')?.value)||0;
+  const gdpObjetivo = parseFloat(document.getElementById('form-rac-gdp')?.value)||0;
+  const clima = document.getElementById('form-rac-clima')?.value||'normal';
+  const req = calcularRequerimientosDinamicos(cat, peso, gdpObjetivo, clima);
+  const consumoMS = parseFloat(document.getElementById('form-rac-consumo')?.value)||0;
+  const cabezas = parseInt(document.getElementById('form-rac-cabezas')?.value)||1;
+  const precioVenta = parseFloat(document.getElementById('form-rac-preciov')?.value)||0;
+  const minForraje = parseFloat(document.getElementById('form-rac-minforraje')?.value)||0;
+  const fdnMax = parseFloat(document.getElementById('form-rac-fdnmax')?.value)||0;
+  const capMin = parseFloat(document.getElementById('form-rac-caprmin')?.value)||0;
+  const capMax = parseFloat(document.getElementById('form-rac-caprmax')?.value)||0;
+  if(!req || consumoMS<=0){ toast('Completá categoría y consumo de MS','err'); return; }
+
+  const filas = [...document.querySelectorAll('#ingredientes-tbody tr')];
+  const todos = ingredientesFormulacion();
+  const activos = [];
+  filas.forEach(fila=>{
+    const id = fila.dataset.ing;
+    const incluir = fila.querySelector('.ing-incluir').checked;
+    if(!incluir) return;
+    const base = todos.find(i=>i.id===id);
+    if(!base) return;
+    const costo = parseFloat(fila.querySelector('.ing-costo').value)||0;
+    const maxIncl = parseFloat(fila.querySelector('.ing-maxincl').value)||0;
+    if(maxIncl<=0) return;
+    activos.push({...base, costo, maxIncl});
+  });
+
+  if(activos.length<2){ toast('Marcá al menos 2 ingredientes con inclusión > 0','err'); return; }
+
+  // Alertas de precio: comparar contra el último costo guardado para cada ingrediente
+  if(!DB.formulacionRacion) DB.formulacionRacion = {ingredientesCustom:[], historial:[], historialPrecios:{}, activaPorCategoria:{}};
+  if(!DB.formulacionRacion.historialPrecios) DB.formulacionRacion.historialPrecios = {};
+  const alertasPrecio = [];
+  activos.forEach(a=>{
+    const prev = DB.formulacionRacion.historialPrecios[a.id];
+    if(prev && prev.costo>0){
+      const variacion = ((a.costo - prev.costo)/prev.costo)*100;
+      if(Math.abs(variacion)>=15){
+        alertasPrecio.push(`${a.nombre}: ${variacion>0?'+':''}${variacion.toFixed(0)}% desde $${prev.costo} (${prev.fecha.split('T')[0]})`);
+      }
+    }
+  });
+
+  const n = activos.length;
+  const costosPorKgMS = activos.map(a => a.costo / (a.ms/100));
+  const restricciones = [];
+  // suma de fracciones = 1
+  restricciones.push({coefs: new Array(n).fill(1), rel:'=', rhs:1});
+  // límites máximos de inclusión por ingrediente
+  activos.forEach((a,j)=>{
+    const c = new Array(n).fill(0); c[j]=1;
+    restricciones.push({coefs:c, rel:'<=', rhs:a.maxIncl/100});
+  });
+  // nutrientes mínimos
+  ['pb','em','ca','p','fdn','mg','k','s','na'].forEach(nut=>{
+    const min = req[nut];
+    if(min>0){
+      restricciones.push({coefs: activos.map(a=>a[nut]), rel:'>=', rhs:min});
+    }
+  });
+  // mínimo % forraje voluminoso
+  if(minForraje>0){
+    restricciones.push({coefs: activos.map(a=>a.tipo==='forraje'?1:0), rel:'>=', rhs:minForraje/100});
+  }
+  // FDN máximo (opcional)
+  if(fdnMax>0){
+    restricciones.push({coefs: activos.map(a=>a.fdn), rel:'<=', rhs:fdnMax});
+  }
+  // relación Ca:P (Ca >= capMin*P  y  Ca <= capMax*P)
+  if(capMin>0){
+    restricciones.push({coefs: activos.map(a=>a.ca - capMin*a.p), rel:'>=', rhs:0});
+  }
+  if(capMax>0){
+    restricciones.push({coefs: activos.map(a=>a.ca - capMax*a.p), rel:'<=', rhs:0});
+  }
+
+  const sol = resolverLP(n, restricciones, costosPorKgMS);
+  const div = document.getElementById('rac-resultado');
+  if(!sol.factible){
+    div.innerHTML = `<div class="card" style="border-left:4px solid var(--red,#c00)">
+      ⚠️ No se encontró una combinación factible con las restricciones marcadas (inclusión máxima, mín. forraje, FDN máx. o relación Ca:P).
+      Probá habilitar más ingredientes, relajar el % mínimo de forraje/FDN máx, o subir los % máximos de inclusión.</div>`;
+    return;
+  }
+
+  let costoTotalDia = 0, pbLogrado=0, emLogrado=0, caLogrado=0, pLogrado=0, fdnLogrado=0, mgLogrado=0, kLogrado=0, sLogrado=0, naLogrado=0;
+  const detalle = activos.map((a,j)=>({a, fraccion:sol.x[j]})).filter(d=>d.fraccion>0.0001);
+  const filasResultado = detalle.map(({a,fraccion})=>{
+    const kgMSdia = fraccion*consumoMS;
+    const kgTalCualDia = kgMSdia/(a.ms/100);
+    const costoDia = kgTalCualDia*a.costo;
+    costoTotalDia += costoDia;
+    pbLogrado += fraccion*a.pb; emLogrado += fraccion*a.em;
+    caLogrado += fraccion*a.ca; pLogrado += fraccion*a.p; fdnLogrado += fraccion*a.fdn;
+    mgLogrado += fraccion*a.mg; kLogrado += fraccion*a.k; sLogrado += fraccion*a.s; naLogrado += fraccion*a.na;
+    return `<tr><td>${a.nombre}</td><td class="td-mono">${(fraccion*100).toFixed(1)}%</td><td class="td-mono">${kgMSdia.toFixed(2)} kg</td><td class="td-mono">${(kgTalCualDia*cabezas).toFixed(1)} kg</td><td class="td-mono">$${costoDia.toFixed(0)}</td></tr>`;
+  }).join('');
+
+  const costoPorKgGanado = gdpObjetivo>0 ? costoTotalDia/gdpObjetivo : null;
+  const margenPorKg = (costoPorKgGanado!==null && precioVenta>0) ? precioVenta-costoPorKgGanado : null;
+  const racionId = 'rac_'+Date.now();
+
+  div.innerHTML = `
+    <div class="card">
+      <h3 style="margin-top:0">Ración óptima — ${req.nombre}</h3>
+      ${alertasPrecio.length?`<div style="background:#fff3cd;border-left:4px solid #f0ad4e;padding:8px 12px;margin-bottom:10px;font-size:13px">⚠️ <b>Cambios de precio detectados:</b><br>${alertasPrecio.join('<br>')}</div>`:''}
+      <div class="tbl-wrap"><table><thead><tr><th>Ingrediente</th><th>% inclusión (MS)</th><th>kg MS/cab/día</th><th>kg tal cual/día (lote, ${cabezas} cab.)</th><th>Costo/cab/día</th></tr></thead>
+      <tbody>${filasResultado}</tbody></table></div>
+      <div style="margin-top:10px;font-size:14px;line-height:1.6">
+        <b>Costo: $${costoTotalDia.toFixed(0)}/cabeza/día</b> · <b>$${(costoTotalDia*cabezas).toFixed(0)}/día para el lote</b> (${cabezas} cabezas, consumo MS ${consumoMS} kg/día c/u)<br>
+        ${costoPorKgGanado!==null?`Costo por kg de ganancia: <b>$${costoPorKgGanado.toFixed(0)}/kg</b> (GDP objetivo ${gdpObjetivo} kg/día)${margenPorKg!==null?` · Margen estimado: <b>$${margenPorKg.toFixed(0)}/kg</b> (precio venta $${precioVenta}/kg)`:''}<br>`:''}
+        Perfil logrado — PB: ${pbLogrado.toFixed(1)}% (req ≥${req.pb.toFixed(1)}%) · EM: ${emLogrado.toFixed(2)} Mcal/kgMS (req ≥${req.em.toFixed(2)}) ·
+        Ca: ${caLogrado.toFixed(2)}% (req ≥${req.ca.toFixed(2)}%) · P: ${pLogrado.toFixed(2)}% (req ≥${req.p.toFixed(2)}%) · FDN: ${fdnLogrado.toFixed(1)}%<br>
+        Mg: ${mgLogrado.toFixed(2)}% (req ≥${req.mg}%) · K: ${kLogrado.toFixed(2)}% (req ≥${req.k}%) · S: ${sLogrado.toFixed(2)}% (req ≥${req.s}%) · Na: ${naLogrado.toFixed(2)}% (req ≥${req.na}%)
+      </div>
+      <div class="toolbar" style="margin-top:10px">
+        <div class="toolbar-right">
+          <button class="btn-secondary" onclick="marcarRacionActiva('${racionId}')">⭐ Marcar como activa para esta categoría</button>
+          <button class="btn-primary" onclick="exportarRacionPDF('${racionId}')">📄 Exportar PDF</button>
+        </div>
+      </div>
+    </div>`;
+
+  // guardar historial + actualizar precios de referencia
+  DB.formulacionRacion.historial.push({
+    id:racionId, fecha:new Date().toISOString(), categoria:cat, categoriaNombre:req.nombre,
+    consumoMS, cabezas, costoTotalDia, costoPorKgGanado, gdpObjetivo, precioVenta,
+    perfil:{pb:pbLogrado, em:emLogrado, ca:caLogrado, p:pLogrado, fdn:fdnLogrado, mg:mgLogrado, k:kLogrado, s:sLogrado, na:naLogrado},
+    ingredientes: detalle.map(({a,fraccion})=>({id:a.id, nombre:a.nombre, fraccion, ms:a.ms, costo:a.costo}))
+  });
+  activos.forEach(a=>{ DB.formulacionRacion.historialPrecios[a.id] = {costo:a.costo, fecha:new Date().toISOString()}; });
+  saveToStorage();
+  renderHistorialRaciones();
+}
+
+function renderHistorialRaciones(){
+  const tbody = document.getElementById('historial-raciones-tbody');
+  if(!tbody) return;
+  const hist = (DB.formulacionRacion?.historial || []).slice().reverse();
+  const activas = DB.formulacionRacion?.activaPorCategoria || {};
+  tbody.innerHTML = hist.map(r => `<tr>
+    <td class="td-mono">${(r.fecha||'').split('T')[0]}</td>
+    <td>${r.categoriaNombre||r.categoria}</td>
+    <td class="td-mono">$${(r.costoTotalDia||0).toFixed(0)}</td>
+    <td class="td-mono">${(r.perfil?.pb||0).toFixed(1)}%</td>
+    <td class="td-mono">${(r.perfil?.em||0).toFixed(2)}</td>
+    <td>${activas[r.categoria]===r.id?'<span class="badge badge-green">★ Activa</span>':`<button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="marcarRacionActiva('${r.id}')">Marcar</button>`}</td>
+    <td><button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarRacionHistorial('${r.id}')">🗑</button></td>
+  </tr>`).join('') || emptyRow(7);
+}
+
+function marcarRacionActiva(id){
+  if(!DB.formulacionRacion) return;
+  const r = DB.formulacionRacion.historial.find(h=>h.id===id);
+  if(!r) return;
+  if(!DB.formulacionRacion.activaPorCategoria) DB.formulacionRacion.activaPorCategoria = {};
+  DB.formulacionRacion.activaPorCategoria[r.categoria] = id;
+  saveToStorage();
+  renderHistorialRaciones();
+  toast(`Ración marcada como activa para ${r.categoriaNombre} ✅`);
+}
+
+function eliminarRacionHistorial(id){
+  if(!DB.formulacionRacion) return;
+  DB.formulacionRacion.historial = DB.formulacionRacion.historial.filter(h=>h.id!==id);
+  Object.keys(DB.formulacionRacion.activaPorCategoria||{}).forEach(cat=>{
+    if(DB.formulacionRacion.activaPorCategoria[cat]===id) delete DB.formulacionRacion.activaPorCategoria[cat];
+  });
+  saveToStorage();
+  renderHistorialRaciones();
+}
+
+function exportarRacionPDF(id){
+  if(typeof window.jspdf==='undefined'){ toast('No se pudo cargar el generador de PDF','err'); return; }
+  const r = DB.formulacionRacion?.historial.find(h=>h.id===id);
+  if(!r){ toast('No se encontró esa ración guardada','err'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = pdfEncabezado(doc, `Receta de mezcla — ${r.categoriaNombre}`);
+  doc.setFontSize(10);
+  doc.text(`Cabezas: ${r.cabezas} · Consumo MS: ${r.consumoMS} kg/día/cab. · Costo: $${r.costoTotalDia.toFixed(0)}/cab/día ($${(r.costoTotalDia*r.cabezas).toFixed(0)}/día lote)`, 14, y);
+  y += 8;
+  doc.autoTable({
+    startY:y,
+    head:[['Ingrediente','% inclusión (MS)','kg tal cual/cab/día','kg tal cual/día (lote)']],
+    body:r.ingredientes.map(i=>{
+      const kgTalCualCab = (i.fraccion*r.consumoMS)/(i.ms/100);
+      return [i.nombre, (i.fraccion*100).toFixed(1)+'%', kgTalCualCab.toFixed(2), (kgTalCualCab*r.cabezas).toFixed(1)];
+    }),
+    styles:{fontSize:9}, headStyles:{fillColor:[240,192,96], textColor:20}, margin:{left:14,right:14}
+  });
+  y = doc.lastAutoTable.finalY+10;
+  doc.setFontSize(10);
+  doc.text(`Perfil logrado — PB: ${r.perfil.pb.toFixed(1)}% · EM: ${r.perfil.em.toFixed(2)} Mcal/kgMS · Ca: ${r.perfil.ca.toFixed(2)}% · P: ${r.perfil.p.toFixed(2)}% · FDN: ${r.perfil.fdn.toFixed(1)}%`, 14, y);
+  doc.save(nombreArchivoExport('Racion', 'pdf'));
+}
+
 function renderCompras(){
   const tbody=document.getElementById('compras-tbody');if(!tbody)return;
   tbody.innerHTML=[...DB.compras].reverse().map(c=>`<tr><td>${c.fecha}</td><td>${c.prov||'--'}</td><td>${c.cat}</td><td class="td-mono">${c.cant}</td><td class="td-mono">${c.peso||'--'} kg</td><td class="td-mono">$${(c.precio||0).toLocaleString('es-AR')}</td><td class="td-mono text-amber">$${(c.total||0).toLocaleString('es-AR')}</td><td>${c.potrero||'--'}</td><td class="td-mono">${c.guia||'--'}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(c.rps&&c.rps.length)?c.rps.join(', '):'--'}</td></tr>`).join('')||emptyRow(10);
@@ -10029,6 +10622,7 @@ function dbVacia(nombre) {
     traslados:[], muertes:[], historial:[], precios:{},
     transportistas:[], viajes:[], clientes:[], diario:[],
     insumos:[], insumoLotes:[],
+    formulacionRacion: { ingredientesCustom:[], historial:[], historialPrecios:{}, activaPorCategoria:{} },
     saldosPotreros:{},
     aguadas:[], precipitaciones:[],
     raspajes:[], sangrados:[],
