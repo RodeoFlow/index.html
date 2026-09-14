@@ -1319,6 +1319,77 @@
           </table>
         </div>
       </div>
+
+      <!-- ══ CONVERSIÓN ALIMENTICIA ══ -->
+      <div class="card" id="page-conv-alim" style="margin-top:16px;border-left:3px solid var(--blue)">
+        <div class="card-title">📊 Conversión Alimenticia</div>
+        <div class="tabs" style="margin-bottom:12px">
+          <div class="tab active" onclick="switchTab('conv-alim','conv-lote')">Por lote/potrero</div>
+          <div class="tab" onclick="switchTab('conv-alim','conv-animal')">Por animal (RP)</div>
+        </div>
+
+        <div class="tab-content active">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Lote / Potrero</label><select id="ca-lote-potrero" class="form-control"><option value="">-- Elegir --</option></select></div>
+            <div class="form-group"><label class="form-label">Desde</label><input type="date" id="ca-lote-desde" class="form-control"></div>
+            <div class="form-group"><label class="form-label">Hasta</label><input type="date" id="ca-lote-hasta" class="form-control"></div>
+          </div>
+          <button class="btn-primary" onclick="calcularConversionLote()">⚙️ Calcular conversión del lote</button>
+          <div id="ca-lote-resultado" style="margin-top:12px"></div>
+        </div>
+
+        <div class="tab-content">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">RP del animal</label><input type="text" id="ca-rp" class="form-control" placeholder="1001"></div>
+            <div class="form-group"><label class="form-label">Desde (opcional, si no se toma la 1ª pesada)</label><input type="date" id="ca-animal-desde" class="form-control"></div>
+            <div class="form-group"><label class="form-label">Hasta (opcional, si no se toma la última pesada)</label><input type="date" id="ca-animal-hasta" class="form-control"></div>
+          </div>
+          <button class="btn-primary" onclick="calcularConversionAnimal()">⚙️ Calcular conversión del animal</button>
+          <div id="ca-animal-resultado" style="margin-top:12px"></div>
+        </div>
+      </div>
+
+      <!-- ══ RENDIMIENTO GDP ══ -->
+      <div class="card" style="margin-top:16px;border-left:3px solid var(--green)">
+        <div class="card-title">📈 Rendimiento de Ganancia de Peso (GDP)</div>
+
+        <h3 style="margin:4px 0 8px;font-size:14px">🎯 Objetivos de GDP por lote</h3>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Lote / Potrero</label><select id="gdp-obj-potrero" class="form-control"></select></div>
+          <div class="form-group"><label class="form-label">Objetivo (kg/día)</label><input type="number" id="gdp-obj-valor" class="form-control" step="0.05" value="1.0"></div>
+          <div class="form-group" style="align-self:flex-end"><button class="btn-secondary" onclick="guardarObjetivoGDP()">💾 Guardar objetivo</button></div>
+        </div>
+        <div class="tbl-wrap" style="margin-bottom:20px">
+          <table><thead><tr><th>Lote / Potrero</th><th>Objetivo</th><th>GDP real (30 días)</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="gdp-objetivos-tbody"></tbody></table>
+        </div>
+
+        <h3 style="margin:4px 0 8px;font-size:14px">🏆 Ranking de potreros por GDP (últimos 90 días)</h3>
+        <div class="form-row" style="margin-bottom:4px">
+          <div class="form-group" style="max-width:200px"><label class="form-label">Ventana</label>
+            <select id="gdp-rank-dias" class="form-control" onchange="renderRankingGDP()">
+              <option value="30">Últimos 30 días</option>
+              <option value="90" selected>Últimos 90 días</option>
+              <option value="365">Último año</option>
+            </select>
+          </div>
+        </div>
+        <div id="gdp-ranking" style="margin-bottom:20px"></div>
+
+        <h3 style="margin:4px 0 8px;font-size:14px">📉 Tendencia de GDP</h3>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Ver</label>
+            <select id="gdp-trend-tipo" class="form-control" onchange="renderTendenciaGDP()">
+              <option value="rodeo">Todo el rodeo (promedio mensual)</option>
+              <option value="potrero">Por potrero</option>
+              <option value="rp">Por animal (RP)</option>
+            </select>
+          </div>
+          <div class="form-group" id="gdp-trend-potrero-wrap" style="display:none"><label class="form-label">Potrero</label><select id="gdp-trend-potrero" class="form-control" onchange="renderTendenciaGDP()"></select></div>
+          <div class="form-group" id="gdp-trend-rp-wrap" style="display:none"><label class="form-label">RP</label><input type="text" id="gdp-trend-rp" class="form-control" oninput="renderTendenciaGDP()" placeholder="1001"></div>
+        </div>
+        <canvas id="chart-gdp-tendencia" width="700" height="220" style="display:block;width:100%;max-width:700px;margin-top:8px"></canvas>
+      </div>
     </div>
 
     <!-- ═══ CAMPO ═══ -->
@@ -1420,6 +1491,7 @@
 
       <div class="tabs">
         <div class="tab active" onclick="switchTab('reproduccion','nacimientos')">Nacimientos</div>
+        <div class="tab" onclick="switchTab('reproduccion','servicio')">🐂 Servicio y Celo</div>
         <div class="tab" onclick="switchTab('reproduccion','prenadas')">Preñadas</div>
         <div class="tab" onclick="switchTab('reproduccion','abortos')">Abortos</div>
         <div class="tab" onclick="switchTab('reproduccion','recats')">Recategorización</div>
@@ -1435,6 +1507,35 @@
         </div>
         <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>RP Cría</th><th>RP Madre</th><th>Sexo</th><th>Raza</th><th>Peso Nac.</th><th>Potrero</th><th>Observaciones</th><th>Acciones</th></tr></thead>
         <tbody id="nacimiento-tbody"></tbody></table></div>
+      </div>
+
+      <!-- Servicio y Celo -->
+      <div class="tab-content">
+        <div class="grid-4" style="margin-bottom:16px">
+          <div class="kpi blue"><div class="kpi-label">Celos detectados</div><div class="kpi-val" id="k-celos-total">0</div><div class="kpi-sub">últimos 30 días</div></div>
+          <div class="kpi amber"><div class="kpi-label">Servicios realizados</div><div class="kpi-val" id="k-servicios-total">0</div><div class="kpi-sub">últimos 30 días</div></div>
+          <div class="kpi green"><div class="kpi-label">% Preñez lograda</div><div class="kpi-val" id="k-tasa-concepcion">--</div><div class="kpi-sub">sobre servicios con tacto posterior</div></div>
+          <div class="kpi purple"><div class="kpi-label">% Detección s/celo</div><div class="kpi-val" id="k-tasa-deteccion">--</div><div class="kpi-sub">servicios sobre celos detectados</div></div>
+        </div>
+
+        <div class="toolbar">
+          <div class="toolbar-right">
+            <button class="btn-secondary" onclick="openModal('modal-celo')">👁️ Registrar celo/receptividad</button>
+            <button class="btn-primary" onclick="openModal('modal-servicio')">🐂 Registrar servicio/carga</button>
+          </div>
+        </div>
+
+        <h3 style="margin:16px 0 8px">👁️ Detección de celo / receptividad</h3>
+        <div class="tbl-wrap"><table><thead><tr>
+          <th>Fecha</th><th>Hora</th><th>RP</th><th>Método</th><th>Intensidad</th><th>Día protocolo</th><th>Observaciones</th><th>Acciones</th>
+        </tr></thead>
+        <tbody id="celo-tbody"></tbody></table></div>
+
+        <h3 style="margin:20px 0 8px">🐂 Servicios / cargas realizadas</h3>
+        <div class="tbl-wrap"><table><thead><tr>
+          <th>Fecha</th><th>RP Hembra</th><th>Tipo</th><th>RP Toro / Semen</th><th>Protocolo IATF</th><th>Operador</th><th>Observaciones</th><th>Acciones</th>
+        </tr></thead>
+        <tbody id="servicio-tbody"></tbody></table></div>
       </div>
       <!-- Preñadas -->
       <div class="tab-content">
@@ -1801,11 +1902,16 @@
         <div style="font-size:13px;color:var(--text3);margin-bottom:12px">
           Estimación de forraje disponible por potrero, a partir de la superficie, el tipo de pastura, los días de descanso desde el último pastoreo, y el consumo de los animales que tiene hoy. Es una aproximación para planificar rotaciones — no reemplaza la lectura del campo.
         </div>
+        <div class="toolbar">
+          <div class="toolbar-right">
+            <button class="btn-primary" onclick="abrirModalMedicionForraje()">📏 Medir forraje (regla/aro)</button>
+          </div>
+        </div>
         <div class="grid-4" id="forraje-kpis" style="margin-bottom:16px"></div>
         <div class="card">
           <div class="card-title">🌾 Planificación de rotación por potrero</div>
           <div class="tbl-wrap"><table>
-            <thead><tr><th>Potrero</th><th>Pastura</th><th>Días descanso</th><th>Forraje est. (kg MS)</th><th>Animales</th><th>Consumo diario (kg MS)</th><th>Días de pastoreo restantes</th><th>Rotar antes de</th></tr></thead>
+            <thead><tr><th>Potrero</th><th>Pastura</th><th>Días descanso</th><th>Forraje est. (kg MS)</th><th>Origen</th><th>Animales</th><th>Consumo diario (kg MS)</th><th>Días de pastoreo restantes</th><th>Rotar antes de</th></tr></thead>
             <tbody id="forraje-tbody"></tbody>
           </table></div>
         </div>
@@ -3032,6 +3138,69 @@
   </div>
 </div>
 
+<!-- Modal: Celo / Receptividad -->
+<div id="modal-celo" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">👁️ Registrar celo / receptividad</div><button class="modal-close" onclick="closeModal('modal-celo')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">RP *</label><input type="text" id="celo-rp" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="celo-fecha" class="form-control"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Hora</label><input type="time" id="celo-hora" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Método de detección</label>
+          <select id="celo-metodo" class="form-control">
+            <option>Visual (monta / standing heat)</option>
+            <option>Parche detector</option>
+            <option>Podómetro / collar</option>
+            <option>Sincronización hormonal (IATF)</option>
+            <option>Toro retajo / marcador</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Intensidad</label>
+          <select id="celo-intensidad" class="form-control"><option>Alta</option><option>Media</option><option>Baja / dudosa</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Día de protocolo IATF (opcional)</label><input type="text" id="celo-dia-protocolo" class="form-control" placeholder="Ej: Día 9"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="celo-obs" class="form-control" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-celo')">Cancelar</button><button class="btn-primary" onclick="guardarCelo()">💾 Guardar</button></div>
+  </div>
+</div>
+
+<!-- Modal: Servicio / Carga -->
+<div id="modal-servicio" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">🐂 Registrar servicio / carga</div><button class="modal-close" onclick="closeModal('modal-servicio')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">RP Hembra *</label><input type="text" id="serv-rp" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="serv-fecha" class="form-control"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tipo de servicio</label>
+          <select id="serv-tipo" class="form-control" onchange="document.getElementById('serv-toro-label').textContent = this.value==='Monta natural'?'RP Toro':'Semen / Toro (partida)'">
+            <option>Inseminación Artificial (IA)</option>
+            <option>IATF (a tiempo fijo)</option>
+            <option>Monta natural</option>
+            <option>Repaso natural</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label" id="serv-toro-label">Semen / Toro (partida)</label><input type="text" id="serv-toro" class="form-control"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Protocolo IATF (opcional)</label><input type="text" id="serv-protocolo" class="form-control" placeholder="Ej: Dispositivo + BE + PGF2α"></div>
+        <div class="form-group"><label class="form-label">Operador / inseminador</label><input type="text" id="serv-operador" class="form-control"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="serv-obs" class="form-control" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-servicio')">Cancelar</button><button class="btn-primary" onclick="guardarServicio()">💾 Guardar</button></div>
+  </div>
+</div>
+
 <!-- Modal: Recategorización -->
 <div id="modal-recat" class="modal-overlay">
   <div class="modal">
@@ -3082,6 +3251,46 @@
       </div>
     </div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-potrero')">Cancelar</button><button class="btn-primary" onclick="guardarPotrero()">💾 Guardar</button></div>
+  </div>
+</div>
+
+<!-- Modal: Medición de forraje (regla/aro) -->
+<div id="modal-medicion-forraje" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">📏 Medir forraje disponible</div><button class="modal-close" onclick="closeModal('modal-medicion-forraje')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Potrero *</label><select id="mf-potrero" class="form-control" onchange="mfActualizarFactorSugerido()"><option value="">-- Elegir --</option></select></div>
+        <div class="form-group"><label class="form-label">Método</label>
+          <select id="mf-metodo" class="form-control" onchange="mfCambiarMetodo()">
+            <option value="regla">Regla/aro de altura (altura promedio)</option>
+            <option value="corte">Aro de corte y pesada (más preciso)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="mf-bloque-regla">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Altura promedio medida (cm)</label><input type="number" id="mf-altura" class="form-control" step="0.5" oninput="mfRecalcular()" placeholder="Ej: 18"></div>
+          <div class="form-group"><label class="form-label">Altura residual/rastrojo (cm)</label><input type="number" id="mf-altura-residual" class="form-control" step="0.5" value="5" oninput="mfRecalcular()"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Factor de conversión (kg MS/ha por cm) — <span style="cursor:pointer;color:var(--accent)" onclick="mfActualizarFactorSugerido()">sugerir según tipo de pasto</span></label>
+          <input type="number" id="mf-factor" class="form-control" step="1" oninput="mfRecalcular()">
+        </div>
+      </div>
+
+      <div id="mf-bloque-corte" style="display:none">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Peso verde cortado (gramos, promedio de las muestras del aro)</label><input type="number" id="mf-peso-verde" class="form-control" step="1" oninput="mfRecalcular()" placeholder="Ej: 120"></div>
+          <div class="form-group"><label class="form-label">Área del aro (m²)</label><input type="number" id="mf-area-aro" class="form-control" step="0.01" value="0.25" oninput="mfRecalcular()"></div>
+        </div>
+        <div class="form-group"><label class="form-label">% Materia seca de la muestra</label><input type="number" id="mf-pct-ms" class="form-control" step="1" value="25" oninput="mfRecalcular()"></div>
+      </div>
+
+      <div id="mf-resultado" style="background:var(--bg2,#1a1a1a);border-radius:8px;padding:10px;margin-top:6px;font-size:14px"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-medicion-forraje')">Cancelar</button><button class="btn-primary" onclick="guardarMedicionForraje()">💾 Guardar medición</button></div>
   </div>
 </div>
 
@@ -3454,12 +3663,13 @@
 // ─── STATE ───
 window.DB = {
   animales:[], potreros:[], pesadas:[], vacunas:[], tratamientos:[], encierres:[],
-  enfermedades:[], tactos:[], destetes:[], abortos:[], recategorizaciones:[],
+  enfermedades:[], tactos:[], destetes:[], abortos:[], recategorizaciones:[], celos:[], servicios:[],
   pastoreos:[], suplementos:[], nutricion:[], compras:[], ventas:[],
   traslados:[], muertes:[], historial:[], precios:{},
   transportistas:[], viajes:[], clientes:[], diario:[],
   insumos:[], insumoLotes:[],
   formulacionRacion: { ingredientesCustom:[], historial:[], historialPrecios:{}, activaPorCategoria:{} },
+  objetivosGDP: {},
   saldosPotreros:{},
   aguadas:[], precipitaciones:[],
   raspajes:[], sangrados:[],
@@ -3854,7 +4064,8 @@ function init(desdeSync) {
   renderSelectorEstab();
   // No cargar datos de muestra - app de producción
   renderEncierres();
-  // Pre-fill estab name
+  poblarSelectConvAlim();
+  poblarSelectsGDP(); renderObjetivosGDP(); renderRankingGDP(); renderTendenciaGDP();
   const en = document.getElementById('estab-name');
   if(en) {
     en.value = DB.settings.establecimiento || '';
@@ -4070,7 +4281,7 @@ function showPage(id) {
   if(nav) nav.classList.add('active');
   if(id === 'dashboard') renderDashboard();
   if(id === 'animales') renderAnimales();
-  if(id === 'reproduccion') { renderNacimientos(); renderPrenadas(); renderDestetes(); renderAbortos(); renderRecats(); renderRecria(); renderCalendarioReproductivoPotreroSelect(); renderCalendarioReproductivo(); }
+  if(id === 'reproduccion') { renderNacimientos(); renderCelos(); renderServicios(); actualizarKpisServicio(); renderPrenadas(); renderDestetes(); renderAbortos(); renderRecats(); renderRecria(); renderCalendarioReproductivoPotreroSelect(); renderCalendarioReproductivo(); }
   if(id === 'sanidad') { renderVacunas(); renderTratamientos(); renderEnfermedades(); renderRaspaje(); renderSangrado(); }
   if(id === 'tratamientos') { renderTratamientos(); renderEnfermedades(); }
   if(id === 'nutricion') { renderNutricion(); renderIngredientesTabla(); actualizarRequerimientosUI(); poblarCategoriasRodeo(); renderHistorialRaciones(); }
@@ -4439,7 +4650,7 @@ function loadSampleData() {
 }
 
 function renderAll() {
-  renderDashboard(); renderAnimales(); renderPesadas(); renderEncierres(); renderVacunas(); renderTratamientos();
+  renderDashboard(); renderAnimales(); renderPesadas(); renderEncierres(); poblarSelectConvAlim(); poblarSelectsGDP(); renderObjetivosGDP(); renderRankingGDP(); renderTendenciaGDP(); renderVacunas(); renderTratamientos();
   renderEnfermedades(); renderNacimientos(); renderDestetes(); renderAbortos(); renderRecats(); renderRecria();
   renderPotreros(); renderPastoreos(); renderNutricion(); renderCompras(); renderVentas();
   renderTraslados(); renderHistorial(); renderMuertes(); renderTransportistas(); renderClientes();
@@ -6411,6 +6622,78 @@ function guardarAborto(){
   toast('Aborto registrado','ok');
 }
 
+function guardarCelo(){
+  const rp=$v('celo-rp');
+  if(!rp){toast('RP obligatorio','err');return;}
+  const c={id:Date.now(),rp,fecha:$v('celo-fecha')||new Date().toISOString().split('T')[0],hora:$v('celo-hora'),
+    metodo:$v('celo-metodo'),intensidad:$v('celo-intensidad'),diaProtocolo:$v('celo-dia-protocolo'),obs:$v('celo-obs')};
+  if(!DB.celos)DB.celos=[];
+  DB.celos.push(c);
+  addHistorial('Celo',`RP ${rp}: celo detectado (${c.metodo}, intensidad ${c.intensidad})`,rp,'');
+  saveToStorage();
+  closeModal('modal-celo');renderCelos();actualizarKpisServicio();
+  toast('Celo registrado ✅','ok');
+}
+
+function bajaCelo(id){
+  if(!confirm('¿Eliminar este registro de celo?')) return;
+  if(!DB.celos) return;
+  DB.celos = DB.celos.filter(c => c.id !== id);
+  saveToStorage(); renderCelos(); actualizarKpisServicio();
+  toast('Registro eliminado','info');
+}
+
+function guardarServicio(){
+  const rp=$v('serv-rp');
+  if(!rp){toast('RP Hembra obligatorio','err');return;}
+  const s={id:Date.now(),rp,fecha:$v('serv-fecha')||new Date().toISOString().split('T')[0],tipo:$v('serv-tipo'),
+    toro:$v('serv-toro'),protocolo:$v('serv-protocolo'),operador:$v('serv-operador'),obs:$v('serv-obs')};
+  if(!DB.servicios)DB.servicios=[];
+  DB.servicios.push(s);
+  addHistorial('Servicio',`RP ${rp}: ${s.tipo}${s.toro?' — '+s.toro:''}`,rp,s.operador);
+  saveToStorage();
+  closeModal('modal-servicio');renderServicios();actualizarKpisServicio();
+  toast('Servicio registrado ✅','ok');
+}
+
+function bajaServicio(id){
+  if(!confirm('¿Eliminar este registro de servicio?')) return;
+  if(!DB.servicios) return;
+  DB.servicios = DB.servicios.filter(s => s.id !== id);
+  saveToStorage(); renderServicios(); actualizarKpisServicio();
+  toast('Registro eliminado','info');
+}
+
+// Cruza servicios con celos y con tactos (DB.tactos) para estimar tasas de detección y concepción.
+function actualizarKpisServicio(){
+  const kCelos=document.getElementById('k-celos-total'), kServ=document.getElementById('k-servicios-total'),
+        kConc=document.getElementById('k-tasa-concepcion'), kDet=document.getElementById('k-tasa-deteccion');
+  if(!kCelos) return;
+  const hace30 = Date.now() - 30*86400000;
+  const celosRecientes = (DB.celos||[]).filter(c=>new Date(c.fecha).getTime()>=hace30);
+  const serviciosRecientes = (DB.servicios||[]).filter(s=>new Date(s.fecha).getTime()>=hace30);
+  kCelos.textContent = celosRecientes.length;
+  kServ.textContent = serviciosRecientes.length;
+  kDet.textContent = celosRecientes.length>0 ? Math.round(serviciosRecientes.length/celosRecientes.length*100)+'%' : '--';
+
+  // Tasa de concepción: de los servicios de hace 30-90 días, cuántas RP tienen un tacto positivo posterior
+  const hace90 = Date.now() - 90*86400000;
+  const serviciosParaTacto = (DB.servicios||[]).filter(s=>{
+    const t = new Date(s.fecha).getTime();
+    return t<=hace30 && t>=hace90-60*86400000;
+  });
+  if(serviciosParaTacto.length>0 && DB.tactos){
+    let confirmadas=0;
+    serviciosParaTacto.forEach(s=>{
+      const huboTactoPositivo = DB.tactos.some(t=>t.rp===s.rp && new Date(t.fecha)>new Date(s.fecha) && (t.diagnostico||'').toLowerCase().includes('preñ'));
+      if(huboTactoPositivo) confirmadas++;
+    });
+    kConc.textContent = Math.round(confirmadas/serviciosParaTacto.length*100)+'%';
+  } else {
+    kConc.textContent = '--';
+  }
+}
+
 function guardarRecat(){
   const rp=$v('rc-rp');
   if(!rp){toast('RP obligatorio','err');return;}
@@ -7123,6 +7406,288 @@ function guardarEncierre() {
   toast('Consumo en encierre guardado ✅','ok');
 }
 
+function poblarSelectConvAlim(){
+  const sel = document.getElementById('ca-lote-potrero');
+  if(!sel) return;
+  const cur = sel.value;
+  const nombres = new Set(DB.potreros.map(p=>p.nombre));
+  (DB.encierres||[]).forEach(e=>{ if(e.potrero) nombres.add(e.potrero); });
+  sel.innerHTML = '<option value="">-- Elegir --</option>' + [...nombres].sort().map(n=>`<option>${n}</option>`).join('');
+  sel.value = cur;
+}
+
+// Conversión alimenticia por lote/potrero: cruza consumo de DB.encierres con peso ganado según DB.pesadas, en un rango de fechas.
+function calcularConversionLote(){
+  const potrero = document.getElementById('ca-lote-potrero').value;
+  const desde = document.getElementById('ca-lote-desde').value;
+  const hasta = document.getElementById('ca-lote-hasta').value;
+  const div = document.getElementById('ca-lote-resultado');
+  if(!potrero){ toast('Elegí un lote/potrero','err'); return; }
+  if(!desde || !hasta){ toast('Completá el rango de fechas','err'); return; }
+
+  const tDesde = new Date(desde).getTime(), tHasta = new Date(hasta).getTime();
+  const encierresLote = (DB.encierres||[]).filter(e=>e.potrero===potrero && new Date(e.fecha).getTime()>=tDesde && new Date(e.fecha).getTime()<=tHasta);
+  const kgConsumido = encierresLote.reduce((s,e)=>s+(e.totalKg||0),0);
+  const costoTotal = encierresLote.reduce((s,e)=>s+(e.costoTotal||0),0);
+
+  // Ganancia: promedio por cabeza (de los animales con ≥2 pesadas en el rango), proyectado
+  // a la cantidad real de cabezas del encierre — así el IC no se distorsiona si solo se pesó una muestra.
+  const pesadasLote = (DB.pesadas||[]).filter(p=>p.potrero===potrero && new Date(p.fecha).getTime()>=tDesde && new Date(p.fecha).getTime()<=tHasta);
+  const porRP = {};
+  pesadasLote.forEach(p=>{ (porRP[p.rp] = porRP[p.rp]||[]).push(p); });
+  let sumaGanancias = 0, animalesConDatos = 0;
+  Object.values(porRP).forEach(lista=>{
+    if(lista.length<2) return;
+    lista.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+    const gan = lista[lista.length-1].peso - lista[0].peso;
+    if(gan>0){ sumaGanancias += gan; animalesConDatos++; }
+  });
+  const gananciaPromedioCab = animalesConDatos>0 ? sumaGanancias/animalesConDatos : 0;
+  const cabezasEncierre = encierresLote.length ? Math.round(encierresLote.reduce((s,e)=>s+(e.animales||0),0)/encierresLote.length) : animalesConDatos;
+  const pesoGanado = gananciaPromedioCab * cabezasEncierre;
+
+  if(kgConsumido<=0 || pesoGanado<=0){
+    div.innerHTML = `<div class="card" style="border-left:4px solid var(--red,#c00)">⚠️ Faltan datos: ${kgConsumido<=0?'no hay consumo de encierre cargado en ese rango. ':''}${pesoGanado<=0?'no hay al menos 2 pesadas por animal en ese potrero/rango para calcular ganancia.':''}</div>`;
+    return;
+  }
+
+  const ic = kgConsumido/pesoGanado;
+  const costoPorKg = costoTotal/pesoGanado;
+  div.innerHTML = `<div class="card">
+    <div style="font-size:14px;line-height:1.8">
+      <b>${animalesConDatos}</b> animales pesados (ganancia prom. ${gananciaPromedioCab.toFixed(1)}kg/cab) proyectado a <b>${cabezasEncierre}</b> cabezas del encierre ·
+      Kg consumidos: <b>${kgConsumido.toLocaleString('es-AR')} kg</b> · Kg ganados (lote, estimado): <b>${pesoGanado.toLocaleString('es-AR',{maximumFractionDigits:0})} kg</b><br>
+      <b style="font-size:18px;color:var(--blue)">Conversión alimenticia: ${ic.toFixed(2)} : 1</b> (kg alimento por kg de carne producida)<br>
+      Costo total del período: $${costoTotal.toLocaleString('es-AR',{maximumFractionDigits:0})} · <b>Costo por kg producido: $${costoPorKg.toFixed(0)}/kg</b>
+    </div>
+  </div>`;
+}
+
+// Conversión alimenticia por animal: usa la 1ª y última pesada del RP (o el rango indicado) y le asigna el consumo
+// de los registros de encierre de su potrero que caen dentro de ese mismo rango.
+function calcularConversionAnimal(){
+  const rp = document.getElementById('ca-rp').value.trim();
+  const div = document.getElementById('ca-animal-resultado');
+  if(!rp){ toast('Ingresá un RP','err'); return; }
+
+  let pesadasRP = (DB.pesadas||[]).filter(p=>p.rp===rp).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+  const desdeInput = document.getElementById('ca-animal-desde').value;
+  const hastaInput = document.getElementById('ca-animal-hasta').value;
+  if(desdeInput) pesadasRP = pesadasRP.filter(p=>new Date(p.fecha)>=new Date(desdeInput));
+  if(hastaInput) pesadasRP = pesadasRP.filter(p=>new Date(p.fecha)<=new Date(hastaInput));
+
+  if(pesadasRP.length<2){
+    div.innerHTML = `<div class="card" style="border-left:4px solid var(--red,#c00)">⚠️ Necesito al menos 2 pesadas de RP ${rp} en el rango elegido para calcular ganancia de peso.</div>`;
+    return;
+  }
+  const primera = pesadasRP[0], ultima = pesadasRP[pesadasRP.length-1];
+  const pesoGanado = ultima.peso - primera.peso;
+  const potrero = ultima.potrero || primera.potrero;
+  const tDesde = new Date(primera.fecha).getTime(), tHasta = new Date(ultima.fecha).getTime();
+
+  const encierresRP = (DB.encierres||[]).filter(e=>e.potrero===potrero && new Date(e.fecha).getTime()>=tDesde && new Date(e.fecha).getTime()<=tHasta);
+  const kgConsumidoAnimal = encierresRP.reduce((s,e)=>s+((e.racion||0)+(e.silaje||0)+(e.balanceado||0))*(e.dias||0),0);
+  const costoAnimal = encierresRP.reduce((s,e)=>s+(e.costoCab||0),0);
+
+  if(pesoGanado<=0){
+    div.innerHTML = `<div class="card" style="border-left:4px solid var(--red,#c00)">⚠️ RP ${rp} no muestra ganancia de peso positiva entre ${primera.fecha} (${primera.peso}kg) y ${ultima.fecha} (${ultima.peso}kg).</div>`;
+    return;
+  }
+  if(kgConsumidoAnimal<=0){
+    div.innerHTML = `<div class="card" style="border-left:4px solid var(--amber)">⚠️ RP ${rp} ganó ${pesoGanado}kg (${primera.fecha} → ${ultima.fecha}), pero no encontré registros de encierre para "${potrero||'su potrero'}" en ese rango para calcular consumo. Cargalos en "Consumo en Encierre".</div>`;
+    return;
+  }
+
+  const ic = kgConsumidoAnimal/pesoGanado;
+  const costoPorKg = costoAnimal>0 ? costoAnimal/pesoGanado : null;
+  div.innerHTML = `<div class="card">
+    <div style="font-size:14px;line-height:1.8">
+      RP <b>${rp}</b> · ${primera.fecha} (${primera.peso}kg) → ${ultima.fecha} (${ultima.peso}kg) en potrero "${potrero||'--'}"<br>
+      Peso ganado: <b>${pesoGanado.toFixed(1)} kg</b> · Consumo estimado (según encierre del potrero): <b>${kgConsumidoAnimal.toFixed(1)} kg</b><br>
+      <b style="font-size:18px;color:var(--blue)">Conversión alimenticia: ${ic.toFixed(2)} : 1</b>
+      ${costoPorKg!==null?`<br>Costo asignado: $${costoAnimal.toLocaleString('es-AR',{maximumFractionDigits:0})} · <b>Costo por kg producido: $${costoPorKg.toFixed(0)}/kg</b>`:''}
+    </div>
+  </div>`;
+}
+
+// ═══ RENDIMIENTO GDP (objetivos por lote, ranking de potreros, tendencia) ═══
+
+// Devuelve [{rp, potrero, fecha, gdp}] — un punto por cada par de pesadas consecutivas de cada animal.
+function serieGDPTodos(){
+  const porRP = {};
+  (DB.pesadas||[]).forEach(p=>{ (porRP[p.rp]=porRP[p.rp]||[]).push(p); });
+  const puntos = [];
+  Object.entries(porRP).forEach(([rp,lista])=>{
+    lista.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+    for(let i=1;i<lista.length;i++){
+      const dias = (new Date(lista[i].fecha)-new Date(lista[i-1].fecha))/86400000;
+      if(dias<1) continue;
+      const gdpKgDia = (lista[i].peso-lista[i-1].peso)/dias;
+      puntos.push({rp, potrero:lista[i].potrero||lista[i-1].potrero, fecha:lista[i].fecha, gdp:gdpKgDia});
+    }
+  });
+  return puntos;
+}
+
+function poblarSelectsGDP(){
+  const nombres = [...new Set(DB.potreros.map(p=>p.nombre))].sort();
+  const selObj = document.getElementById('gdp-obj-potrero');
+  const selTrend = document.getElementById('gdp-trend-potrero');
+  [selObj, selTrend].forEach(sel=>{
+    if(!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = nombres.map(n=>`<option>${n}</option>`).join('');
+    if(nombres.includes(cur)) sel.value = cur;
+  });
+}
+
+function guardarObjetivoGDP(){
+  const potrero = document.getElementById('gdp-obj-potrero').value;
+  const valor = parseFloat(document.getElementById('gdp-obj-valor').value)||0;
+  if(!potrero || valor<=0){ toast('Elegí un lote y un objetivo válido','err'); return; }
+  if(!DB.objetivosGDP) DB.objetivosGDP = {};
+  DB.objetivosGDP[potrero] = { gdpObjetivo: valor, fecha: new Date().toISOString().split('T')[0] };
+  saveToStorage();
+  renderObjetivosGDP();
+  toast(`Objetivo guardado para ${potrero}: ${valor} kg/día ✅`,'ok');
+}
+
+function eliminarObjetivoGDP(potrero){
+  if(!DB.objetivosGDP) return;
+  delete DB.objetivosGDP[potrero];
+  saveToStorage();
+  renderObjetivosGDP();
+}
+
+function renderObjetivosGDP(){
+  const tbody = document.getElementById('gdp-objetivos-tbody');
+  if(!tbody) return;
+  const objetivos = DB.objetivosGDP || {};
+  const nombres = Object.keys(objetivos);
+  if(!nombres.length){ tbody.innerHTML = emptyRow(5); return; }
+  const hace30 = Date.now() - 30*86400000;
+  const serie = serieGDPTodos().filter(p=>new Date(p.fecha).getTime()>=hace30);
+  tbody.innerHTML = nombres.sort().map(nombre=>{
+    const obj = objetivos[nombre];
+    const puntosPot = serie.filter(p=>p.potrero===nombre);
+    const real = puntosPot.length ? puntosPot.reduce((s,p)=>s+p.gdp,0)/puntosPot.length : null;
+    let estado, color;
+    if(real===null){ estado='Sin pesadas recientes'; color='var(--text3)'; }
+    else if(real>=obj.gdpObjetivo){ estado='✅ En objetivo'; color='var(--green)'; }
+    else if(real>=obj.gdpObjetivo*0.85){ estado='⚠️ Levemente bajo'; color='var(--amber)'; }
+    else { estado='🔴 Por debajo del objetivo'; color='var(--red)'; }
+    return `<tr>
+      <td>${nombre}</td>
+      <td class="td-mono">${obj.gdpObjetivo.toFixed(2)} kg/día</td>
+      <td class="td-mono">${real!==null?real.toFixed(2)+' kg/día':'--'}</td>
+      <td style="color:${color};font-weight:600">${estado}</td>
+      <td><button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarObjetivoGDP('${nombre}')">🗑</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderRankingGDP(){
+  const div = document.getElementById('gdp-ranking');
+  if(!div) return;
+  const dias = parseInt(document.getElementById('gdp-rank-dias')?.value)||90;
+  const desde = Date.now() - dias*86400000;
+  const serie = serieGDPTodos().filter(p=>new Date(p.fecha).getTime()>=desde);
+  const porPotrero = {};
+  serie.forEach(p=>{ if(!p.potrero) return; (porPotrero[p.potrero]=porPotrero[p.potrero]||[]).push(p.gdp); });
+  const filas = Object.entries(porPotrero).map(([potrero,vals])=>({
+    potrero, promedio: vals.reduce((s,v)=>s+v,0)/vals.length, n: vals.length
+  })).sort((a,b)=>b.promedio-a.promedio);
+
+  if(!filas.length){ div.innerHTML = '<span style="color:var(--text3)">Sin datos de GDP en ese período.</span>'; return; }
+  const maxV = Math.max(...filas.map(f=>f.promedio), 0.01);
+  div.innerHTML = filas.map(f=>{
+    const pct = Math.max(2,(f.promedio/maxV*100));
+    const color = f.promedio>=1.0 ? '#2ecc71' : f.promedio>=0.6 ? '#e8a020' : '#e74c3c';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="width:110px;font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.potrero}</div>
+      <div style="flex:1;background:var(--border);border-radius:3px;height:14px">
+        <div style="width:${pct.toFixed(1)}%;background:${color};height:100%;border-radius:3px"></div>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:13px;color:var(--text);width:90px;text-align:right">${f.promedio.toFixed(2)} kg/d</div>
+      <div style="font-size:11px;color:var(--text3);width:50px;text-align:right">(${f.n} obs.)</div>
+    </div>`;
+  }).join('');
+}
+
+function renderTendenciaGDP(){
+  const tipo = document.getElementById('gdp-trend-tipo')?.value || 'rodeo';
+  const wrapPotrero = document.getElementById('gdp-trend-potrero-wrap');
+  const wrapRP = document.getElementById('gdp-trend-rp-wrap');
+  if(wrapPotrero) wrapPotrero.style.display = tipo==='potrero' ? '' : 'none';
+  if(wrapRP) wrapRP.style.display = tipo==='rp' ? '' : 'none';
+
+  let puntos = serieGDPTodos();
+  let serieFinal = []; // [{label, valor}]
+
+  if(tipo==='rp'){
+    const rp = document.getElementById('gdp-trend-rp')?.value.trim();
+    if(!rp){ dibujarLineaGDP('chart-gdp-tendencia', []); return; }
+    puntos = puntos.filter(p=>p.rp===rp).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+    serieFinal = puntos.map(p=>({label:p.fecha, valor:p.gdp}));
+  } else {
+    if(tipo==='potrero'){
+      const potrero = document.getElementById('gdp-trend-potrero')?.value;
+      puntos = puntos.filter(p=>p.potrero===potrero);
+    }
+    // Promedio mensual (todo el rodeo, o filtrado por potrero)
+    const porMes = {};
+    puntos.forEach(p=>{
+      const mes = (p.fecha||'').slice(0,7); // YYYY-MM
+      if(!mes) return;
+      (porMes[mes]=porMes[mes]||[]).push(p.gdp);
+    });
+    serieFinal = Object.keys(porMes).sort().map(mes=>({
+      label: mes, valor: porMes[mes].reduce((s,v)=>s+v,0)/porMes[mes].length
+    }));
+  }
+  dibujarLineaGDP('chart-gdp-tendencia', serieFinal);
+}
+
+// Línea simple sobre canvas nativo (sin librerías), en kg/día en el eje Y.
+function dibujarLineaGDP(id, serie){
+  const canvas = document.getElementById(id); if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+  if(!serie.length){
+    ctx.fillStyle='#4a5568'; ctx.font='13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('Sin datos suficientes para graficar', W/2, H/2);
+    return;
+  }
+  const padL=45, padR=15, padT=15, padB=30;
+  const chartW = W-padL-padR, chartH = H-padT-padB;
+  const valores = serie.map(s=>s.valor);
+  const minV = Math.min(0, Math.min(...valores));
+  const maxV = Math.max(...valores, 0.1);
+  const escalaY = v => padT + chartH - ((v-minV)/(maxV-minV||1))*chartH;
+  const escalaX = i => padL + (serie.length===1 ? chartW/2 : (i/(serie.length-1))*chartW);
+
+  // Ejes
+  ctx.strokeStyle='#2a3347'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(padL,padT); ctx.lineTo(padL,padT+chartH); ctx.lineTo(padL+chartW,padT+chartH); ctx.stroke();
+  ctx.fillStyle='#8a9ab0'; ctx.font='10px sans-serif'; ctx.textAlign='right'; ctx.textBaseline='middle';
+  ctx.fillText(maxV.toFixed(2), padL-6, padT);
+  ctx.fillText(minV.toFixed(2), padL-6, padT+chartH);
+
+  // Línea
+  ctx.strokeStyle='#2ecc71'; ctx.lineWidth=2; ctx.beginPath();
+  serie.forEach((s,i)=>{ const x=escalaX(i), y=escalaY(s.valor); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  ctx.stroke();
+  // Puntos
+  ctx.fillStyle='#2ecc71';
+  serie.forEach((s,i)=>{ const x=escalaX(i), y=escalaY(s.valor); ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill(); });
+
+  // Etiquetas eje X (primero, medio, último para no saturar)
+  ctx.fillStyle='#8a9ab0'; ctx.font='10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
+  const idxsAMostrar = serie.length<=6 ? serie.map((_,i)=>i) : [0, Math.floor(serie.length/2), serie.length-1];
+  idxsAMostrar.forEach(i=>{ ctx.fillText(serie[i].label.slice(0,10), escalaX(i), padT+chartH+6); });
+}
+
 function renderEncierres() {
   if(!DB.encierres) DB.encierres = [];
   const tbody = document.getElementById('encierres-tbody');
@@ -7456,6 +8021,27 @@ function renderAbortos(){
   tbody.innerHTML=[...DB.abortos].reverse().map(a=>`<tr><td>${a.fecha}</td><td class="td-mono">${a.rp}</td><td class="td-mono">${a.meses||'--'}</td><td><span class="badge badge-red">${a.causa||'--'}</span></td><td>${a.vet||'--'}</td><td style="color:var(--text2);max-width:200px;white-space:normal">${a.obs||'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaAborto(${a.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
 }
 
+function renderCelos(){
+  const tbody=document.getElementById('celo-tbody');if(!tbody)return;
+  tbody.innerHTML=[...(DB.celos||[])].reverse().map(c=>`<tr>
+    <td>${c.fecha}</td><td class="td-mono">${c.hora||'--'}</td><td class="td-mono">${c.rp}</td>
+    <td>${c.metodo||'--'}</td><td><span class="badge ${c.intensidad==='Alta'?'badge-green':c.intensidad==='Media'?'badge-amber':'badge-red'}">${c.intensidad||'--'}</span></td>
+    <td class="td-mono">${c.diaProtocolo||'--'}</td>
+    <td style="color:var(--text2);max-width:180px;white-space:normal">${c.obs||'--'}</td>
+    <td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaCelo(${c.id})">🗑</button></td>
+  </tr>`).join('')||emptyRow(8);
+}
+
+function renderServicios(){
+  const tbody=document.getElementById('servicio-tbody');if(!tbody)return;
+  tbody.innerHTML=[...(DB.servicios||[])].reverse().map(s=>`<tr>
+    <td>${s.fecha}</td><td class="td-mono">${s.rp}</td><td>${s.tipo||'--'}</td>
+    <td class="td-mono">${s.toro||'--'}</td><td>${s.protocolo||'--'}</td><td>${s.operador||'--'}</td>
+    <td style="color:var(--text2);max-width:180px;white-space:normal">${s.obs||'--'}</td>
+    <td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaServicio(${s.id})">🗑</button></td>
+  </tr>`).join('')||emptyRow(8);
+}
+
 function renderRecats(){
   const tbody=document.getElementById('recat-tbody');if(!tbody)return;
   if(!DB.recategorizaciones){tbody.innerHTML=emptyRow(6);return;}
@@ -7692,6 +8278,99 @@ function estimarProdMS(tipoTexto){
   return 20; // default genérico si no matchea ninguna palabra clave
 }
 
+// ═══ Medición de forraje en campo (regla/aro) ═══
+// Factor de conversión aproximado: kg MS/ha por cada cm de altura por encima del rastrojo residual.
+function estimarFactorAltura(tipoTexto){
+  const t = (tipoTexto||'').toLowerCase();
+  if(t.includes('verdeo') || t.includes('avena') || t.includes('raigr')) return 200;
+  if(t.includes('alfalfa')) return 180;
+  if(t.includes('festuca') || t.includes('pradera') || t.includes('implant')) return 150;
+  if(t.includes('rastrojo')) return 60;
+  if(t.includes('natural') || t.includes('campo')) return 80;
+  return 120; // default genérico
+}
+
+function abrirModalMedicionForraje(){
+  const sel = document.getElementById('mf-potrero');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">-- Elegir --</option>' + DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  sel.value = cur;
+  document.getElementById('mf-metodo').value = 'regla';
+  document.getElementById('mf-altura').value = '';
+  document.getElementById('mf-altura-residual').value = '5';
+  document.getElementById('mf-peso-verde').value = '';
+  document.getElementById('mf-area-aro').value = '0.25';
+  document.getElementById('mf-pct-ms').value = '25';
+  mfCambiarMetodo();
+  mfActualizarFactorSugerido();
+  openModal('modal-medicion-forraje');
+}
+
+function mfCambiarMetodo(){
+  const metodo = document.getElementById('mf-metodo').value;
+  document.getElementById('mf-bloque-regla').style.display = metodo==='regla' ? '' : 'none';
+  document.getElementById('mf-bloque-corte').style.display = metodo==='corte' ? '' : 'none';
+  mfRecalcular();
+}
+
+function mfActualizarFactorSugerido(){
+  const nombrePotrero = document.getElementById('mf-potrero').value;
+  const p = DB.potreros.find(x=>x.nombre===nombrePotrero);
+  const factor = estimarFactorAltura(p?.pasto||'');
+  const el = document.getElementById('mf-factor');
+  if(el) el.value = factor;
+  mfRecalcular();
+}
+
+function mfCalcularKgMSha(){
+  const metodo = document.getElementById('mf-metodo').value;
+  if(metodo==='regla'){
+    const altura = parseFloat(document.getElementById('mf-altura').value)||0;
+    const residual = parseFloat(document.getElementById('mf-altura-residual').value)||0;
+    const factor = parseFloat(document.getElementById('mf-factor').value)||0;
+    return Math.max(0, altura-residual) * factor;
+  } else {
+    const gramos = parseFloat(document.getElementById('mf-peso-verde').value)||0;
+    const area = parseFloat(document.getElementById('mf-area-aro').value)||0.25;
+    const pctMS = parseFloat(document.getElementById('mf-pct-ms').value)||0;
+    if(area<=0) return 0;
+    return (gramos/area) * 10 * (pctMS/100);
+  }
+}
+
+function mfRecalcular(){
+  const kgMSha = mfCalcularKgMSha();
+  const nombrePotrero = document.getElementById('mf-potrero')?.value;
+  const p = DB.potreros.find(x=>x.nombre===nombrePotrero);
+  const div = document.getElementById('mf-resultado');
+  if(!div) return;
+  if(kgMSha<=0){ div.innerHTML = 'Completá los datos de la medición.'; return; }
+  const totalPotrero = p?.ha ? kgMSha*p.ha : null;
+  div.innerHTML = `<b>${kgMSha.toFixed(0)} kg MS/ha</b> disponibles hoy${totalPotrero!==null?` · <b>${totalPotrero.toLocaleString('es-AR',{maximumFractionDigits:0})} kg MS totales</b> en el potrero (${p.ha} ha)`:''}`;
+}
+
+function guardarMedicionForraje(){
+  const nombrePotrero = document.getElementById('mf-potrero').value;
+  if(!nombrePotrero){ toast('Elegí un potrero','err'); return; }
+  const kgMSha = mfCalcularKgMSha();
+  if(kgMSha<=0){ toast('Completá los datos de la medición','err'); return; }
+  const p = DB.potreros.find(x=>x.nombre===nombrePotrero);
+  if(!p){ toast('Potrero no encontrado','err'); return; }
+  const metodo = document.getElementById('mf-metodo').value;
+  p.medicionDirecta = {
+    fecha: new Date().toISOString().split('T')[0],
+    metodo: metodo==='regla' ? 'Regla/aro (altura)' : 'Aro (corte y pesada)',
+    kgMSha: Math.round(kgMSha),
+    detalle: metodo==='regla'
+      ? `Altura ${$v('mf-altura')}cm - residual ${$v('mf-altura-residual')}cm × ${$v('mf-factor')} kg MS/ha/cm`
+      : `${$v('mf-peso-verde')}g verde / ${$v('mf-area-aro')}m² aro × ${$v('mf-pct-ms')}% MS`
+  };
+  saveToStorage();
+  closeModal('modal-medicion-forraje');
+  renderForraje();
+  toast(`Medición guardada: ${Math.round(kgMSha)} kg MS/ha ✅`,'ok');
+}
+
 function sugerirProdMS(){
   const val = estimarProdMS($v('pot-pasto'));
   const el = document.getElementById('pot-prodms');
@@ -7709,10 +8388,26 @@ function diasDescansoPotrero(nombrePotrero){
   return Math.max(0, dias);
 }
 
+const DIAS_VIGENCIA_MEDICION_FORRAJE = 20; // una medición directa más vieja que esto se ignora y se vuelve a la estimación por crecimiento
+
 function calcularForrajePotrero(p){
   const diasDescanso = diasDescansoPotrero(p.nombre);
   const prodMS = p.prodMS || estimarProdMS(p.pasto);
-  const forrajeEstimado = (p.ha||0) * prodMS * Math.min(diasDescanso, TOPE_DIAS_ACUMULACION);
+
+  let forrajeEstimado, origen, medicionDiasAtras=null;
+  const med = p.medicionDirecta;
+  if(med && med.fecha){
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    medicionDiasAtras = Math.round((hoy - new Date(med.fecha))/86400000);
+    if(medicionDiasAtras>=0 && medicionDiasAtras<=DIAS_VIGENCIA_MEDICION_FORRAJE){
+      forrajeEstimado = med.kgMSha * (p.ha||0);
+      origen = 'medido';
+    }
+  }
+  if(origen!=='medido'){
+    forrajeEstimado = (p.ha||0) * prodMS * Math.min(diasDescanso, TOPE_DIAS_ACUMULACION);
+    origen = 'estimado';
+  }
 
   const animalesPotrero = DB.animales.filter(a=>a.activo && a.potrero===p.nombre);
   const consumoDiario = animalesPotrero.reduce((s,a)=>s+((a.peso||0)*CONSUMO_MS_PORCENTAJE_PV),0);
@@ -7724,7 +8419,7 @@ function calcularForrajePotrero(p){
     fechaRotacion = f.toISOString().split('T')[0];
   }
 
-  return { diasDescanso, prodMS, forrajeEstimado, animales: animalesPotrero.length, consumoDiario, diasRestantes, fechaRotacion };
+  return { diasDescanso, prodMS, forrajeEstimado, origen, medicionDiasAtras, animales: animalesPotrero.length, consumoDiario, diasRestantes, fechaRotacion };
 }
 
 function renderForraje(){
@@ -7747,7 +8442,7 @@ function renderForraje(){
     `;
   }
 
-  if(!filas.length){ tbody.innerHTML = emptyRow(8); return; }
+  if(!filas.length){ tbody.innerHTML = emptyRow(9); return; }
   tbody.innerHTML = filas.sort((a,b)=>(a.calc.diasRestantes??9999)-(b.calc.diasRestantes??9999)).map(({p,calc})=>{
     let color='var(--text2)', estadoTxt='--';
     if(calc.animales===0){ color='var(--blue)'; estadoTxt='Libre/descansando'; }
@@ -7755,11 +8450,15 @@ function renderForraje(){
     else if(calc.diasRestantes<=5){ color='var(--red)'; estadoTxt=`${calc.diasRestantes} día(s)`; }
     else if(calc.diasRestantes<=10){ color='var(--amber)'; estadoTxt=`${calc.diasRestantes} día(s)`; }
     else { color='var(--green)'; estadoTxt=`${calc.diasRestantes} día(s)`; }
+    const origenTxt = calc.origen==='medido'
+      ? `📏 Medido (${calc.medicionDiasAtras}d)`
+      : `📈 Estimado`;
     return `<tr>
       <td>${p.nombre}</td>
       <td>${p.pasto||'--'}</td>
       <td class="td-mono">${calc.diasDescanso}</td>
       <td class="td-mono">${Math.round(calc.forrajeEstimado).toLocaleString('es-AR')}</td>
+      <td style="font-size:12px;white-space:nowrap">${origenTxt}</td>
       <td class="td-mono">${calc.animales}</td>
       <td class="td-mono">${Math.round(calc.consumoDiario)}</td>
       <td class="td-mono" style="color:${color};font-weight:600">${estadoTxt}</td>
@@ -8091,46 +8790,48 @@ function renderNutricion(){
 // ═══ FORMULACIÓN DE RACIÓN (optimización por programación lineal) ═══
 
 const INGREDIENTES_BASE = [
-  // id, nombre, tipo, MS%, PB%, EM Mcal/kgMS, FDN%, Ca%, P%, Mg%, K%, S%, Na%, costo$/kg tal cual, maxIncl% (sobre MS de la dieta)
-  {id:'maiz',        nombre:'Maíz grano molido',        tipo:'concentrado', ms:88, pb:9,   em:3.3, fdn:9,  ca:0.02, p:0.28, mg:0.12, k:0.35, s:0.12, na:0.02, costo:250, maxIncl:70},
-  {id:'sorgo',       nombre:'Sorgo grano molido',        tipo:'concentrado', ms:88, pb:10,  em:3.1, fdn:11, ca:0.03, p:0.30, mg:0.15, k:0.35, s:0.12, na:0.02, costo:220, maxIncl:60},
-  {id:'maizhum',     nombre:'Grano húmedo de maíz',      tipo:'concentrado', ms:65, pb:9,   em:3.4, fdn:8,  ca:0.02, p:0.27, mg:0.11, k:0.33, s:0.11, na:0.02, costo:200, maxIncl:60},
-  {id:'cebada',      nombre:'Cebada grano',              tipo:'concentrado', ms:88, pb:11.5,em:2.9, fdn:15, ca:0.05, p:0.35, mg:0.14, k:0.55, s:0.15, na:0.02, costo:230, maxIncl:60},
-  {id:'avena',       nombre:'Grano de avena',            tipo:'concentrado', ms:88, pb:12,  em:2.7, fdn:25, ca:0.08, p:0.35, mg:0.15, k:0.45, s:0.20, na:0.02, costo:200, maxIncl:50},
-  {id:'silomaiz',    nombre:'Silaje de maíz',            tipo:'forraje',     ms:33, pb:8,   em:2.6, fdn:45, ca:0.25, p:0.22, mg:0.20, k:1.00, s:0.13, na:0.02, costo:45,  maxIncl:70},
-  {id:'silosorgo',   nombre:'Silaje de sorgo',           tipo:'forraje',     ms:30, pb:7,   em:2.3, fdn:55, ca:0.30, p:0.20, mg:0.22, k:1.30, s:0.14, na:0.02, costo:40,  maxIncl:70},
-  {id:'henoalfalfa', nombre:'Heno de alfalfa',           tipo:'forraje',     ms:88, pb:18,  em:2.2, fdn:45, ca:1.40, p:0.25, mg:0.30, k:2.20, s:0.25, na:0.08, costo:90,  maxIncl:40},
-  {id:'henopast',    nombre:'Heno de pastura',           tipo:'forraje',     ms:87, pb:9,   em:1.9, fdn:60, ca:0.40, p:0.20, mg:0.20, k:1.50, s:0.15, na:0.05, costo:60,  maxIncl:40},
-  {id:'rollopast',   nombre:'Rollo de pastura',          tipo:'forraje',     ms:85, pb:8,   em:1.8, fdn:62, ca:0.40, p:0.18, mg:0.20, k:1.40, s:0.15, na:0.04, costo:35,  maxIncl:40},
-  {id:'pastverde',   nombre:'Pastura verde (base)',      tipo:'forraje',     ms:22, pb:20,  em:2.5, fdn:40, ca:0.60, p:0.35, mg:0.25, k:2.50, s:0.25, na:0.05, costo:15,  maxIncl:100},
-  {id:'expgirasol',  nombre:'Expeller de girasol',       tipo:'concentrado', ms:90, pb:32,  em:2.4, fdn:35, ca:0.40, p:0.90, mg:0.65, k:1.10, s:0.35, na:0.03, costo:180, maxIncl:20},
-  {id:'expsoja',     nombre:'Expeller / harina de soja', tipo:'concentrado', ms:90, pb:44,  em:2.9, fdn:14, ca:0.30, p:0.65, mg:0.30, k:2.00, s:0.40, na:0.02, costo:350, maxIncl:20},
-  {id:'pelletgir',   nombre:'Pellet de girasol',         tipo:'concentrado', ms:90, pb:28,  em:2.2, fdn:30, ca:0.35, p:0.90, mg:0.60, k:1.10, s:0.35, na:0.03, costo:170, maxIncl:20},
-  {id:'afrechillo',  nombre:'Afrechillo de trigo',       tipo:'concentrado', ms:89, pb:16,  em:2.2, fdn:40, ca:0.13, p:1.00, mg:0.50, k:1.20, s:0.20, na:0.02, costo:140, maxIncl:25},
-  {id:'cascsoja',    nombre:'Cascarilla de soja',        tipo:'forraje',     ms:90, pb:12,  em:2.0, fdn:65, ca:0.50, p:0.15, mg:0.25, k:1.30, s:0.12, na:0.02, costo:90,  maxIncl:20},
-  {id:'wdgs',        nombre:'Burlanda húmeda (WDGS)',    tipo:'concentrado', ms:32, pb:28,  em:3.1, fdn:35, ca:0.05, p:0.75, mg:0.30, k:0.90, s:0.55, na:0.15, costo:60,  maxIncl:30},
-  {id:'ddgs',        nombre:'Burlanda seca (DDGS)',      tipo:'concentrado', ms:88, pb:28,  em:2.9, fdn:33, ca:0.06, p:0.75, mg:0.30, k:0.90, s:0.55, na:0.15, costo:150, maxIncl:30},
-  {id:'melaza',      nombre:'Melaza',                    tipo:'concentrado', ms:75, pb:5,   em:3.0, fdn:0,  ca:0.90, p:0.08, mg:0.35, k:3.00, s:0.40, na:0.10, costo:130, maxIncl:8},
-  {id:'urea',        nombre:'Urea (NNP)',                tipo:'mineral',     ms:99, pb:281, em:0,   fdn:0,  ca:0,    p:0,    mg:0,    k:0,    s:0,    na:0,    costo:400, maxIncl:1},
-  {id:'nucleo',      nombre:'Núcleo vitamínico-mineral', tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:12,   p:8,    mg:8,    k:2,    s:2,    na:5,    costo:500, maxIncl:3},
-  {id:'sal',         nombre:'Sal común',                 tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:0,    p:0,    mg:0,    k:0,    s:0,    na:39,   costo:80,  maxIncl:0.5},
-  {id:'carbcalcio',  nombre:'Carbonato de calcio',       tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:38,   p:0,    mg:2,    k:0,    s:0,    na:0,    costo:90,  maxIncl:1.5},
-  {id:'fosfbical',   nombre:'Fosfato bicálcico',         tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:23,   p:18,   mg:0.5,  k:0,    s:0,    na:0,    costo:600, maxIncl:1}
+  // id, nombre, tipo, MS%, PB%, EM Mcal/kgMS, FDN%, Ca%, P%, Mg%, K%, S%, Na%,
+  // Cu/Zn/Mn/Se/Co/I en ppm (mg/kg MS), VitA/VitD en UI/kgMS, VitE en mg/kgMS, costo$/kg tal cual, maxIncl%
+  {id:'maiz',        nombre:'Maíz grano molido',        tipo:'concentrado', ms:88, pb:9,   em:3.3, fdn:9,  ca:0.02, p:0.28, mg:0.12, k:0.35, s:0.12, na:0.02, cu:3,  zn:20, mn:6,   se:0.05, co:0.05, i:0.03, vitA:0,    vitD:0,   vitE:20, costo:250, maxIncl:70},
+  {id:'sorgo',       nombre:'Sorgo grano molido',        tipo:'concentrado', ms:88, pb:10,  em:3.1, fdn:11, ca:0.03, p:0.30, mg:0.15, k:0.35, s:0.12, na:0.02, cu:3,  zn:15, mn:14,  se:0.05, co:0.05, i:0.03, vitA:0,    vitD:0,   vitE:15, costo:220, maxIncl:60},
+  {id:'maizhum',     nombre:'Grano húmedo de maíz',      tipo:'concentrado', ms:65, pb:9,   em:3.4, fdn:8,  ca:0.02, p:0.27, mg:0.11, k:0.33, s:0.11, na:0.02, cu:3,  zn:20, mn:6,   se:0.05, co:0.05, i:0.03, vitA:0,    vitD:0,   vitE:18, costo:200, maxIncl:60},
+  {id:'cebada',      nombre:'Cebada grano',              tipo:'concentrado', ms:88, pb:11.5,em:2.9, fdn:15, ca:0.05, p:0.35, mg:0.14, k:0.55, s:0.15, na:0.02, cu:6,  zn:25, mn:16,  se:0.06, co:0.06, i:0.03, vitA:0,    vitD:0,   vitE:20, costo:230, maxIncl:60},
+  {id:'avena',       nombre:'Grano de avena',            tipo:'concentrado', ms:88, pb:12,  em:2.7, fdn:25, ca:0.08, p:0.35, mg:0.15, k:0.45, s:0.20, na:0.02, cu:5,  zn:30, mn:40,  se:0.07, co:0.06, i:0.03, vitA:0,    vitD:0,   vitE:20, costo:200, maxIncl:50},
+  {id:'silomaiz',    nombre:'Silaje de maíz',            tipo:'forraje',     ms:33, pb:8,   em:2.6, fdn:45, ca:0.25, p:0.22, mg:0.20, k:1.00, s:0.13, na:0.02, cu:5,  zn:25, mn:40,  se:0.05, co:0.08, i:0.05, vitA:2000, vitD:300, vitE:15, costo:45,  maxIncl:70},
+  {id:'silosorgo',   nombre:'Silaje de sorgo',           tipo:'forraje',     ms:30, pb:7,   em:2.3, fdn:55, ca:0.30, p:0.20, mg:0.22, k:1.30, s:0.14, na:0.02, cu:5,  zn:25, mn:45,  se:0.05, co:0.08, i:0.05, vitA:1800, vitD:250, vitE:12, costo:40,  maxIncl:70},
+  {id:'henoalfalfa', nombre:'Heno de alfalfa',           tipo:'forraje',     ms:88, pb:18,  em:2.2, fdn:45, ca:1.40, p:0.25, mg:0.30, k:2.20, s:0.25, na:0.08, cu:9,  zn:20, mn:30,  se:0.30, co:0.20, i:0.10, vitA:3000, vitD:500, vitE:20, costo:90,  maxIncl:40},
+  {id:'henopast',    nombre:'Heno de pastura',           tipo:'forraje',     ms:87, pb:9,   em:1.9, fdn:60, ca:0.40, p:0.20, mg:0.20, k:1.50, s:0.15, na:0.05, cu:7,  zn:20, mn:60,  se:0.10, co:0.15, i:0.08, vitA:1500, vitD:400, vitE:15, costo:60,  maxIncl:40},
+  {id:'rollopast',   nombre:'Rollo de pastura',          tipo:'forraje',     ms:85, pb:8,   em:1.8, fdn:62, ca:0.40, p:0.18, mg:0.20, k:1.40, s:0.15, na:0.04, cu:6,  zn:18, mn:55,  se:0.08, co:0.12, i:0.06, vitA:1200, vitD:350, vitE:12, costo:35,  maxIncl:40},
+  {id:'pastverde',   nombre:'Pastura verde (base)',      tipo:'forraje',     ms:22, pb:20,  em:2.5, fdn:40, ca:0.60, p:0.35, mg:0.25, k:2.50, s:0.25, na:0.05, cu:8,  zn:25, mn:70,  se:0.05, co:0.10, i:0.05, vitA:8000, vitD:0,   vitE:40, costo:15,  maxIncl:100},
+  {id:'expgirasol',  nombre:'Expeller de girasol',       tipo:'concentrado', ms:90, pb:32,  em:2.4, fdn:35, ca:0.40, p:0.90, mg:0.65, k:1.10, s:0.35, na:0.03, cu:20, zn:60, mn:30,  se:0.50, co:0.10, i:0.10, vitA:0,    vitD:0,   vitE:10, costo:180, maxIncl:20},
+  {id:'expsoja',     nombre:'Expeller / harina de soja', tipo:'concentrado', ms:90, pb:44,  em:2.9, fdn:14, ca:0.30, p:0.65, mg:0.30, k:2.00, s:0.40, na:0.02, cu:15, zn:55, mn:35,  se:0.30, co:0.10, i:0.10, vitA:0,    vitD:0,   vitE:5,  costo:350, maxIncl:20},
+  {id:'pelletgir',   nombre:'Pellet de girasol',         tipo:'concentrado', ms:90, pb:28,  em:2.2, fdn:30, ca:0.35, p:0.90, mg:0.60, k:1.10, s:0.35, na:0.03, cu:18, zn:55, mn:28,  se:0.40, co:0.10, i:0.10, vitA:0,    vitD:0,   vitE:8,  costo:170, maxIncl:20},
+  {id:'afrechillo',  nombre:'Afrechillo de trigo',       tipo:'concentrado', ms:89, pb:16,  em:2.2, fdn:40, ca:0.13, p:1.00, mg:0.50, k:1.20, s:0.20, na:0.02, cu:12, zn:90, mn:110, se:0.40, co:0.10, i:0.05, vitA:0,    vitD:0,   vitE:15, costo:140, maxIncl:25},
+  {id:'cascsoja',    nombre:'Cascarilla de soja',        tipo:'forraje',     ms:90, pb:12,  em:2.0, fdn:65, ca:0.50, p:0.15, mg:0.25, k:1.30, s:0.12, na:0.02, cu:8,  zn:35, mn:25,  se:0.10, co:0.08, i:0.05, vitA:0,    vitD:0,   vitE:5,  costo:90,  maxIncl:20},
+  {id:'wdgs',        nombre:'Burlanda húmeda (WDGS)',    tipo:'concentrado', ms:32, pb:28,  em:3.1, fdn:35, ca:0.05, p:0.75, mg:0.30, k:0.90, s:0.55, na:0.15, cu:6,  zn:70, mn:20,  se:0.30, co:0.10, i:0.05, vitA:0,    vitD:0,   vitE:10, costo:60,  maxIncl:30},
+  {id:'ddgs',        nombre:'Burlanda seca (DDGS)',      tipo:'concentrado', ms:88, pb:28,  em:2.9, fdn:33, ca:0.06, p:0.75, mg:0.30, k:0.90, s:0.55, na:0.15, cu:6,  zn:70, mn:20,  se:0.30, co:0.10, i:0.05, vitA:0,    vitD:0,   vitE:10, costo:150, maxIncl:30},
+  {id:'melaza',      nombre:'Melaza',                    tipo:'concentrado', ms:75, pb:5,   em:3.0, fdn:0,  ca:0.90, p:0.08, mg:0.35, k:3.00, s:0.40, na:0.10, cu:10, zn:15, mn:30,  se:0.10, co:0.20, i:0.05, vitA:0,    vitD:0,   vitE:0,  costo:130, maxIncl:8},
+  {id:'urea',        nombre:'Urea (NNP)',                tipo:'mineral',     ms:99, pb:281, em:0,   fdn:0,  ca:0,    p:0,    mg:0,    k:0,    s:0,    na:0,    cu:0,  zn:0,  mn:0,   se:0,    co:0,    i:0,    vitA:0,    vitD:0,   vitE:0,  costo:400, maxIncl:1},
+  {id:'nucleo',      nombre:'Núcleo vitamínico-mineral', tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:12,   p:8,    mg:8,    k:2,    s:2,    na:5,    cu:1500,zn:3500,mn:2000,se:25,   co:150,  i:100,  vitA:800000,vitD:150000,vitE:3000, costo:500, maxIncl:3},
+  {id:'sal',         nombre:'Sal común',                 tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:0,    p:0,    mg:0,    k:0,    s:0,    na:39,   cu:0,  zn:0,  mn:0,   se:0,    co:0,    i:0,    vitA:0,    vitD:0,   vitE:0,  costo:80,  maxIncl:0.5},
+  {id:'carbcalcio',  nombre:'Carbonato de calcio',       tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:38,   p:0,    mg:2,    k:0,    s:0,    na:0,    cu:0,  zn:0,  mn:0,   se:0,    co:0,    i:0,    vitA:0,    vitD:0,   vitE:0,  costo:90,  maxIncl:1.5},
+  {id:'fosfbical',   nombre:'Fosfato bicálcico',         tipo:'mineral',     ms:99, pb:0,   em:0,   fdn:0,  ca:23,   p:18,   mg:0.5,  k:0,    s:0,    na:0,    cu:0,  zn:0,  mn:0,   se:0,    co:0,    i:0,    vitA:0,    vitD:0,   vitE:0,  costo:600, maxIncl:1}
 ];
 
 // Requerimientos base por categoría, definidos a un peso y GDP de referencia (refPeso/refGDP).
 // calcularRequerimientosDinamicos() los ajusta según el peso real y la GDP objetivo cargados.
 // Valores orientativos (aproximación práctica tipo NRC) — ajustables por el usuario en el resultado.
+// cu/zn/mn/se/co/i en ppm (mg/kg MS de la dieta); vitA/vitD en UI/kgMS; vitE en mg/kgMS.
 const REQUERIMIENTOS_CATEGORIA = {
-  recria:               {nombre:'Recría',                            refPeso:250, refGDP:0.6, pb:13,   em:2.4, ca:0.35, p:0.22, fdn:20, mg:0.10, k:0.65, s:0.15, na:0.06},
-  engorde:              {nombre:'Engorde',                            refPeso:350, refGDP:1.0, pb:12,   em:2.7, ca:0.35, p:0.22, fdn:18, mg:0.10, k:0.60, s:0.15, na:0.06},
-  terminacion:          {nombre:'Terminación',                        refPeso:450, refGDP:1.3, pb:11.5, em:2.9, ca:0.30, p:0.20, fdn:15, mg:0.10, k:0.55, s:0.15, na:0.06},
-  destete_precoz:       {nombre:'Destete precoz (<150kg)',            refPeso:120, refGDP:0.7, pb:16,   em:2.8, ca:0.60, p:0.35, fdn:14, mg:0.12, k:0.70, s:0.18, na:0.08},
-  vaca_manten:          {nombre:'Vaca de cría (mantenimiento)',       refPeso:450, refGDP:0.0, pb:8,    em:2.0, ca:0.20, p:0.15, fdn:25, mg:0.10, k:0.60, s:0.12, na:0.06},
-  vaca_prena_temprana:  {nombre:'Vaca preñada (1er-2do tercio)',      refPeso:450, refGDP:0.1, pb:9,    em:2.1, ca:0.25, p:0.17, fdn:24, mg:0.10, k:0.60, s:0.13, na:0.06},
-  vaca_prena_tardia:    {nombre:'Vaca preñada (último tercio)',       refPeso:470, refGDP:0.2, pb:10,   em:2.3, ca:0.40, p:0.22, fdn:22, mg:0.12, k:0.65, s:0.15, na:0.07},
-  vaca_lactando:        {nombre:'Vaca de cría + ternero al pie',      refPeso:450, refGDP:0.3, pb:11,   em:2.3, ca:0.40, p:0.25, fdn:22, mg:0.12, k:0.70, s:0.16, na:0.08},
-  toro:                 {nombre:'Toro (servicio)',                    refPeso:600, refGDP:0.0, pb:9,    em:2.1, ca:0.25, p:0.18, fdn:22, mg:0.10, k:0.60, s:0.14, na:0.06}
+  recria:               {nombre:'Recría',                            refPeso:250, refGDP:0.6, pb:13,   em:2.4, ca:0.35, p:0.22, fdn:20, mg:0.10, k:0.65, s:0.15, na:0.06, cu:10, zn:30, mn:20, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:15},
+  engorde:              {nombre:'Engorde',                            refPeso:350, refGDP:1.0, pb:12,   em:2.7, ca:0.35, p:0.22, fdn:18, mg:0.10, k:0.60, s:0.15, na:0.06, cu:10, zn:30, mn:20, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:15},
+  terminacion:          {nombre:'Terminación',                        refPeso:450, refGDP:1.3, pb:11.5, em:2.9, ca:0.30, p:0.20, fdn:15, mg:0.10, k:0.55, s:0.15, na:0.06, cu:10, zn:30, mn:20, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:20},
+  destete_precoz:       {nombre:'Destete precoz (<150kg)',            refPeso:120, refGDP:0.7, pb:16,   em:2.8, ca:0.60, p:0.35, fdn:14, mg:0.12, k:0.70, s:0.18, na:0.08, cu:10, zn:40, mn:25, se:0.10, co:0.10, i:0.50, vitA:2700, vitD:300, vitE:20},
+  vaca_manten:          {nombre:'Vaca de cría (mantenimiento)',       refPeso:450, refGDP:0.0, pb:8,    em:2.0, ca:0.20, p:0.15, fdn:25, mg:0.10, k:0.60, s:0.12, na:0.06, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:1300, vitD:275, vitE:15},
+  vaca_prena_temprana:  {nombre:'Vaca preñada (1er-2do tercio)',      refPeso:450, refGDP:0.1, pb:9,    em:2.1, ca:0.25, p:0.17, fdn:24, mg:0.10, k:0.60, s:0.13, na:0.06, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:1300, vitD:275, vitE:15},
+  vaca_prena_tardia:    {nombre:'Vaca preñada (último tercio)',       refPeso:470, refGDP:0.2, pb:10,   em:2.3, ca:0.40, p:0.22, fdn:22, mg:0.12, k:0.65, s:0.15, na:0.07, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:2000, vitD:275, vitE:15},
+  vaca_lactando:        {nombre:'Vaca de cría + ternero al pie',      refPeso:450, refGDP:0.3, pb:11,   em:2.3, ca:0.40, p:0.25, fdn:22, mg:0.12, k:0.70, s:0.16, na:0.08, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:3900, vitD:275, vitE:15},
+  toro:                 {nombre:'Toro (servicio)',                    refPeso:600, refGDP:0.0, pb:9,    em:2.1, ca:0.25, p:0.18, fdn:22, mg:0.10, k:0.60, s:0.14, na:0.06, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:15}
 };
 
 // Ajusta el requerimiento base según peso real, GDP objetivo y condición climática.
@@ -8146,7 +8847,8 @@ function calcularRequerimientosDinamicos(cat, peso, gdp, clima){
   const pb = Math.max(6, base.pb + 3.0*dGDP);
   const ca = Math.max(0.15, base.ca + 0.05*dGDP);
   const p  = Math.max(0.12, base.p + 0.03*dGDP);
-  return {nombre:base.nombre, pb, em, ca, p, fdn:base.fdn, mg:base.mg, k:base.k, s:base.s, na:base.na};
+  return {nombre:base.nombre, pb, em, ca, p, fdn:base.fdn, mg:base.mg, k:base.k, s:base.s, na:base.na,
+    cu:base.cu, zn:base.zn, mn:base.mn, se:base.se, co:base.co, i:base.i, vitA:base.vitA, vitD:base.vitD, vitE:base.vitE};
 }
 
 function ingredientesFormulacion(){
@@ -8170,7 +8872,9 @@ function actualizarRequerimientosUI(){
   if(!req || !div) return;
   div.innerHTML = `Requerimiento mínimo estimado (base MS, para ${peso}kg y GDP ${gdp}kg/día${clima!=='normal'?', '+(clima==='frio'?'ajustado por frío/barro':'ajustado por estrés calórico'):''}):<br>
   PB ≥ ${req.pb.toFixed(1)}% · EM ≥ ${req.em.toFixed(2)} Mcal/kgMS · Ca ≥ ${req.ca.toFixed(2)}% · P ≥ ${req.p.toFixed(2)}% · FDN ≥ ${req.fdn}% ·
-  Mg ≥ ${req.mg}% · K ≥ ${req.k}% · S ≥ ${req.s}% · Na ≥ ${req.na}%.<br>
+  Mg ≥ ${req.mg}% · K ≥ ${req.k}% · S ≥ ${req.s}% · Na ≥ ${req.na}%<br>
+  Oligoelementos: Cu ≥ ${req.cu}ppm · Zn ≥ ${req.zn}ppm · Mn ≥ ${req.mn}ppm · Se ≥ ${req.se}ppm · Co ≥ ${req.co}ppm · I ≥ ${req.i}ppm ·
+  Vit.A ≥ ${req.vitA} UI/kgMS · Vit.D ≥ ${req.vitD} UI/kgMS · Vit.E ≥ ${req.vitE} mg/kgMS<br>
   <span style="color:#888">Valores orientativos (aproximación práctica, no reemplaza una fórmula NRC completa): ajustá costos e inclusiones según tu zona.</span>`;
 }
 
@@ -8217,9 +8921,21 @@ function abrirModalIngredienteCustom(){
   const na = num('% Sodio (base MS):', '0.05'); if(na===null) return;
   const costo = num('Costo $/kg tal cual:', '100'); if(costo===null) return;
   const maxIncl = num('Máx % inclusión sobre MS de la dieta:', '20'); if(maxIncl===null) return;
+  let cu=0,zn=0,mn=0,se=0,co=0,i=0,vitA=0,vitD=0,vitE=0;
+  if(tipoValido==='mineral' && confirm('¿Es un núcleo/premix con microminerales y vitaminas? Aceptá para cargar Cu, Zn, Mn, Se, Co, I y vitaminas A/D/E.')){
+    cu = num('Cobre (Cu) en ppm (mg/kg):', '1000')||0;
+    zn = num('Zinc (Zn) en ppm:', '2500')||0;
+    mn = num('Manganeso (Mn) en ppm:', '1500')||0;
+    se = num('Selenio (Se) en ppm:', '20')||0;
+    co = num('Cobalto (Co) en ppm:', '100')||0;
+    i  = num('Yodo (I) en ppm:', '80')||0;
+    vitA = num('Vitamina A en UI/kg:', '500000')||0;
+    vitD = num('Vitamina D en UI/kg:', '100000')||0;
+    vitE = num('Vitamina E en mg/kg:', '2000')||0;
+  }
   const id = 'custom_'+Date.now();
   if(!DB.formulacionRacion) DB.formulacionRacion = {ingredientesCustom:[], historial:[], historialPrecios:{}, activaPorCategoria:{}};
-  DB.formulacionRacion.ingredientesCustom.push({id, nombre, tipo:tipoValido, ms, pb, em, fdn, ca, p, mg, k, s, na, costo, maxIncl, custom:true});
+  DB.formulacionRacion.ingredientesCustom.push({id, nombre, tipo:tipoValido, ms, pb, em, fdn, ca, p, mg, k, s, na, cu, zn, mn, se, co, i, vitA, vitD, vitE, costo, maxIncl, custom:true});
   saveToStorage();
   renderIngredientesTabla();
   toast('Ingrediente propio agregado ✅');
@@ -8421,10 +9137,10 @@ function optimizarRacion(){
     restricciones.push({coefs:c, rel:'<=', rhs:a.maxIncl/100});
   });
   // nutrientes mínimos
-  ['pb','em','ca','p','fdn','mg','k','s','na'].forEach(nut=>{
+  ['pb','em','ca','p','fdn','mg','k','s','na','cu','zn','mn','se','co','i','vitA','vitD','vitE'].forEach(nut=>{
     const min = req[nut];
     if(min>0){
-      restricciones.push({coefs: activos.map(a=>a[nut]), rel:'>=', rhs:min});
+      restricciones.push({coefs: activos.map(a=>a[nut]||0), rel:'>=', rhs:min});
     }
   });
   // mínimo % forraje voluminoso
@@ -8453,6 +9169,7 @@ function optimizarRacion(){
   }
 
   let costoTotalDia = 0, pbLogrado=0, emLogrado=0, caLogrado=0, pLogrado=0, fdnLogrado=0, mgLogrado=0, kLogrado=0, sLogrado=0, naLogrado=0;
+  let cuLogrado=0, znLogrado=0, mnLogrado=0, seLogrado=0, coLogrado=0, iLogrado=0, vitALogrado=0, vitDLogrado=0, vitELogrado=0;
   const detalle = activos.map((a,j)=>({a, fraccion:sol.x[j]})).filter(d=>d.fraccion>0.0001);
   const filasResultado = detalle.map(({a,fraccion})=>{
     const kgMSdia = fraccion*consumoMS;
@@ -8462,6 +9179,9 @@ function optimizarRacion(){
     pbLogrado += fraccion*a.pb; emLogrado += fraccion*a.em;
     caLogrado += fraccion*a.ca; pLogrado += fraccion*a.p; fdnLogrado += fraccion*a.fdn;
     mgLogrado += fraccion*a.mg; kLogrado += fraccion*a.k; sLogrado += fraccion*a.s; naLogrado += fraccion*a.na;
+    cuLogrado += fraccion*(a.cu||0); znLogrado += fraccion*(a.zn||0); mnLogrado += fraccion*(a.mn||0);
+    seLogrado += fraccion*(a.se||0); coLogrado += fraccion*(a.co||0); iLogrado += fraccion*(a.i||0);
+    vitALogrado += fraccion*(a.vitA||0); vitDLogrado += fraccion*(a.vitD||0); vitELogrado += fraccion*(a.vitE||0);
     return `<tr><td>${a.nombre}</td><td class="td-mono">${(fraccion*100).toFixed(1)}%</td><td class="td-mono">${kgMSdia.toFixed(2)} kg</td><td class="td-mono">${(kgTalCualDia*cabezas).toFixed(1)} kg</td><td class="td-mono">$${costoDia.toFixed(0)}</td></tr>`;
   }).join('');
 
@@ -8480,7 +9200,10 @@ function optimizarRacion(){
         ${costoPorKgGanado!==null?`Costo por kg de ganancia: <b>$${costoPorKgGanado.toFixed(0)}/kg</b> (GDP objetivo ${gdpObjetivo} kg/día)${margenPorKg!==null?` · Margen estimado: <b>$${margenPorKg.toFixed(0)}/kg</b> (precio venta $${precioVenta}/kg)`:''}<br>`:''}
         Perfil logrado — PB: ${pbLogrado.toFixed(1)}% (req ≥${req.pb.toFixed(1)}%) · EM: ${emLogrado.toFixed(2)} Mcal/kgMS (req ≥${req.em.toFixed(2)}) ·
         Ca: ${caLogrado.toFixed(2)}% (req ≥${req.ca.toFixed(2)}%) · P: ${pLogrado.toFixed(2)}% (req ≥${req.p.toFixed(2)}%) · FDN: ${fdnLogrado.toFixed(1)}%<br>
-        Mg: ${mgLogrado.toFixed(2)}% (req ≥${req.mg}%) · K: ${kLogrado.toFixed(2)}% (req ≥${req.k}%) · S: ${sLogrado.toFixed(2)}% (req ≥${req.s}%) · Na: ${naLogrado.toFixed(2)}% (req ≥${req.na}%)
+        Mg: ${mgLogrado.toFixed(2)}% (req ≥${req.mg}%) · K: ${kLogrado.toFixed(2)}% (req ≥${req.k}%) · S: ${sLogrado.toFixed(2)}% (req ≥${req.s}%) · Na: ${naLogrado.toFixed(2)}% (req ≥${req.na}%)<br>
+        Cu: ${cuLogrado.toFixed(1)}ppm (req ≥${req.cu}) · Zn: ${znLogrado.toFixed(1)}ppm (req ≥${req.zn}) · Mn: ${mnLogrado.toFixed(1)}ppm (req ≥${req.mn}) ·
+        Se: ${seLogrado.toFixed(2)}ppm (req ≥${req.se}) · Co: ${coLogrado.toFixed(2)}ppm (req ≥${req.co}) · I: ${iLogrado.toFixed(2)}ppm (req ≥${req.i})<br>
+        Vit.A: ${vitALogrado.toFixed(0)} UI/kgMS (req ≥${req.vitA}) · Vit.D: ${vitDLogrado.toFixed(0)} UI/kgMS (req ≥${req.vitD}) · Vit.E: ${vitELogrado.toFixed(1)} mg/kgMS (req ≥${req.vitE})
       </div>
       <div class="toolbar" style="margin-top:10px">
         <div class="toolbar-right">
@@ -8494,7 +9217,8 @@ function optimizarRacion(){
   DB.formulacionRacion.historial.push({
     id:racionId, fecha:new Date().toISOString(), categoria:cat, categoriaNombre:req.nombre,
     consumoMS, cabezas, costoTotalDia, costoPorKgGanado, gdpObjetivo, precioVenta,
-    perfil:{pb:pbLogrado, em:emLogrado, ca:caLogrado, p:pLogrado, fdn:fdnLogrado, mg:mgLogrado, k:kLogrado, s:sLogrado, na:naLogrado},
+    perfil:{pb:pbLogrado, em:emLogrado, ca:caLogrado, p:pLogrado, fdn:fdnLogrado, mg:mgLogrado, k:kLogrado, s:sLogrado, na:naLogrado,
+      cu:cuLogrado, zn:znLogrado, mn:mnLogrado, se:seLogrado, co:coLogrado, i:iLogrado, vitA:vitALogrado, vitD:vitDLogrado, vitE:vitELogrado},
     ingredientes: detalle.map(({a,fraccion})=>({id:a.id, nombre:a.nombre, fraccion, ms:a.ms, costo:a.costo}))
   });
   activos.forEach(a=>{ DB.formulacionRacion.historialPrecios[a.id] = {costo:a.costo, fecha:new Date().toISOString()}; });
@@ -8561,6 +9285,8 @@ function exportarRacionPDF(id){
   y = doc.lastAutoTable.finalY+10;
   doc.setFontSize(10);
   doc.text(`Perfil logrado — PB: ${r.perfil.pb.toFixed(1)}% · EM: ${r.perfil.em.toFixed(2)} Mcal/kgMS · Ca: ${r.perfil.ca.toFixed(2)}% · P: ${r.perfil.p.toFixed(2)}% · FDN: ${r.perfil.fdn.toFixed(1)}%`, 14, y);
+  y += 6;
+  doc.text(`Oligoelementos/vitaminas — Cu:${r.perfil.cu?.toFixed(1)||0}ppm Zn:${r.perfil.zn?.toFixed(1)||0}ppm Mn:${r.perfil.mn?.toFixed(1)||0}ppm Se:${r.perfil.se?.toFixed(2)||0}ppm Co:${r.perfil.co?.toFixed(2)||0}ppm I:${r.perfil.i?.toFixed(2)||0}ppm · VitA:${r.perfil.vitA?.toFixed(0)||0}UI VitD:${r.perfil.vitD?.toFixed(0)||0}UI VitE:${r.perfil.vitE?.toFixed(1)||0}mg`, 14, y);
   doc.save(nombreArchivoExport('Racion', 'pdf'));
 }
 
@@ -10617,12 +11343,13 @@ let   ESTAB_ID_ACTIVO = null;                  // id en memoria
 function dbVacia(nombre) {
   return {
     animales:[], potreros:[], pesadas:[], vacunas:[], tratamientos:[], encierres:[],
-    enfermedades:[], tactos:[], destetes:[], abortos:[], recategorizaciones:[],
+    enfermedades:[], tactos:[], destetes:[], abortos:[], recategorizaciones:[], celos:[], servicios:[],
     pastoreos:[], suplementos:[], nutricion:[], compras:[], ventas:[],
     traslados:[], muertes:[], historial:[], precios:{},
     transportistas:[], viajes:[], clientes:[], diario:[],
     insumos:[], insumoLotes:[],
     formulacionRacion: { ingredientesCustom:[], historial:[], historialPrecios:{}, activaPorCategoria:{} },
+  objetivosGDP: {},
     saldosPotreros:{},
     aguadas:[], precipitaciones:[],
     raspajes:[], sangrados:[],
