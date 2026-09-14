@@ -8007,6 +8007,7 @@ const ICONOS_HISTORIAL = {
 
 function cerrarFichaAnimal(){
   document.querySelectorAll('.ficha-animal-overlay').forEach(el=>el.remove());
+  document.querySelectorAll('.ficha-cerrar-btn').forEach(el=>el.remove());
   document.removeEventListener('keydown', cerrarFichaAnimalEsc);
 }
 function cerrarFichaAnimalEsc(e){ if(e.key==='Escape') cerrarFichaAnimal(); }
@@ -8043,7 +8044,6 @@ function abrirFichaAnimal(rp){
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn-secondary" onclick="exportarFichaPDF('${rp}')">📄 PDF</button>
-        <button class="btn-secondary" onclick="cerrarFichaAnimal()">✕ Cerrar</button>
       </div>
     </div>
 
@@ -8077,6 +8077,17 @@ function abrirFichaAnimal(rp){
   win.onclick = ()=>cerrarFichaAnimal();
   document.body.appendChild(win);
   document.addEventListener('keydown', cerrarFichaAnimalEsc);
+
+  // Botón de cerrar como elemento fijo aparte, por encima de todo lo demás (z-index más alto
+  // de toda la app) y con el handler enganchado por JS directo — así no depende de que ningún
+  // otro elemento de la página no lo tape ni de cómo burbujee el click.
+  const btnCerrar = document.createElement('button');
+  btnCerrar.className = 'ficha-cerrar-btn';
+  btnCerrar.textContent = '✕';
+  btnCerrar.setAttribute('aria-label','Cerrar ficha');
+  btnCerrar.style.cssText = 'position:fixed;top:16px;right:16px;z-index:100000;width:44px;height:44px;border-radius:50%;background:var(--red,#c0392b);color:#fff;border:none;font-size:20px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.5)';
+  btnCerrar.addEventListener('click', (e)=>{ e.stopPropagation(); cerrarFichaAnimal(); });
+  document.body.appendChild(btnCerrar);
 
   if(pesadasRp.length){
     setTimeout(()=>{
