@@ -1536,6 +1536,42 @@
           <th>Fecha</th><th>RP Hembra</th><th>Tipo</th><th>RP Toro / Semen</th><th>Protocolo IATF</th><th>Operador</th><th>Observaciones</th><th>Acciones</th>
         </tr></thead>
         <tbody id="servicio-tbody"></tbody></table></div>
+
+        <h3 style="margin:20px 0 8px">📅 Protocolos IATF — generación automática de calendario</h3>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Aplicar a</label>
+              <select id="iatf-modo" class="form-control" onchange="iatfCambiarModo()">
+                <option value="individual">Animal individual (RP)</option>
+                <option value="lote">Lote / potrero completo</option>
+              </select>
+            </div>
+            <div class="form-group" id="iatf-rp-wrap"><label class="form-label">RP</label><input type="text" id="iatf-rp" class="form-control" placeholder="1001"></div>
+            <div class="form-group" id="iatf-potrero-wrap" style="display:none"><label class="form-label">Potrero</label><select id="iatf-potrero" class="form-control"></select></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Plantilla de protocolo</label>
+              <select id="iatf-plantilla" class="form-control">
+                <option value="be8">8 días — Dispositivo + Benzoato de Estradiol (clásico)</option>
+                <option value="gnrh9">9 días — Dispositivo + GnRH (tipo Ovsynch)</option>
+              </select>
+            </div>
+            <div class="form-group"><label class="form-label">Fecha de inicio (Día 0)</label><input type="date" id="iatf-fecha-inicio" class="form-control"></div>
+          </div>
+          <button class="btn-primary" onclick="generarProtocoloIATF()">📅 Generar calendario</button>
+        </div>
+
+        <h3 style="margin:16px 0 8px">✅ Tareas pendientes de protocolos activos</h3>
+        <div class="tbl-wrap"><table><thead><tr>
+          <th>Hecho</th><th>Fecha</th><th>RP / Lote</th><th>Protocolo</th><th>Tarea</th><th></th>
+        </tr></thead>
+        <tbody id="iatf-tareas-tbody"></tbody></table></div>
+
+        <h3 style="margin:16px 0 8px">📋 Protocolos activos</h3>
+        <div class="tbl-wrap"><table><thead><tr>
+          <th>Inicio</th><th>RP / Lote</th><th>Plantilla</th><th>Progreso</th><th></th>
+        </tr></thead>
+        <tbody id="iatf-protocolos-tbody"></tbody></table></div>
       </div>
       <!-- Preñadas -->
       <div class="tab-content">
@@ -1620,6 +1656,49 @@
           <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>RP Ternero</th><th>RP Madre</th><th>Peso</th><th>Edad</th><th>Potrero</th><th>Observaciones</th><th>Acciones</th></tr></thead>
           <tbody id="destete-tbody"></tbody></table></div>
         </div>
+
+        <!-- 1) Terneros listos para destetar -->
+        <div class="card" style="margin-bottom:16px;border-left:3px solid var(--amber)">
+          <div class="card-title">🔔 Terneros listos para destetar</div>
+          <div class="form-row" style="margin-bottom:8px">
+            <div class="form-group" style="max-width:190px"><label class="form-label">Destetar a los (meses)</label><input type="number" id="dst-meses" class="form-control" value="7" step="0.5" oninput="renderListosDestetar()"></div>
+            <div class="form-group" style="max-width:190px"><label class="form-label">o al alcanzar (kg)</label><input type="number" id="dst-kg" class="form-control" value="170" step="5" oninput="renderListosDestetar()"></div>
+          </div>
+          <div class="tbl-wrap"><table><thead><tr><th>RP</th><th>Madre</th><th>Edad</th><th>Último peso</th><th>Motivo</th><th></th></tr></thead>
+          <tbody id="listos-destetar-tbody"></tbody></table></div>
+        </div>
+
+        <!-- 2) Proyección de peso al entore -->
+        <div class="card" style="margin-bottom:16px;border-left:3px solid var(--purple,#9b59b6)">
+          <div class="card-title">🎯 Proyección de peso al entore (vaquillonas)</div>
+          <div class="form-row" style="margin-bottom:8px">
+            <div class="form-group" style="max-width:190px"><label class="form-label">Entore a los (meses)</label><input type="number" id="ent-meses" class="form-control" value="15" step="1" oninput="renderProyeccionEntore()"></div>
+            <div class="form-group" style="max-width:190px"><label class="form-label">Peso objetivo (kg)</label><input type="number" id="ent-peso" class="form-control" value="300" step="5" oninput="renderProyeccionEntore()"></div>
+          </div>
+          <div class="tbl-wrap"><table><thead><tr><th>RP</th><th>Edad</th><th>Peso actual</th><th>GDP</th><th>Meses al entore</th><th>Peso proyectado</th><th>Estado</th></tr></thead>
+          <tbody id="proyeccion-entore-tbody"></tbody></table></div>
+        </div>
+
+        <!-- 3) Recategorización sugerida -->
+        <div class="card" style="margin-bottom:16px;border-left:3px solid var(--blue)">
+          <div class="card-title">🔄 Recategorización sugerida</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Animales que por edad y peso ya deberían pasar a la categoría siguiente.</div>
+          <div class="tbl-wrap"><table><thead><tr><th>RP</th><th>Categoría actual</th><th>Edad</th><th>Peso</th><th>Sugerida</th><th></th></tr></thead>
+          <tbody id="recat-sugerida-tbody"></tbody></table></div>
+        </div>
+
+        <!-- 4) Curva de crecimiento -->
+        <div class="card" style="margin-bottom:16px;border-left:3px solid var(--green)">
+          <div class="card-title">📈 Curva de crecimiento vs. objetivo</div>
+          <div class="form-row" style="margin-bottom:8px">
+            <div class="form-group" style="max-width:220px"><label class="form-label">Filtrar por potrero</label><select id="curva-potrero" class="form-control" onchange="renderCurvaCrecimiento()"><option value="">-- Todos --</option></select></div>
+            <div class="form-group" style="max-width:190px"><label class="form-label">GDP objetivo (kg/día)</label><input type="number" id="curva-gdp-obj" class="form-control" value="0.6" step="0.05" oninput="renderCurvaCrecimiento()"></div>
+            <div class="form-group" style="max-width:190px"><label class="form-label">Peso inicial de referencia (kg)</label><input type="number" id="curva-peso-inicial" class="form-control" value="170" step="5" oninput="renderCurvaCrecimiento()"></div>
+          </div>
+          <canvas id="chart-curva-recria" width="700" height="240" style="display:block;width:100%;max-width:700px"></canvas>
+          <div id="curva-recria-nota" style="font-size:12px;color:var(--text3);margin-top:6px"></div>
+        </div>
+
         <!-- Recría -->
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
           <div class="kpi green"><div class="kpi-label">En Recría</div><div class="kpi-val" id="k-recria-total">0</div><div class="kpi-sub">animales</div></div>
@@ -1684,6 +1763,7 @@
       <div class="page-header"><div class="page-title">🏥 Sanidad</div></div>
       <div class="tabs">
         <div class="tab active" onclick="switchTab('sanidad','san-vacunas')">💉 Vacunas</div>
+        <div class="tab" onclick="switchTab('sanidad','san-calendario')">📅 Calendario Preventivo</div>
         <div class="tab" onclick="switchTab('sanidad','san-raspaje')">🔬 Raspaje</div>
         <div class="tab" onclick="switchTab('sanidad','san-sangrado')">🩸 Sangrado</div>
       </div>
@@ -1699,6 +1779,35 @@
         </div>
         <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>RP</th><th>Vacuna</th><th>Dosis</th><th>Laboratorio</th><th>Refuerzo</th><th>Operador</th><th>Acciones</th></tr></thead>
         <tbody id="vacunas-tbody"></tbody></table></div>
+      </div>
+
+      <!-- Tab: Calendario Preventivo -->
+      <div id="san-calendario" class="tab-content">
+        <div style="font-size:13px;color:var(--text3);margin-bottom:12px">
+          Detecta automáticamente qué animales nunca recibieron una vacuna del protocolo, o tienen el refuerzo vencido — sin necesidad de que vos cargues una fecha de refuerzo a mano. Se basa en matchear el nombre de la vacuna cargada (ej. "Aftosa", "Brucelosis") contra el historial de cada animal.
+        </div>
+        <div class="grid-4" id="san-cal-kpis" style="margin-bottom:16px"></div>
+        <div class="form-row">
+          <div class="form-group" style="max-width:260px"><label class="form-label">Filtrar por protocolo</label>
+            <select id="san-cal-protocolo" class="form-control" onchange="renderCalendarioSanitario()">
+              <option value="">-- Todos --</option>
+              <option value="aftosa">Aftosa</option>
+              <option value="brucelosis">Brucelosis</option>
+              <option value="clostridiales">Clostridiales (Mancha/Enterotoxemia)</option>
+              <option value="ibr_bvd">IBR-BVD (reproductivas)</option>
+            </select>
+          </div>
+          <div class="form-group" style="max-width:260px"><label class="form-label">Estado</label>
+            <select id="san-cal-estado" class="form-control" onchange="renderCalendarioSanitario()">
+              <option value="pendientes">Solo pendientes (nunca/vencido/próximo)</option>
+              <option value="todos">Todos (incluye al día)</option>
+            </select>
+          </div>
+        </div>
+        <div class="tbl-wrap"><table><thead><tr>
+          <th>RP</th><th>Categoría</th><th>Edad</th><th>Protocolo</th><th>Última dosis</th><th>Estado</th><th></th>
+        </tr></thead>
+        <tbody id="san-cal-tbody"></tbody></table></div>
       </div>
 
       <!-- Tab: Raspaje -->
@@ -1915,6 +2024,18 @@
             <tbody id="forraje-tbody"></tbody>
           </table></div>
         </div>
+
+        <div class="card" style="margin-top:16px;border-left:3px solid var(--amber)">
+          <div class="card-title">🔀 Planificador de rotación entre potreros</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:10px">
+            Cruza los potreros ocupados que necesitan rotar pronto con los potreros libres/descansando, y sugiere a cuál mover cada lote y cuándo estará listo para recibirlo.
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="max-width:260px"><label class="form-label">Días mínimos de pastoreo al entrar</label><input type="number" id="rot-dias-minimos" class="form-control" value="15" step="1"></div>
+            <div class="form-group" style="align-self:flex-end"><button class="btn-primary" onclick="generarPlanRotacion()">🔀 Generar plan de rotación</button></div>
+          </div>
+          <div id="rot-plan-resultado" style="margin-top:12px"></div>
+        </div>
       </div>
 
       <!-- Monitoreo de Aguadas -->
@@ -1941,6 +2062,7 @@
       <div class="tabs">
         <div class="tab active" onclick="switchTab('nutricion','nutri-plan')">Plan nutricional</div>
         <div class="tab" onclick="switchTab('nutricion','nutri-formulacion')">⚗️ Formulación de ración</div>
+        <div class="tab" onclick="switchTab('nutricion','nutri-estrategica')">🎯 Suplementación Estratégica</div>
       </div>
 
       <!-- Plan nutricional (registro) -->
@@ -2018,6 +2140,21 @@
 
           <div class="form-grid" style="margin-top:8px">
             <div class="form-group">
+              <label>Biotipo racial</label>
+              <select id="form-rac-raza" onchange="actualizarRequerimientosUI()">
+                <option value="taurus">Bos taurus (Angus, Hereford, etc.)</option>
+                <option value="cruza">Cruza índica x taurus (Braford, Brangus, etc.)</option>
+                <option value="indicus">Bos indicus (Nelore, Brahman, etc.)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Condición corporal actual (escala 1-5)</label>
+              <input type="number" id="form-rac-cc" min="1" max="5" step="0.25" placeholder="Ej: 2.5" oninput="actualizarRequerimientosUI()">
+            </div>
+          </div>
+
+          <div class="form-grid" style="margin-top:8px">
+            <div class="form-group">
               <label>Mín. % forraje voluminoso (sobre MS)</label>
               <input type="number" id="form-rac-minforraje" value="30" step="1">
             </div>
@@ -2058,6 +2195,49 @@
             <th>Fecha</th><th>Categoría</th><th>Costo/cab/día</th><th>PB%</th><th>EM</th><th>Activa p/categoría</th><th></th>
           </tr></thead>
           <tbody id="historial-raciones-tbody"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- Suplementación Estratégica -->
+      <div class="tab-content">
+        <div style="font-size:13px;color:var(--text3);margin-bottom:12px">
+          Compara el perfil nutricional del pasto base de un potrero contra el requerimiento de una categoría, y si hay déficit, sugiere cuánto suplementar por día y a qué costo. Es una estimación rápida con un solo ingrediente — para una mezcla completa optimizada, usá "Formulación de ración".
+        </div>
+
+        <div class="card">
+          <div class="card-title">📉 Análisis de déficit forraje vs. requerimiento</div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Potrero</label><select id="se-potrero" class="form-control"></select></div>
+            <div class="form-group"><label class="form-label">Categoría</label>
+              <select id="se-categoria" class="form-control">
+                <option value="recria">Recría</option>
+                <option value="engorde">Engorde</option>
+                <option value="terminacion">Terminación</option>
+                <option value="destete_precoz">Destete precoz</option>
+                <option value="vaca_manten">Vaca de cría (mantenimiento)</option>
+                <option value="vaca_prena_temprana">Vaca preñada (1er-2do tercio)</option>
+                <option value="vaca_prena_tardia">Vaca preñada (último tercio)</option>
+                <option value="vaca_lactando">Vaca de cría + ternero al pie</option>
+                <option value="toro">Toro (servicio)</option>
+              </select>
+            </div>
+            <div class="form-group"><label class="form-label">Peso vivo (kg)</label><input type="number" id="se-peso" class="form-control" value="350"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">GDP objetivo (kg/día)</label><input type="number" id="se-gdp" class="form-control" value="0.8" step="0.05"></div>
+            <div class="form-group"><label class="form-label">Precio venta $/kg (para breakeven)</label><input type="number" id="se-preciov" class="form-control" placeholder="Opcional"></div>
+            <div class="form-group" style="align-self:flex-end"><button class="btn-primary" onclick="analizarSuplementacionUI()">📉 Analizar déficit</button></div>
+          </div>
+          <div id="se-resultado" style="margin-top:10px"></div>
+        </div>
+
+        <div class="card" style="margin-top:16px;border-left:3px solid var(--amber)">
+          <div class="card-title">⏰ Ventanas críticas activas</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:10px">
+            Momentos donde suplementar rinde más, detectados automáticamente a partir de tactos y destetes cargados.
+          </div>
+          <div class="tbl-wrap"><table><thead><tr><th>RP</th><th>Ventana</th><th>Detalle</th></tr></thead>
+          <tbody id="se-ventanas-tbody"></tbody></table></div>
         </div>
       </div>
     </div>
@@ -3663,7 +3843,7 @@
 // ─── STATE ───
 window.DB = {
   animales:[], potreros:[], pesadas:[], vacunas:[], tratamientos:[], encierres:[],
-  enfermedades:[], tactos:[], destetes:[], abortos:[], recategorizaciones:[], celos:[], servicios:[],
+  enfermedades:[], tactos:[], destetes:[], abortos:[], recategorizaciones:[], celos:[], servicios:[], protocolosIATF:[],
   pastoreos:[], suplementos:[], nutricion:[], compras:[], ventas:[],
   traslados:[], muertes:[], historial:[], precios:{},
   transportistas:[], viajes:[], clientes:[], diario:[],
@@ -4281,10 +4461,10 @@ function showPage(id) {
   if(nav) nav.classList.add('active');
   if(id === 'dashboard') renderDashboard();
   if(id === 'animales') renderAnimales();
-  if(id === 'reproduccion') { renderNacimientos(); renderCelos(); renderServicios(); actualizarKpisServicio(); renderPrenadas(); renderDestetes(); renderAbortos(); renderRecats(); renderRecria(); renderCalendarioReproductivoPotreroSelect(); renderCalendarioReproductivo(); }
-  if(id === 'sanidad') { renderVacunas(); renderTratamientos(); renderEnfermedades(); renderRaspaje(); renderSangrado(); }
+  if(id === 'reproduccion') { renderNacimientos(); renderCelos(); renderServicios(); actualizarKpisServicio(); poblarPotrerosIATF(); iatfCambiarModo(); renderTareasIATF(); renderProtocolosIATF(); renderPrenadas(); renderDestetes(); renderAbortos(); renderRecats(); renderRecria(); renderListosDestetar(); renderProyeccionEntore(); renderRecatSugerida(); poblarPotrerosCurva(); renderCurvaCrecimiento(); renderCalendarioReproductivoPotreroSelect(); renderCalendarioReproductivo(); }
+  if(id === 'sanidad') { renderVacunas(); renderTratamientos(); renderEnfermedades(); renderRaspaje(); renderSangrado(); renderCalendarioSanitario(); }
   if(id === 'tratamientos') { renderTratamientos(); renderEnfermedades(); }
-  if(id === 'nutricion') { renderNutricion(); renderIngredientesTabla(); actualizarRequerimientosUI(); poblarCategoriasRodeo(); renderHistorialRaciones(); }
+  if(id === 'nutricion') { renderNutricion(); renderIngredientesTabla(); actualizarRequerimientosUI(); poblarCategoriasRodeo(); renderHistorialRaciones(); poblarPotrerosSuplementacion(); renderVentanasCriticas(); }
   if(id === 'movimientos') { renderCompras(); renderVentas(); renderTraslados(); }
   if(id === 'reportes') renderResumen();
   if(id === 'mortalidad') renderMuertes();
@@ -7827,6 +8007,120 @@ function renderVacunas(){
   tbody.innerHTML=[...DB.vacunas].reverse().map(v=>`<tr><td>${v.fecha}</td><td class="td-mono">${v.rp}</td><td>${v.vacuna}</td><td class="td-mono">${v.dosis} ml</td><td>${v.lab||'--'}</td><td class="td-mono">${v.refuerzo||'--'}</td><td>${v.operador||'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaVacuna(${v.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(8);
 }
 
+// ═══ CALENDARIO SANITARIO PREVENTIVO ═══
+// Detecta automáticamente animales sin la vacuna del protocolo, o con el refuerzo vencido,
+// cruzando el historial de DB.vacunas (por nombre de vacuna) contra edad/categoría del animal.
+const PROTOCOLOS_SANITARIOS = [
+  { id:'aftosa', nombre:'Aftosa', match:v=>/aftosa/i.test(v.vacuna||''),
+    edadMinMeses:2, intervaloDias:180, repetir:true, aplicaA:a=>true },
+  { id:'brucelosis', nombre:'Brucelosis', match:v=>/bruc/i.test(v.vacuna||''),
+    edadMinMeses:3, edadMaxMeses:8, repetir:false, aplicaA:a=>a.sexo==='Hembra' },
+  { id:'clostridiales', nombre:'Clostridiales (Mancha/Enterotoxemia)', match:v=>/clostri|mancha|enterotox/i.test(v.vacuna||''),
+    edadMinMeses:3, intervaloDias:365, repetir:true, aplicaA:a=>true },
+  { id:'ibr_bvd', nombre:'IBR-BVD (reproductivas)', match:v=>/ibr|bvd|reproduct/i.test(v.vacuna||''),
+    edadMinMeses:12, intervaloDias:365, repetir:true, aplicaA:a=>['Vaca','Vaquillona','Toro'].includes(a.categoria) }
+];
+
+function edadMesesAnimal(a){
+  if(!a.fnac) return null;
+  const f = new Date(a.fnac); if(isNaN(f)) return null;
+  return (Date.now()-f.getTime())/(30.44*86400000);
+}
+
+// Devuelve null si el protocolo todavía no le corresponde al animal (o sin datos de edad/sexo/categoría),
+// o {estado, ultima, diasDesde/diasFaltan} si aplica.
+function evaluarProtocoloAnimal(protocolo, animal){
+  if(!protocolo.aplicaA(animal)) return null;
+  const edadMeses = edadMesesAnimal(animal);
+  if(edadMeses===null) return null;
+  if(edadMeses < protocolo.edadMinMeses) return null;
+
+  const vacunasAnimal = (DB.vacunas||[]).filter(v=>v.rp===animal.rp && protocolo.match(v));
+  if(!vacunasAnimal.length){
+    if(protocolo.edadMaxMeses && edadMeses > protocolo.edadMaxMeses){
+      return { estado:'fuera_ventana', ultima:null };
+    }
+    return { estado:'nunca', ultima:null };
+  }
+  const ultima = vacunasAnimal.map(v=>v.fecha).sort().reverse()[0];
+  if(!protocolo.repetir){
+    return { estado:'al_dia', ultima };
+  }
+  const diasDesde = Math.round((Date.now()-new Date(ultima).getTime())/86400000);
+  const diasFaltan = protocolo.intervaloDias - diasDesde;
+  if(diasFaltan < 0) return { estado:'vencido', ultima, diasVencido:-diasFaltan };
+  if(diasFaltan <= 20) return { estado:'proximo', ultima, diasFaltan };
+  return { estado:'al_dia', ultima, diasFaltan };
+}
+
+function renderCalendarioSanitario(){
+  const kpiBox = document.getElementById('san-cal-kpis');
+  const tbody = document.getElementById('san-cal-tbody');
+  if(!tbody) return;
+
+  const filtroProtocolo = document.getElementById('san-cal-protocolo')?.value || '';
+  const filtroEstado = document.getElementById('san-cal-estado')?.value || 'pendientes';
+
+  const activos = DB.animales.filter(a=>a.activo);
+  const filas = [];
+  PROTOCOLOS_SANITARIOS.forEach(protocolo=>{
+    if(filtroProtocolo && protocolo.id!==filtroProtocolo) return;
+    activos.forEach(a=>{
+      const r = evaluarProtocoloAnimal(protocolo, a);
+      if(!r) return;
+      filas.push({ a, protocolo, ...r });
+    });
+  });
+
+  const nunca = filas.filter(f=>f.estado==='nunca').length;
+  const vencidos = filas.filter(f=>f.estado==='vencido').length;
+  const proximos = filas.filter(f=>f.estado==='proximo').length;
+  const fueraVentana = filas.filter(f=>f.estado==='fuera_ventana').length;
+
+  if(kpiBox){
+    kpiBox.innerHTML = `
+      <div class="kpi red"><div class="kpi-label">Nunca vacunados</div><div class="kpi-val">${nunca}</div><div class="kpi-sub">del protocolo correspondiente</div></div>
+      <div class="kpi red"><div class="kpi-label">Refuerzo vencido</div><div class="kpi-val">${vencidos}</div><div class="kpi-sub">pasó el intervalo</div></div>
+      <div class="kpi amber"><div class="kpi-label">Por vencer (≤20 días)</div><div class="kpi-val">${proximos}</div><div class="kpi-sub">próximo refuerzo</div></div>
+      <div class="kpi blue"><div class="kpi-label">Fuera de ventana</div><div class="kpi-val">${fueraVentana}</div><div class="kpi-sub">ej. brucelosis fuera de edad</div></div>
+    `;
+  }
+
+  let mostrar = filas;
+  if(filtroEstado==='pendientes') mostrar = mostrar.filter(f=>f.estado!=='al_dia');
+  const ordenEstado = {vencido:0, nunca:1, fuera_ventana:2, proximo:3, al_dia:4};
+  mostrar.sort((x,y)=>(ordenEstado[x.estado]-ordenEstado[y.estado]));
+
+  if(!mostrar.length){ tbody.innerHTML = emptyRow(7); return; }
+  tbody.innerHTML = mostrar.map(f=>{
+    const edad = edadMesesAnimal(f.a);
+    const edadTxt = edad!==null ? (edad<12 ? `${Math.floor(edad)}m` : `${(edad/12).toFixed(1)}a`) : '--';
+    let estadoTxt, color;
+    switch(f.estado){
+      case 'nunca': estadoTxt='🔴 Nunca vacunado'; color='var(--red)'; break;
+      case 'vencido': estadoTxt=`🔴 Vencido hace ${f.diasVencido}d`; color='var(--red)'; break;
+      case 'proximo': estadoTxt=`🟡 Vence en ${f.diasFaltan}d`; color='var(--amber)'; break;
+      case 'fuera_ventana': estadoTxt='🔵 Fuera de ventana de edad'; color='var(--blue)'; break;
+      default: estadoTxt='✅ Al día'; color='var(--green)';
+    }
+    return `<tr>
+      <td class="td-mono">${f.a.rp}</td>
+      <td>${f.a.categoria||'--'}</td>
+      <td class="td-mono">${edadTxt}</td>
+      <td>${f.protocolo.nombre}</td>
+      <td class="td-mono">${f.ultima||'--'}</td>
+      <td style="color:${color};font-weight:600">${estadoTxt}</td>
+      <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirModalVacunaDesdeCalendario('${f.a.rp}','${f.protocolo.nombre}')">＋ Vacunar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function abrirModalVacunaDesdeCalendario(rp, nombreVacuna){
+  openModal('modal-vacuna');
+  const elRp = document.getElementById('v-rp'); if(elRp) elRp.value = rp;
+  const elVac = document.getElementById('v-vacuna'); if(elVac) elVac.value = nombreVacuna;
+}
+
 function renderTratamientos(){
   const tbody=document.getElementById('tratamientos-tbody');if(!tbody)return;
   tbody.innerHTML=[...DB.tratamientos].reverse().map(t=>`<tr><td>${t.fecha}</td><td class="td-mono">${t.rp}</td><td>${t.diag||'--'}</td><td>${t.med||'--'}</td><td class="td-mono">${t.dosis||'--'}</td><td class="td-mono">${t.dias||'--'}</td><td>${t.vet||'--'}</td><td><span class="badge ${t.estado==='En Curso'?'badge-amber':t.estado==='Completado'?'badge-green':'badge-gray'}">${t.estado}</span></td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaTratamiento(${t.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
@@ -8042,6 +8336,152 @@ function renderServicios(){
   </tr>`).join('')||emptyRow(8);
 }
 
+// ═══ PROTOCOLOS IATF — generación automática de calendario ═══
+
+const PLANTILLAS_IATF = {
+  be8: {
+    nombre: '8 días — Dispositivo + Benzoato de Estradiol',
+    pasos: [
+      {dia:0, tarea:'Colocación de dispositivo (DIB/CIDR) + Benzoato de Estradiol (2mg IM)'},
+      {dia:8, tarea:'Retiro del dispositivo + PGF2α IM + eCG (400-500 UI, opcional en vacas con cría al pie)'},
+      {dia:9, tarea:'Cipionato de Estradiol (ECP, 0.5-1mg IM) — 24hs post-retiro'},
+      {dia:9, tarea:'Inseminación Artificial a Tiempo Fijo (IATF) — 52-56hs post-retiro', esIA:true}
+    ]
+  },
+  gnrh9: {
+    nombre: '9 días — Dispositivo + GnRH (tipo Ovsynch)',
+    pasos: [
+      {dia:0, tarea:'Colocación de dispositivo (DIB/CIDR) + GnRH (100mcg IM)'},
+      {dia:9, tarea:'Retiro del dispositivo + PGF2α IM'},
+      {dia:9, tarea:'2ª dosis de GnRH + Inseminación Artificial a Tiempo Fijo (IATF) — 54-56hs post-retiro', esIA:true}
+    ]
+  }
+};
+
+function iatfCambiarModo(){
+  const modo = document.getElementById('iatf-modo').value;
+  document.getElementById('iatf-rp-wrap').style.display = modo==='individual' ? '' : 'none';
+  document.getElementById('iatf-potrero-wrap').style.display = modo==='lote' ? '' : 'none';
+}
+
+function poblarPotrerosIATF(){
+  const sel = document.getElementById('iatf-potrero');
+  if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  sel.value = cur;
+}
+
+function generarProtocoloIATF(){
+  const modo = document.getElementById('iatf-modo').value;
+  const plantillaKey = document.getElementById('iatf-plantilla').value;
+  const fechaInicio = document.getElementById('iatf-fecha-inicio').value;
+  if(!fechaInicio){ toast('Elegí la fecha de inicio (Día 0)','err'); return; }
+  const plantilla = PLANTILLAS_IATF[plantillaKey];
+
+  let sujetos = []; // [{tipo:'rp'|'lote', valor}]
+  if(modo==='individual'){
+    const rp = document.getElementById('iatf-rp').value.trim();
+    if(!rp){ toast('Ingresá el RP','err'); return; }
+    sujetos.push({tipo:'rp', valor:rp});
+  } else {
+    const potrero = document.getElementById('iatf-potrero').value;
+    if(!potrero){ toast('Elegí un potrero','err'); return; }
+    const hembras = DB.animales.filter(a=>a.activo && a.potrero===potrero && (a.categoria==='Vaca'||a.categoria==='Vaquillona'));
+    if(!hembras.length){ toast('No hay vacas/vaquillonas activas en ese potrero','err'); return; }
+    hembras.forEach(a=>sujetos.push({tipo:'rp', valor:a.rp, potrero}));
+  }
+
+  if(!DB.protocolosIATF) DB.protocolosIATF = [];
+  sujetos.forEach(suj=>{
+    const pasos = plantilla.pasos.map(p=>{
+      const f = new Date(fechaInicio); f.setDate(f.getDate()+p.dia);
+      return { dia:p.dia, fecha:f.toISOString().split('T')[0], tarea:p.tarea, esIA:!!p.esIA, hecho:false };
+    });
+    DB.protocolosIATF.push({
+      id: 'iatf_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+      rp: suj.valor, potrero: suj.potrero||'',
+      plantillaKey, plantillaNombre: plantilla.nombre,
+      fechaInicio, pasos
+    });
+  });
+
+  saveToStorage();
+  document.getElementById('iatf-rp').value = '';
+  renderTareasIATF();
+  renderProtocolosIATF();
+  toast(`Calendario generado para ${sujetos.length} animal(es) ✅`,'ok');
+}
+
+function marcarTareaIATF(protocoloId, pasoIdx){
+  const prot = (DB.protocolosIATF||[]).find(p=>p.id===protocoloId);
+  if(!prot) return;
+  const paso = prot.pasos[pasoIdx];
+  paso.hecho = !paso.hecho;
+  saveToStorage();
+  renderTareasIATF();
+  renderProtocolosIATF();
+  if(paso.hecho && paso.esIA){
+    if(confirm(`¿Registrar automáticamente el servicio de RP ${prot.rp} con fecha ${paso.fecha}?`)){
+      document.getElementById('serv-rp').value = prot.rp;
+      document.getElementById('serv-fecha').value = paso.fecha;
+      document.getElementById('serv-tipo').value = 'IATF (a tiempo fijo)';
+      document.getElementById('serv-protocolo').value = prot.plantillaNombre;
+      openModal('modal-servicio');
+    }
+  }
+}
+
+function eliminarProtocoloIATF(protocoloId){
+  if(!confirm('¿Eliminar este protocolo y sus tareas?')) return;
+  DB.protocolosIATF = (DB.protocolosIATF||[]).filter(p=>p.id!==protocoloId);
+  saveToStorage();
+  renderTareasIATF();
+  renderProtocolosIATF();
+}
+
+function renderTareasIATF(){
+  const tbody = document.getElementById('iatf-tareas-tbody');
+  if(!tbody) return;
+  const filas = [];
+  (DB.protocolosIATF||[]).forEach(prot=>{
+    prot.pasos.forEach((paso,idx)=>{
+      if(paso.hecho) return;
+      filas.push({prot, paso, idx});
+    });
+  });
+  filas.sort((a,b)=>new Date(a.paso.fecha)-new Date(b.paso.fecha));
+  if(!filas.length){ tbody.innerHTML = emptyRow(5); return; }
+  const hoy = new Date().toISOString().split('T')[0];
+  tbody.innerHTML = filas.map(({prot,paso,idx})=>{
+    const color = paso.fecha<hoy ? 'var(--red)' : paso.fecha===hoy ? 'var(--amber)' : 'var(--text2)';
+    return `<tr>
+      <td><input type="checkbox" onchange="marcarTareaIATF('${prot.id}',${idx})"></td>
+      <td class="td-mono" style="color:${color};font-weight:600">${paso.fecha}</td>
+      <td class="td-mono">${prot.rp}${prot.potrero?` (${prot.potrero})`:''}</td>
+      <td style="font-size:12px">${prot.plantillaNombre}</td>
+      <td>${paso.esIA?'🔵 ':''}${paso.tarea}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderProtocolosIATF(){
+  const tbody = document.getElementById('iatf-protocolos-tbody');
+  if(!tbody) return;
+  const protocolos = DB.protocolosIATF||[];
+  if(!protocolos.length){ tbody.innerHTML = emptyRow(5); return; }
+  tbody.innerHTML = [...protocolos].reverse().map(prot=>{
+    const hechos = prot.pasos.filter(p=>p.hecho).length;
+    return `<tr>
+      <td class="td-mono">${prot.fechaInicio}</td>
+      <td class="td-mono">${prot.rp}${prot.potrero?` (${prot.potrero})`:''}</td>
+      <td style="font-size:12px">${prot.plantillaNombre}</td>
+      <td class="td-mono">${hechos}/${prot.pasos.length}</td>
+      <td><button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarProtocoloIATF('${prot.id}')">🗑</button></td>
+    </tr>`;
+  }).join('');
+}
+
 function renderRecats(){
   const tbody=document.getElementById('recat-tbody');if(!tbody)return;
   if(!DB.recategorizaciones){tbody.innerHTML=emptyRow(6);return;}
@@ -8098,6 +8538,261 @@ function renderRecria(){
       <td>${estado}</td>
     </tr>`;
   }).join('');
+}
+
+// ═══ GESTIÓN DE DESTETE Y RECRÍA ═══
+
+function edadMesesDe(fnac){
+  if(!fnac) return null;
+  const f = new Date(fnac); if(isNaN(f)) return null;
+  return (Date.now()-f.getTime())/(30.44*86400000);
+}
+
+// GDP en kg/día del animal, calculado de sus dos pesadas más separadas en el tiempo.
+function gdpKgDiaAnimal(rp){
+  const lista = (DB.pesadas||[]).filter(p=>p.rp===rp).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+  if(lista.length<2) return null;
+  const primera = lista[0], ultima = lista[lista.length-1];
+  const dias = (new Date(ultima.fecha)-new Date(primera.fecha))/86400000;
+  if(dias<1) return null;
+  return (ultima.peso-primera.peso)/dias;
+}
+
+// 1) Terneros al pie que ya alcanzaron edad o peso de destete.
+function renderListosDestetar(){
+  const tbody = document.getElementById('listos-destetar-tbody');
+  if(!tbody) return;
+  const mesesUmbral = parseFloat(document.getElementById('dst-meses')?.value)||7;
+  const kgUmbral = parseFloat(document.getElementById('dst-kg')?.value)||170;
+  const yaDestetados = new Set((DB.destetes||[]).map(d=>d.ternero));
+  const catsTernero = ['Ternero M','Ternera H','Ternero','Ternera'];
+
+  const filas = DB.animales.filter(a=>{
+    if(!a.activo) return false;
+    if(yaDestetados.has(a.rp)) return false;
+    if(!catsTernero.includes(a.categoria)) return false;
+    const meses = edadMesesDe(a.fnac);
+    const peso = parseFloat(a.peso)||0;
+    return (meses!==null && meses>=mesesUmbral) || (peso>0 && peso>=kgUmbral);
+  }).map(a=>{
+    const meses = edadMesesDe(a.fnac);
+    const peso = parseFloat(a.peso)||0;
+    const motivos = [];
+    if(meses!==null && meses>=mesesUmbral) motivos.push(`edad ≥${mesesUmbral}m`);
+    if(peso>0 && peso>=kgUmbral) motivos.push(`peso ≥${kgUmbral}kg`);
+    return {a, meses, peso, motivo:motivos.join(' + ')};
+  }).sort((x,y)=>(y.meses||0)-(x.meses||0));
+
+  if(!filas.length){ tbody.innerHTML = emptyRow(6); return; }
+  tbody.innerHTML = filas.map(f=>{
+    // Buscar la madre en los nacimientos registrados
+    const nac = (DB.nacimientos||[]).find(n=>n.rp===f.a.rp || n.cria===f.a.rp);
+    const madre = nac?.madre || '--';
+    return `<tr>
+      <td class="td-mono">${f.a.rp}</td>
+      <td class="td-mono">${madre}</td>
+      <td class="td-mono">${f.meses!==null?f.meses.toFixed(1)+'m':'--'}</td>
+      <td class="td-mono">${f.peso>0?f.peso+' kg':'--'}</td>
+      <td style="color:var(--amber)">${f.motivo}</td>
+      <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirDesteteDesdeAlerta('${f.a.rp}','${madre}',${f.peso})">＋ Destetar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function abrirDesteteDesdeAlerta(rp, madre, peso){
+  openModal('modal-destete');
+  const e=id=>document.getElementById(id);
+  if(e('de-ternero')) e('de-ternero').value = rp;
+  if(e('de-madre') && madre!=='--') e('de-madre').value = madre;
+  if(e('de-peso') && peso>0) e('de-peso').value = peso;
+  if(e('de-fecha')) e('de-fecha').value = new Date().toISOString().split('T')[0];
+}
+
+// 2) Proyección de peso al entore para vaquillonas de reposición.
+function renderProyeccionEntore(){
+  const tbody = document.getElementById('proyeccion-entore-tbody');
+  if(!tbody) return;
+  const mesesEntore = parseFloat(document.getElementById('ent-meses')?.value)||15;
+  const pesoObjetivo = parseFloat(document.getElementById('ent-peso')?.value)||300;
+
+  const filas = DB.animales.filter(a=>a.activo && ['Vaquillona','Ternera H'].includes(a.categoria)).map(a=>{
+    const meses = edadMesesDe(a.fnac);
+    const peso = parseFloat(a.peso)||0;
+    const gdp = gdpKgDiaAnimal(a.rp);
+    if(meses===null || peso<=0) return {a, meses, peso, gdp, sinDatos:true};
+    const mesesRestantes = mesesEntore - meses;
+    if(mesesRestantes<=0) return {a, meses, peso, gdp, yaEnEdad:true, pesoProyectado:peso};
+    const gdpUsado = gdp!==null ? gdp : 0;
+    const pesoProyectado = peso + gdpUsado*mesesRestantes*30.44;
+    const gdpNecesario = (pesoObjetivo-peso)/(mesesRestantes*30.44);
+    return {a, meses, peso, gdp, mesesRestantes, pesoProyectado, gdpNecesario};
+  }).sort((x,y)=>(x.pesoProyectado||0)-(y.pesoProyectado||0));
+
+  if(!filas.length){ tbody.innerHTML = emptyRow(7); return; }
+  tbody.innerHTML = filas.map(f=>{
+    let estado, color;
+    if(f.sinDatos){ estado='Sin fecha de nacimiento o peso'; color='var(--text3)'; }
+    else if(f.yaEnEdad){
+      const ok = f.peso>=pesoObjetivo;
+      estado = ok ? `✅ Ya en edad y peso (${f.peso}kg)` : `🔴 Ya en edad pero le faltan ${(pesoObjetivo-f.peso).toFixed(0)}kg`;
+      color = ok ? 'var(--green)' : 'var(--red)';
+    }
+    else if(f.gdp===null){ estado='Faltan pesadas para proyectar GDP'; color='var(--text3)'; }
+    else if(f.pesoProyectado>=pesoObjetivo){ estado='✅ Llega al objetivo'; color='var(--green)'; }
+    else {
+      estado = `🔴 No llega — necesita ${f.gdpNecesario.toFixed(2)} kg/día (trae ${f.gdp.toFixed(2)})`;
+      color = 'var(--red)';
+    }
+    return `<tr>
+      <td class="td-mono">${f.a.rp}</td>
+      <td class="td-mono">${f.meses!==null?f.meses.toFixed(1)+'m':'--'}</td>
+      <td class="td-mono">${f.peso>0?f.peso+' kg':'--'}</td>
+      <td class="td-mono">${f.gdp!==null?f.gdp.toFixed(2)+' kg/d':'--'}</td>
+      <td class="td-mono">${f.mesesRestantes!==undefined?f.mesesRestantes.toFixed(1):'--'}</td>
+      <td class="td-mono">${f.pesoProyectado!==undefined?f.pesoProyectado.toFixed(0)+' kg':'--'}</td>
+      <td style="color:${color};font-weight:600;white-space:normal">${estado}</td>
+    </tr>`;
+  }).join('');
+}
+
+// 3) Recategorización sugerida por edad y peso.
+const REGLAS_RECATEGORIZACION = [
+  {desde:'Ternero M', hacia:'Novillito',  mesesMin:8,  pesoMin:180},
+  {desde:'Ternera H', hacia:'Vaquillona', mesesMin:8,  pesoMin:170},
+  {desde:'Novillito', hacia:'Novillo',    mesesMin:24, pesoMin:380},
+  {desde:'Torito',    hacia:'Toro',       mesesMin:24, pesoMin:450},
+  {desde:'Vaquillona',hacia:'Vaca',       mesesMin:30, pesoMin:380}
+];
+
+function renderRecatSugerida(){
+  const tbody = document.getElementById('recat-sugerida-tbody');
+  if(!tbody) return;
+  const filas = [];
+  DB.animales.filter(a=>a.activo).forEach(a=>{
+    const regla = REGLAS_RECATEGORIZACION.find(r=>r.desde===a.categoria);
+    if(!regla) return;
+    const meses = edadMesesDe(a.fnac);
+    const peso = parseFloat(a.peso)||0;
+    if(meses===null || peso<=0) return;
+    if(meses>=regla.mesesMin && peso>=regla.pesoMin){
+      filas.push({a, meses, peso, regla});
+    }
+  });
+  if(!filas.length){ tbody.innerHTML = emptyRow(6); return; }
+  tbody.innerHTML = filas.sort((x,y)=>y.meses-x.meses).map(f=>`<tr>
+    <td class="td-mono">${f.a.rp}</td>
+    <td><span class="badge badge-white">${f.a.categoria}</span></td>
+    <td class="td-mono">${f.meses.toFixed(1)}m</td>
+    <td class="td-mono">${f.peso} kg</td>
+    <td><span class="badge badge-green">${f.regla.hacia}</span></td>
+    <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirRecatDesdeAlerta('${f.a.rp}','${f.a.categoria}','${f.regla.hacia}',${f.peso})">🔄 Recategorizar</button></td>
+  </tr>`).join('');
+}
+
+function abrirRecatDesdeAlerta(rp, catActual, catNueva, peso){
+  openModal('modal-recat');
+  const e=id=>document.getElementById(id);
+  if(e('rc-rp')) e('rc-rp').value = rp;
+  if(e('rc-nueva')) e('rc-nueva').value = catNueva;
+  if(e('rc-ant')) e('rc-ant').value = catActual;
+  if(e('rc-peso') && peso>0) e('rc-peso').value = peso;
+  if(e('rc-fecha')) e('rc-fecha').value = new Date().toISOString().split('T')[0];
+  if(e('rc-motivo')) e('rc-motivo').value = 'Desarrollo (edad y peso alcanzados)';
+}
+
+// 4) Curva de crecimiento real del lote de recría vs. curva objetivo.
+function poblarPotrerosCurva(){
+  const sel = document.getElementById('curva-potrero');
+  if(!sel) return;
+  const cur = sel.value;
+  const catsRecria=['Novillito','Vaquillona','Torito','Ternero M','Ternera H'];
+  const potreros = [...new Set(DB.animales.filter(a=>a.activo && catsRecria.includes(a.categoria)).map(a=>a.potrero).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">-- Todos --</option>' + potreros.map(p=>`<option>${p}</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur)) sel.value = cur;
+}
+
+function renderCurvaCrecimiento(){
+  const canvas = document.getElementById('chart-curva-recria');
+  const nota = document.getElementById('curva-recria-nota');
+  if(!canvas) return;
+  const potreroFiltro = document.getElementById('curva-potrero')?.value || '';
+  const gdpObjetivo = parseFloat(document.getElementById('curva-gdp-obj')?.value)||0.6;
+  const pesoInicial = parseFloat(document.getElementById('curva-peso-inicial')?.value)||170;
+
+  const catsRecria=['Novillito','Vaquillona','Torito','Ternero M','Ternera H'];
+  const rpsRecria = new Set(DB.animales.filter(a=>a.activo && catsRecria.includes(a.categoria)
+    && (!potreroFiltro || a.potrero===potreroFiltro)).map(a=>a.rp));
+
+  // Promedio de peso del lote por mes
+  const porMes = {};
+  (DB.pesadas||[]).forEach(p=>{
+    if(!rpsRecria.has(p.rp)) return;
+    const mes = (p.fecha||'').slice(0,7);
+    if(!mes || !(p.peso>0)) return;
+    (porMes[mes]=porMes[mes]||[]).push(p.peso);
+  });
+  const meses = Object.keys(porMes).sort();
+  const serieReal = meses.map(m=>({label:m, valor:porMes[m].reduce((s,v)=>s+v,0)/porMes[m].length}));
+  // Curva objetivo: arranca en pesoInicial en el primer mes con datos y crece a gdpObjetivo
+  const serieObjetivo = meses.map((m,i)=>({label:m, valor: pesoInicial + gdpObjetivo*30.44*i}));
+
+  dibujarCurvaRecria('chart-curva-recria', serieReal, serieObjetivo);
+  if(nota){
+    if(!serieReal.length){ nota.textContent = 'Sin pesadas de animales en recría para graficar.'; }
+    else {
+      const ultimoReal = serieReal[serieReal.length-1].valor;
+      const ultimoObj = serieObjetivo[serieObjetivo.length-1].valor;
+      const dif = ultimoReal-ultimoObj;
+      nota.innerHTML = `${rpsRecria.size} animales en recría${potreroFiltro?` (potrero ${potreroFiltro})`:''} · Último mes: real ${ultimoReal.toFixed(0)}kg vs. objetivo ${ultimoObj.toFixed(0)}kg — <b style="color:${dif>=0?'var(--green)':'var(--red)'}">${dif>=0?'+':''}${dif.toFixed(0)} kg</b>`;
+    }
+  }
+}
+
+function dibujarCurvaRecria(id, serieReal, serieObjetivo){
+  const canvas = document.getElementById(id); if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  if(!serieReal.length){
+    ctx.fillStyle='#4a5568'; ctx.font='13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('Sin datos suficientes para graficar', W/2, H/2);
+    return;
+  }
+  const padL=48, padR=15, padT=15, padB=32;
+  const chartW=W-padL-padR, chartH=H-padT-padB;
+  const todos = [...serieReal.map(s=>s.valor), ...serieObjetivo.map(s=>s.valor)];
+  const minV = Math.min(...todos)*0.95, maxV = Math.max(...todos)*1.05;
+  const escalaY = v => padT + chartH - ((v-minV)/(maxV-minV||1))*chartH;
+  const n = serieReal.length;
+  const escalaX = i => padL + (n===1 ? chartW/2 : (i/(n-1))*chartW);
+
+  ctx.strokeStyle='#2a3347'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(padL,padT); ctx.lineTo(padL,padT+chartH); ctx.lineTo(padL+chartW,padT+chartH); ctx.stroke();
+  ctx.fillStyle='#8a9ab0'; ctx.font='10px sans-serif'; ctx.textAlign='right'; ctx.textBaseline='middle';
+  ctx.fillText(maxV.toFixed(0)+'kg', padL-6, padT);
+  ctx.fillText(minV.toFixed(0)+'kg', padL-6, padT+chartH);
+
+  // Curva objetivo (punteada gris)
+  ctx.strokeStyle='#8a9ab0'; ctx.lineWidth=1.5; ctx.setLineDash([5,4]); ctx.beginPath();
+  serieObjetivo.forEach((s,i)=>{ const x=escalaX(i), y=escalaY(s.valor); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  ctx.stroke(); ctx.setLineDash([]);
+
+  // Curva real (verde)
+  ctx.strokeStyle='#2ecc71'; ctx.lineWidth=2.5; ctx.beginPath();
+  serieReal.forEach((s,i)=>{ const x=escalaX(i), y=escalaY(s.valor); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  ctx.stroke();
+  ctx.fillStyle='#2ecc71';
+  serieReal.forEach((s,i)=>{ const x=escalaX(i), y=escalaY(s.valor); ctx.beginPath(); ctx.arc(x,y,3.5,0,Math.PI*2); ctx.fill(); });
+
+  // Leyenda
+  ctx.font='11px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillStyle='#2ecc71'; ctx.fillText('— Real', padL+8, padT+8);
+  ctx.fillStyle='#8a9ab0'; ctx.fillText('--- Objetivo', padL+60, padT+8);
+
+  // Etiquetas X
+  ctx.fillStyle='#8a9ab0'; ctx.font='10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
+  const idxs = n<=6 ? serieReal.map((_,i)=>i) : [0, Math.floor(n/2), n-1];
+  idxs.forEach(i=>ctx.fillText(serieReal[i].label, escalaX(i), padT+chartH+6));
 }
 
 // ═══ CALENDARIO REPRODUCTIVO CON ALERTAS ═══
@@ -8467,6 +9162,92 @@ function renderForraje(){
   }).join('');
 }
 
+// ═══ PLANIFICADOR DE ROTACIÓN ENTRE POTREROS ═══
+
+// Simula día a día (hasta 200 días) cuándo un potrero libre acumula forraje suficiente
+// para sostener el consumo diario de un lote entrante durante al menos diasMinimos.
+function fechaListoPotrero(p, consumoDiarioLoteEntrante, diasMinimos){
+  const diasDescansoActual = diasDescansoPotrero(p.nombre);
+  const prodMS = p.prodMS || estimarProdMS(p.pasto);
+  for(let t=0; t<=200; t++){
+    const diasDescansoFuturo = Math.min(diasDescansoActual + t, TOPE_DIAS_ACUMULACION);
+    const forraje = (p.ha||0) * prodMS * diasDescansoFuturo;
+    const diasQueAlcanza = consumoDiarioLoteEntrante>0 ? forraje/consumoDiarioLoteEntrante : Infinity;
+    if(diasQueAlcanza >= diasMinimos){
+      const f = new Date(); f.setDate(f.getDate()+t);
+      return { fecha: f.toISOString().split('T')[0], diasDesdeHoy: t, diasQueAlcanza: Math.floor(diasQueAlcanza) };
+    }
+  }
+  return null; // nunca alcanza (potrero muy chico o pastura muy pobre para ese lote)
+}
+
+function generarPlanRotacion(){
+  const diasMinimos = parseFloat(document.getElementById('rot-dias-minimos')?.value)||15;
+  const div = document.getElementById('rot-plan-resultado');
+  if(!div) return;
+
+  const activos = DB.potreros.filter(p=>p.estado==='Activo').map(p=>({p, calc: calcularForrajePotrero(p)}));
+  let ocupados = activos.filter(f=>f.calc.animales>0 && f.calc.diasRestantes!==null)
+    .sort((a,b)=>a.calc.diasRestantes-b.calc.diasRestantes);
+  let libresDisponibles = activos.filter(f=>f.calc.animales===0).map(f=>f.p);
+
+  if(!ocupados.length){
+    div.innerHTML = '<span style="color:var(--text3)">No hay potreros ocupados con datos suficientes para planificar rotación.</span>';
+    return;
+  }
+  if(!libresDisponibles.length){
+    div.innerHTML = '<div class="card" style="border-left:4px solid var(--red,#c00)">⚠️ No hay potreros libres/descansando disponibles ahora mismo para recibir rotaciones.</div>';
+    return;
+  }
+
+  const movimientos = [];
+  const sinDestino = [];
+
+  ocupados.forEach(({p:origen, calc})=>{
+    if(!libresDisponibles.length){ sinDestino.push(origen); return; }
+    // Para cada potrero libre restante, calcular cuándo estaría listo para este lote (mismo consumo diario)
+    const candidatos = libresDisponibles.map(destino=>({
+      destino, listo: fechaListoPotrero(destino, calc.consumoDiario, diasMinimos)
+    })).filter(c=>c.listo!==null);
+
+    if(!candidatos.length){ sinDestino.push(origen); return; }
+
+    // Elegir el que esté listo más pronto; si empatan, el de mayor hectáreas (más margen)
+    candidatos.sort((a,b)=> a.listo.diasDesdeHoy - b.listo.diasDesdeHoy || (b.destino.ha||0)-(a.destino.ha||0));
+    const elegido = candidatos[0];
+
+    // Alerta de sobrecarga si el potrero destino tiene cargaMax definida y el lote la supera
+    let alertaCarga = '';
+    if(elegido.destino.cargaMax && elegido.destino.ha){
+      const capacidadCabezas = elegido.destino.cargaMax * elegido.destino.ha;
+      if(calc.animales > capacidadCabezas){
+        alertaCarga = `⚠️ El lote (${calc.animales} cab.) supera la carga máxima sugerida del destino (${capacidadCabezas.toFixed(0)} cab.)`;
+      }
+    }
+
+    movimientos.push({ origen, calc, destino: elegido.destino, listo: elegido.listo, alertaCarga });
+    // Sacar el potrero elegido del pool de libres para no asignarlo dos veces
+    libresDisponibles = libresDisponibles.filter(x=>x!==elegido.destino);
+  });
+
+  let html = '';
+  if(movimientos.length){
+    html += movimientos.map((m,idx)=>{
+      const urgenciaColor = m.calc.diasRestantes<=5 ? 'var(--red)' : m.calc.diasRestantes<=10 ? 'var(--amber)' : 'var(--text2)';
+      const listoTxt = m.listo.diasDesdeHoy===0 ? 'ya está listo' : `listo en ${m.listo.diasDesdeHoy} día(s) (${m.listo.fecha})`;
+      return `<div class="card" style="margin-bottom:10px;border-left:3px solid ${urgenciaColor}">
+        <b>Movimiento ${idx+1}:</b> Lote de <b>${m.origen.nombre}</b> (${m.calc.animales} cabezas, rota en <span style="color:${urgenciaColor};font-weight:600">${m.calc.diasRestantes} día(s)</span>)
+        → mover a <b>${m.destino.nombre}</b> (${m.destino.ha||'--'} ha) — ${listoTxt}, sostendría ~${m.listo.diasQueAlcanza} días de pastoreo
+        ${m.alertaCarga?`<br><span style="color:var(--amber)">${m.alertaCarga}</span>`:''}
+      </div>`;
+    }).join('');
+  }
+  if(sinDestino.length){
+    html += `<div class="card" style="border-left:4px solid var(--red,#c00)">⚠️ Sin destino disponible para: ${sinDestino.map(p=>p.nombre).join(', ')}. Faltan potreros libres, o ninguno alcanzaría ${diasMinimos} días de pastoreo para ese lote a tiempo.</div>`;
+  }
+  div.innerHTML = html || '<span style="color:var(--text3)">No se generaron movimientos.</span>';
+}
+
 function renderPotreros(){
   const tbody=document.getElementById('potreros-tbody');if(!tbody)return;
   tbody.innerHTML=DB.potreros.map((p,i)=>{
@@ -8823,32 +9604,46 @@ const INGREDIENTES_BASE = [
 // Valores orientativos (aproximación práctica tipo NRC) — ajustables por el usuario en el resultado.
 // cu/zn/mn/se/co/i en ppm (mg/kg MS de la dieta); vitA/vitD en UI/kgMS; vitE en mg/kgMS.
 const REQUERIMIENTOS_CATEGORIA = {
-  recria:               {nombre:'Recría',                            refPeso:250, refGDP:0.6, pb:13,   em:2.4, ca:0.35, p:0.22, fdn:20, mg:0.10, k:0.65, s:0.15, na:0.06, cu:10, zn:30, mn:20, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:15},
-  engorde:              {nombre:'Engorde',                            refPeso:350, refGDP:1.0, pb:12,   em:2.7, ca:0.35, p:0.22, fdn:18, mg:0.10, k:0.60, s:0.15, na:0.06, cu:10, zn:30, mn:20, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:15},
-  terminacion:          {nombre:'Terminación',                        refPeso:450, refGDP:1.3, pb:11.5, em:2.9, ca:0.30, p:0.20, fdn:15, mg:0.10, k:0.55, s:0.15, na:0.06, cu:10, zn:30, mn:20, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:20},
-  destete_precoz:       {nombre:'Destete precoz (<150kg)',            refPeso:120, refGDP:0.7, pb:16,   em:2.8, ca:0.60, p:0.35, fdn:14, mg:0.12, k:0.70, s:0.18, na:0.08, cu:10, zn:40, mn:25, se:0.10, co:0.10, i:0.50, vitA:2700, vitD:300, vitE:20},
-  vaca_manten:          {nombre:'Vaca de cría (mantenimiento)',       refPeso:450, refGDP:0.0, pb:8,    em:2.0, ca:0.20, p:0.15, fdn:25, mg:0.10, k:0.60, s:0.12, na:0.06, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:1300, vitD:275, vitE:15},
-  vaca_prena_temprana:  {nombre:'Vaca preñada (1er-2do tercio)',      refPeso:450, refGDP:0.1, pb:9,    em:2.1, ca:0.25, p:0.17, fdn:24, mg:0.10, k:0.60, s:0.13, na:0.06, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:1300, vitD:275, vitE:15},
-  vaca_prena_tardia:    {nombre:'Vaca preñada (último tercio)',       refPeso:470, refGDP:0.2, pb:10,   em:2.3, ca:0.40, p:0.22, fdn:22, mg:0.12, k:0.65, s:0.15, na:0.07, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:2000, vitD:275, vitE:15},
-  vaca_lactando:        {nombre:'Vaca de cría + ternero al pie',      refPeso:450, refGDP:0.3, pb:11,   em:2.3, ca:0.40, p:0.25, fdn:22, mg:0.12, k:0.70, s:0.16, na:0.08, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:3900, vitD:275, vitE:15},
-  toro:                 {nombre:'Toro (servicio)',                    refPeso:600, refGDP:0.0, pb:9,    em:2.1, ca:0.25, p:0.18, fdn:22, mg:0.10, k:0.60, s:0.14, na:0.06, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:15}
+  recria:               {nombre:'Recría',                            refPeso:250, refGDP:0.6, ccObjetivo:3.0, pb:13,   em:2.4, ca:0.35, p:0.22, fdn:20, mg:0.10, k:0.65, s:0.15, na:0.06, cu:10, zn:30, mn:20, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:15},
+  engorde:              {nombre:'Engorde',                            refPeso:350, refGDP:1.0, ccObjetivo:3.0, pb:12,   em:2.7, ca:0.35, p:0.22, fdn:18, mg:0.10, k:0.60, s:0.15, na:0.06, cu:10, zn:30, mn:20, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:15},
+  terminacion:          {nombre:'Terminación',                        refPeso:450, refGDP:1.3, ccObjetivo:3.5, pb:11.5, em:2.9, ca:0.30, p:0.20, fdn:15, mg:0.10, k:0.55, s:0.15, na:0.06, cu:10, zn:30, mn:20, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:20},
+  destete_precoz:       {nombre:'Destete precoz (<150kg)',            refPeso:120, refGDP:0.7, ccObjetivo:3.0, pb:16,   em:2.8, ca:0.60, p:0.35, fdn:14, mg:0.12, k:0.70, s:0.18, na:0.08, cu:10, zn:40, mn:25, se:0.10, co:0.10, i:0.50, vitA:2700, vitD:300, vitE:20},
+  vaca_manten:          {nombre:'Vaca de cría (mantenimiento)',       refPeso:450, refGDP:0.0, ccObjetivo:3.0, pb:8,    em:2.0, ca:0.20, p:0.15, fdn:25, mg:0.10, k:0.60, s:0.12, na:0.06, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:1300, vitD:275, vitE:15},
+  vaca_prena_temprana:  {nombre:'Vaca preñada (1er-2do tercio)',      refPeso:450, refGDP:0.1, ccObjetivo:3.0, pb:9,    em:2.1, ca:0.25, p:0.17, fdn:24, mg:0.10, k:0.60, s:0.13, na:0.06, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:1300, vitD:275, vitE:15},
+  vaca_prena_tardia:    {nombre:'Vaca preñada (último tercio)',       refPeso:470, refGDP:0.2, ccObjetivo:3.5, pb:10,   em:2.3, ca:0.40, p:0.22, fdn:22, mg:0.12, k:0.65, s:0.15, na:0.07, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:2000, vitD:275, vitE:15},
+  vaca_lactando:        {nombre:'Vaca de cría + ternero al pie',      refPeso:450, refGDP:0.3, ccObjetivo:3.0, pb:11,   em:2.3, ca:0.40, p:0.25, fdn:22, mg:0.12, k:0.70, s:0.16, na:0.08, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:3900, vitD:275, vitE:15},
+  toro:                 {nombre:'Toro (servicio)',                    refPeso:600, refGDP:0.0, ccObjetivo:3.5, pb:9,    em:2.1, ca:0.25, p:0.18, fdn:22, mg:0.10, k:0.60, s:0.14, na:0.06, cu:10, zn:30, mn:40, se:0.10, co:0.10, i:0.50, vitA:2200, vitD:275, vitE:15}
 };
 
-// Ajusta el requerimiento base según peso real, GDP objetivo y condición climática.
+// Ajusta el requerimiento base según peso real, GDP objetivo, clima, raza y condición corporal (CC).
 // Aproximación práctica (no una ecuación NRC exacta): a mayor GDP objetivo sube la exigencia
-// de energía y proteína; el frío extremo/barro y el estrés calórico suben el requerimiento de energía.
-function calcularRequerimientosDinamicos(cat, peso, gdp, clima){
+// de energía y proteína; el frío extremo/barro y el estrés calórico suben el requerimiento de energía;
+// el biotipo racial ajusta el mantenimiento (Bos indicus más eficiente en mantenimiento que Bos taurus);
+// una CC por debajo del objetivo de la categoría suma energía extra para recuperar reservas corporales.
+const FACTOR_RAZA = {
+  taurus: {nombre:'Bos taurus (Angus, Hereford, etc.)', factor:1.00},
+  cruza:  {nombre:'Cruza índica x taurus (Braford, Brangus, etc.)', factor:0.95},
+  indicus:{nombre:'Bos indicus (Nelore, Brahman, etc.)', factor:0.90}
+};
+
+function calcularRequerimientosDinamicos(cat, peso, gdp, clima, raza, cc){
   const base = REQUERIMIENTOS_CATEGORIA[cat];
   if(!base) return null;
   const dGDP = gdp - base.refGDP;
   const dPeso = peso - base.refPeso;
   const climaFactor = clima==='frio' ? 1.12 : clima==='calor' ? 1.05 : 1.0;
-  const em = Math.max(1.6, (base.em + 0.9*dGDP + 0.0015*dPeso) * climaFactor);
+  const razaFactor = (FACTOR_RAZA[raza]||FACTOR_RAZA.taurus).factor;
+  const ccObjetivo = base.ccObjetivo;
+  const ccActual = (cc>0) ? cc : ccObjetivo;
+  const deficitCC = Math.max(0, ccObjetivo - ccActual);
+  const ccFactor = 1 + 0.06*deficitCC; // +6% de EM por cada punto de CC (escala 1-5) por debajo del objetivo
+  const em = Math.max(1.6, (base.em + 0.9*dGDP + 0.0015*dPeso) * climaFactor * razaFactor * ccFactor);
   const pb = Math.max(6, base.pb + 3.0*dGDP);
   const ca = Math.max(0.15, base.ca + 0.05*dGDP);
   const p  = Math.max(0.12, base.p + 0.03*dGDP);
   return {nombre:base.nombre, pb, em, ca, p, fdn:base.fdn, mg:base.mg, k:base.k, s:base.s, na:base.na,
-    cu:base.cu, zn:base.zn, mn:base.mn, se:base.se, co:base.co, i:base.i, vitA:base.vitA, vitD:base.vitD, vitE:base.vitE};
+    cu:base.cu, zn:base.zn, mn:base.mn, se:base.se, co:base.co, i:base.i, vitA:base.vitA, vitD:base.vitD, vitE:base.vitE,
+    ccObjetivo, ccActual, deficitCC, razaFactor};
 }
 
 function ingredientesFormulacion(){
@@ -8867,15 +9662,183 @@ function actualizarRequerimientosUI(){
   const peso = parseFloat(document.getElementById('form-rac-peso')?.value)||0;
   const gdp = parseFloat(document.getElementById('form-rac-gdp')?.value)||0;
   const clima = document.getElementById('form-rac-clima')?.value||'normal';
-  const req = calcularRequerimientosDinamicos(cat, peso, gdp, clima);
+  const raza = document.getElementById('form-rac-raza')?.value||'taurus';
+  const cc = parseFloat(document.getElementById('form-rac-cc')?.value)||0;
+  const req = calcularRequerimientosDinamicos(cat, peso, gdp, clima, raza, cc);
   const div = document.getElementById('rac-requerimientos');
   if(!req || !div) return;
-  div.innerHTML = `Requerimiento mínimo estimado (base MS, para ${peso}kg y GDP ${gdp}kg/día${clima!=='normal'?', '+(clima==='frio'?'ajustado por frío/barro':'ajustado por estrés calórico'):''}):<br>
+  const razaTxt = FACTOR_RAZA[raza]?.nombre||'';
+  div.innerHTML = `Requerimiento mínimo estimado (base MS, para ${peso}kg y GDP ${gdp}kg/día${clima!=='normal'?', '+(clima==='frio'?'ajustado por frío/barro':'ajustado por estrés calórico'):''}, ${razaTxt}):<br>
   PB ≥ ${req.pb.toFixed(1)}% · EM ≥ ${req.em.toFixed(2)} Mcal/kgMS · Ca ≥ ${req.ca.toFixed(2)}% · P ≥ ${req.p.toFixed(2)}% · FDN ≥ ${req.fdn}% ·
   Mg ≥ ${req.mg}% · K ≥ ${req.k}% · S ≥ ${req.s}% · Na ≥ ${req.na}%<br>
   Oligoelementos: Cu ≥ ${req.cu}ppm · Zn ≥ ${req.zn}ppm · Mn ≥ ${req.mn}ppm · Se ≥ ${req.se}ppm · Co ≥ ${req.co}ppm · I ≥ ${req.i}ppm ·
   Vit.A ≥ ${req.vitA} UI/kgMS · Vit.D ≥ ${req.vitD} UI/kgMS · Vit.E ≥ ${req.vitE} mg/kgMS<br>
+  CC objetivo de la categoría: ${req.ccObjetivo}/5${req.deficitCC>0?` — CC actual ${req.ccActual}/5, déficit de ${req.deficitCC.toFixed(2)} puntos → EM +${(6*req.deficitCC).toFixed(0)}% para recuperar condición`:' (sin déficit, no se suma energía extra)'}<br>
+  ${raza!=='taurus'?`Ajuste por biotipo racial: EM ×${req.razaFactor.toFixed(2)} (${razaTxt})<br>`:''}
   <span style="color:#888">Valores orientativos (aproximación práctica, no reemplaza una fórmula NRC completa): ajustá costos e inclusiones según tu zona.</span>`;
+}
+
+// ═══ SUPLEMENTACIÓN ESTRATÉGICA ═══
+// Cruza el perfil del pasto base del potrero con el requerimiento de la categoría.
+// Si hay déficit de EM o PB, calcula cuánto suplemento hace falta y su costo, y compara
+// contra el valor del kg de carne extra que ese cierre de brecha permitiría producir.
+
+function poblarPotrerosSuplementacion(){
+  const sel = document.getElementById('se-potrero');
+  if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur)) sel.value = cur;
+}
+
+// Perfil nutricional del pasto base según el tipo de pastura declarado en el potrero.
+function perfilPastoBase(tipoTexto){
+  const t = (tipoTexto||'').toLowerCase();
+  if(t.includes('verdeo') || t.includes('avena') || t.includes('raigr')) return {nombre:'Verdeo', pb:18, em:2.6};
+  if(t.includes('alfalfa')) return {nombre:'Alfalfa', pb:20, em:2.5};
+  if(t.includes('festuca') || t.includes('pradera') || t.includes('implant')) return {nombre:'Pradera implantada', pb:14, em:2.3};
+  if(t.includes('rastrojo')) return {nombre:'Rastrojo', pb:4, em:1.6};
+  if(t.includes('natural') || t.includes('campo')) return {nombre:'Campo natural', pb:8, em:1.9};
+  return {nombre:'Pastura genérica', pb:10, em:2.0};
+}
+
+function analizarSuplementacion(potreroNombre, cat, peso, gdpObjetivo, precioVenta){
+  const potrero = DB.potreros.find(p=>p.nombre===potreroNombre);
+  if(!potrero) return {error:'Potrero no encontrado'};
+  const req = calcularRequerimientosDinamicos(cat, peso, gdpObjetivo, 'normal', 'taurus', 0);
+  if(!req) return {error:'Categoría inválida'};
+
+  const pasto = perfilPastoBase(potrero.pasto);
+  const consumoMS = peso * CONSUMO_MS_PORCENTAJE_PV; // kg MS/día que come el animal
+  const deficitEM = Math.max(0, req.em - pasto.em);   // Mcal/kg MS faltantes
+  const deficitPB = Math.max(0, req.pb - pasto.pb);   // puntos % de PB faltantes
+
+  if(deficitEM<=0 && deficitPB<=0){
+    return {sinDeficit:true, pasto, req, consumoMS, potrero};
+  }
+
+  // Elegir el suplemento más barato (por kg MS) que cierre la brecha de EM y PB.
+  const candidatos = ingredientesFormulacion().filter(i=>i.tipo!=='forraje' && i.em>0);
+  const opciones = candidatos.map(ing=>{
+    // Fracción x de la dieta (base MS) como suplemento, resto pasto, para cerrar cada brecha:
+    // pasto*(1-x) + ing*x >= req  →  x >= (req - pasto) / (ing - pasto)
+    const xEM = (ing.em > pasto.em) ? deficitEM/(ing.em - pasto.em) : (deficitEM>0 ? Infinity : 0);
+    const xPB = (ing.pb > pasto.pb) ? deficitPB/(ing.pb - pasto.pb) : (deficitPB>0 ? Infinity : 0);
+    const x = Math.max(xEM===Infinity?0:xEM, xPB===Infinity?0:xPB);
+    const inviable = (deficitEM>0 && ing.em<=pasto.em) || (deficitPB>0 && ing.pb<=pasto.pb);
+    if(inviable || x<=0 || x>(ing.maxIncl/100)) return null;
+    const kgMSsupl = x*consumoMS;
+    const kgTalCual = kgMSsupl/(ing.ms/100);
+    const costoDia = kgTalCual*ing.costo;
+    return {ing, fraccion:x, kgMSsupl, kgTalCual, costoDia};
+  }).filter(Boolean).sort((a,b)=>a.costoDia-b.costoDia);
+
+  return {pasto, req, consumoMS, deficitEM, deficitPB, opciones, potrero, gdpObjetivo, precioVenta};
+}
+
+function analizarSuplementacionUI(){
+  const potreroNombre = document.getElementById('se-potrero')?.value;
+  const cat = document.getElementById('se-categoria')?.value;
+  const peso = parseFloat(document.getElementById('se-peso')?.value)||0;
+  const gdp = parseFloat(document.getElementById('se-gdp')?.value)||0;
+  const precioVenta = parseFloat(document.getElementById('se-preciov')?.value)||0;
+  const div = document.getElementById('se-resultado');
+  if(!div) return;
+  if(!potreroNombre || peso<=0){ toast('Elegí potrero y peso','err'); return; }
+
+  const r = analizarSuplementacion(potreroNombre, cat, peso, gdp, precioVenta);
+  if(r.error){ div.innerHTML = `<span style="color:var(--red)">${r.error}</span>`; return; }
+
+  if(r.sinDeficit){
+    div.innerHTML = `<div class="card" style="border-left:4px solid var(--green)">
+      ✅ <b>Sin déficit.</b> El pasto base (${r.pasto.nombre}: ${r.pasto.pb}% PB, ${r.pasto.em} Mcal/kgMS) ya cubre el requerimiento de esta categoría
+      (PB ≥${r.req.pb.toFixed(1)}%, EM ≥${r.req.em.toFixed(2)}). No haría falta suplementar para ese objetivo de ganancia.
+    </div>`;
+    return;
+  }
+
+  if(!r.opciones.length){
+    div.innerHTML = `<div class="card" style="border-left:4px solid var(--red,#c00)">
+      ⚠️ Déficit detectado (EM: ${r.deficitEM.toFixed(2)} Mcal/kgMS, PB: ${r.deficitPB.toFixed(1)} puntos), pero ningún suplemento disponible lo cierra dentro de su límite de inclusión.
+      Probá con un objetivo de ganancia menor, o cargá un ingrediente más concentrado en "Formulación de ración".
+    </div>`;
+    return;
+  }
+
+  const mejor = r.opciones[0];
+  // Costo por kg de carne extra: asumimos que cerrar la brecha permite alcanzar el GDP objetivo.
+  const costoPorKgGanado = r.gdpObjetivo>0 ? mejor.costoDia/r.gdpObjetivo : null;
+  let veredicto = '';
+  if(costoPorKgGanado!==null && r.precioVenta>0){
+    const margen = r.precioVenta - costoPorKgGanado;
+    veredicto = margen>0
+      ? `<div style="color:var(--green);font-weight:600;margin-top:6px">✅ Conviene: cada kg producido cuesta $${costoPorKgGanado.toFixed(0)} y se vende a $${r.precioVenta} → margen $${margen.toFixed(0)}/kg</div>`
+      : `<div style="color:var(--red);font-weight:600;margin-top:6px">⚠️ No conviene a ese precio: producir el kg cuesta $${costoPorKgGanado.toFixed(0)} y se vende a $${r.precioVenta} → pérdida de $${Math.abs(margen).toFixed(0)}/kg</div>`;
+  }
+
+  div.innerHTML = `<div class="card">
+    <div style="font-size:14px;line-height:1.7">
+      Pasto base: <b>${r.pasto.nombre}</b> (${r.pasto.pb}% PB · ${r.pasto.em} Mcal/kgMS) · Requerimiento: PB ≥${r.req.pb.toFixed(1)}% · EM ≥${r.req.em.toFixed(2)}<br>
+      <b style="color:var(--amber)">Déficit: ${r.deficitEM>0?`EM ${r.deficitEM.toFixed(2)} Mcal/kgMS`:''}${r.deficitEM>0&&r.deficitPB>0?' · ':''}${r.deficitPB>0?`PB ${r.deficitPB.toFixed(1)} puntos`:''}</b><br>
+      Consumo estimado del animal: ${r.consumoMS.toFixed(1)} kg MS/día
+    </div>
+    <div style="margin-top:10px;font-size:14px">
+      <b>Suplemento más económico que cierra la brecha:</b><br>
+      <b style="font-size:16px;color:var(--blue)">${mejor.ing.nombre} — ${mejor.kgTalCual.toFixed(2)} kg/cab/día</b>
+      (${(mejor.fraccion*100).toFixed(0)}% de la dieta en MS) · Costo: <b>$${mejor.costoDia.toFixed(0)}/cab/día</b>
+      ${costoPorKgGanado!==null?`<br>Costo por kg de carne extra: <b>$${costoPorKgGanado.toFixed(0)}/kg</b> (a GDP objetivo ${r.gdpObjetivo} kg/día)`:''}
+      ${veredicto}
+    </div>
+    ${r.opciones.length>1?`<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Otras opciones</th><th>kg/cab/día</th><th>% dieta</th><th>Costo/cab/día</th></tr></thead><tbody>
+      ${r.opciones.slice(1,6).map(o=>`<tr><td>${o.ing.nombre}</td><td class="td-mono">${o.kgTalCual.toFixed(2)}</td><td class="td-mono">${(o.fraccion*100).toFixed(0)}%</td><td class="td-mono">$${o.costoDia.toFixed(0)}</td></tr>`).join('')}
+    </tbody></table></div>`:''}
+  </div>`;
+}
+
+// Ventanas críticas: momentos donde suplementar tiene mayor retorno biológico.
+function renderVentanasCriticas(){
+  const tbody = document.getElementById('se-ventanas-tbody');
+  if(!tbody) return;
+  const filas = [];
+  const hoy = Date.now();
+
+  // 1) Vacas en último tercio de preñez (gestación bovina ~283 días; último tercio = últimos ~94 días)
+  (DB.tactos||[]).forEach(t=>{
+    if(!/preñ/i.test(t.diagnostico||'')) return;
+    const mesesGestacion = parseFloat(t.meses)||0;
+    if(!t.fecha) return;
+    const diasDesdeTacto = (hoy - new Date(t.fecha).getTime())/86400000;
+    const diasGestacionHoy = mesesGestacion*30.44 + diasDesdeTacto;
+    if(diasGestacionHoy >= 189 && diasGestacionHoy <= 283){
+      const diasAlParto = Math.round(283 - diasGestacionHoy);
+      filas.push({rp:t.rp, ventana:'🤰 Último tercio de preñez',
+        detalle:`~${diasAlParto} días al parto — suplementar mejora peso del ternero al nacer y condición corporal al parto`});
+    }
+  });
+
+  // 2) Terneros recién destetados (primeros 60 días post-destete)
+  (DB.destetes||[]).forEach(d=>{
+    if(!d.fecha) return;
+    const dias = (hoy - new Date(d.fecha).getTime())/86400000;
+    if(dias>=0 && dias<=60){
+      filas.push({rp:d.ternero, ventana:'🐄 Post-destete (primeros 60 días)',
+        detalle:`Destetado hace ${Math.round(dias)} días — período de mayor respuesta a la suplementación proteica`});
+    }
+  });
+
+  // 3) Toros próximos a servicio (categoría Toro activa, aviso permanente de acondicionamiento)
+  const toros = DB.animales.filter(a=>a.activo && a.categoria==='Toro');
+  toros.forEach(a=>{
+    filas.push({rp:a.rp, ventana:'🐂 Toro — acondicionamiento pre-servicio',
+      detalle:'Suplementar 60-90 días antes del servicio mejora libido y calidad seminal'});
+  });
+
+  if(!filas.length){ tbody.innerHTML = emptyRow(3); return; }
+  tbody.innerHTML = filas.map(f=>`<tr>
+    <td class="td-mono">${f.rp}</td>
+    <td>${f.ventana}</td>
+    <td style="color:var(--text2);white-space:normal">${f.detalle}</td>
+  </tr>`).join('');
 }
 
 function renderIngredientesTabla(){
@@ -9085,7 +10048,9 @@ function optimizarRacion(){
   const peso = parseFloat(document.getElementById('form-rac-peso')?.value)||0;
   const gdpObjetivo = parseFloat(document.getElementById('form-rac-gdp')?.value)||0;
   const clima = document.getElementById('form-rac-clima')?.value||'normal';
-  const req = calcularRequerimientosDinamicos(cat, peso, gdpObjetivo, clima);
+  const raza = document.getElementById('form-rac-raza')?.value||'taurus';
+  const cc = parseFloat(document.getElementById('form-rac-cc')?.value)||0;
+  const req = calcularRequerimientosDinamicos(cat, peso, gdpObjetivo, clima, raza, cc);
   const consumoMS = parseFloat(document.getElementById('form-rac-consumo')?.value)||0;
   const cabezas = parseInt(document.getElementById('form-rac-cabezas')?.value)||1;
   const precioVenta = parseFloat(document.getElementById('form-rac-preciov')?.value)||0;
@@ -11343,7 +12308,7 @@ let   ESTAB_ID_ACTIVO = null;                  // id en memoria
 function dbVacia(nombre) {
   return {
     animales:[], potreros:[], pesadas:[], vacunas:[], tratamientos:[], encierres:[],
-    enfermedades:[], tactos:[], destetes:[], abortos:[], recategorizaciones:[], celos:[], servicios:[],
+    enfermedades:[], tactos:[], destetes:[], abortos:[], recategorizaciones:[], celos:[], servicios:[], protocolosIATF:[],
     pastoreos:[], suplementos:[], nutricion:[], compras:[], ventas:[],
     traslados:[], muertes:[], historial:[], precios:{},
     transportistas:[], viajes:[], clientes:[], diario:[],
