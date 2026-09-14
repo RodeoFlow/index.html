@@ -8005,7 +8005,14 @@ const ICONOS_HISTORIAL = {
   Animal:'🐄', Mortandad:'☠️', Raspaje:'🔬', Sangrado:'🩸'
 };
 
+function cerrarFichaAnimal(){
+  document.querySelectorAll('.ficha-animal-overlay').forEach(el=>el.remove());
+  document.removeEventListener('keydown', cerrarFichaAnimalEsc);
+}
+function cerrarFichaAnimalEsc(e){ if(e.key==='Escape') cerrarFichaAnimal(); }
+
 function abrirFichaAnimal(rp){
+  cerrarFichaAnimal(); // por si había una ficha abierta sin cerrar, evita overlays apilados
   const a = DB.animales.find(x=>x.rp===rp);
   if(!a){ toast('No se encontró el animal RP '+rp,'err'); return; }
 
@@ -8026,7 +8033,7 @@ function abrirFichaAnimal(rp){
   const partosComoMadre = (DB.nacimientos||[]).filter(n=>n.madre===rp);
 
   const win = document.createElement('div');
-  win.id = 'ficha-animal-overlay';
+  win.className = 'ficha-animal-overlay';
   win.style.cssText = 'position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,0.85);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px';
   win.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:820px;width:100%;cursor:default" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px">
@@ -8036,7 +8043,7 @@ function abrirFichaAnimal(rp){
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn-secondary" onclick="exportarFichaPDF('${rp}')">📄 PDF</button>
-        <button class="btn-secondary" onclick="document.getElementById('ficha-animal-overlay').remove()">✕ Cerrar</button>
+        <button class="btn-secondary" onclick="cerrarFichaAnimal()">✕ Cerrar</button>
       </div>
     </div>
 
@@ -8067,8 +8074,9 @@ function abrirFichaAnimal(rp){
       </div>`).join('') : '<div style="padding:14px;color:var(--text3);font-size:13px">Sin eventos registrados para este animal.</div>'}
     </div>
   </div>`;
-  win.onclick = ()=>win.remove();
+  win.onclick = ()=>cerrarFichaAnimal();
   document.body.appendChild(win);
+  document.addEventListener('keydown', cerrarFichaAnimalEsc);
 
   if(pesadasRp.length){
     setTimeout(()=>{
