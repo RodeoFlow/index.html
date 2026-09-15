@@ -976,7 +976,7 @@
               <div style="font-size:13px;color:var(--text3)" id="tv-nov"></div>
             </div>
             <div class="kpi green" style="padding:8px;flex:1;text-align:center">
-              <div class="kpi-label" style="font-size:13px">Ternero M</div>
+              <div class="kpi-label" style="font-size:13px">Novillito</div>
               <div style="font-family:var(--font-mono);font-size:14px;font-weight:700" id="t-tern">--</div>
               <div style="font-size:13px;color:var(--text3)" id="tv-tern"></div>
             </div>
@@ -5056,13 +5056,6 @@ async function fetchPrices() {
 // veces por día) que sí ejecuta el JavaScript de elrural.com con un navegador
 // headless — por eso consigue los números reales. Ver /scripts/scrape-precios.js
 async function fetchMAGPrices() {
-  const categoriasReferencia = {
-    'Ternero M':{min:4400,prom:4800,max:5200},
-    'Ternera H':{min:4200,prom:4600,max:5000},
-    'Invernada Machos':{min:3800,prom:4100,max:4450},
-    'Invernada Hembras':{min:3600,prom:3900,max:4250},
-    'Invernada Vientres':{min:3400,prom:3700,max:4050}
-  };
   const fallbackCategorias = {
     'Novillo':{min:3900,prom:4200,max:4550},
     'Novillito':{min:4000,prom:4350,max:4700},
@@ -5091,11 +5084,7 @@ async function fetchMAGPrices() {
     'Vaca Cons. Buena':{min:2600,prom:2700,max:2800},
     'Vaca Cons. Infer.':{min:2500,prom:2500,max:2500},
     'Toro Bueno/Esp.':{min:3600,prom:3630,max:3670},
-    'Toro Reg.':{min:2700,prom:2700,max:2700},
-    // Valores aproximados sin confirmar — corregir cuando haya un precio real de referencia
-    'Invernada Machos':{min:4000,prom:4300,max:4600},
-    'Invernada Hembras':{min:3700,prom:4000,max:4300},
-    'Invernada Vientres':{min:3400,prom:3700,max:4000}
+    'Toro Reg.':{min:2700,prom:2700,max:2700}
   };
 
   let datos = null;
@@ -5112,7 +5101,7 @@ async function fetchMAGPrices() {
       fuente: 'MAG (ref. local — el robot automático todavía no trajo datos reales)',
       fuente_parcial: null,
       indice_arr_fuente: 'ref. local',
-      categorias_full: { ...fallbackCategorias, ...categoriasReferencia },
+      categorias_full: { ...fallbackCategorias },
       categorias: Object.fromEntries(Object.entries(fallbackCategorias).map(([k,v]) => [k, v.prom])),
       dolar_oficial: 1055, dolar_blue: 1260,
       indice_arrendamiento_novillo_kg_ha: idx,
@@ -5120,7 +5109,7 @@ async function fetchMAGPrices() {
     };
   }
 
-  const categoriasFull = { ...categoriasReferencia, ...datos.categorias };
+  const categoriasFull = { ...datos.categorias };
   const flatCats = {};
   Object.entries(categoriasFull).forEach(([cat, v]) => { flatCats[cat] = v.prom; });
   const idxVal = datos.indice_arrendamiento_novillo_kg_ha || 180;
@@ -5131,7 +5120,7 @@ async function fetchMAGPrices() {
   return {
     fecha: datos.fecha_mercado || datos.fecha_scrape?.split('T')[0] || new Date().toISOString().split('T')[0],
     fuente: datos.fuente || 'MAG / Mercado de Liniers (robot automático)',
-    fuente_parcial: 'Ternero y categorías de invernada: valor de referencia, no scrapeado',
+    fuente_parcial: null,
     indice_arr_fuente: datos.indice_arrendamiento_novillo_kg_ha ? 'MAG / elrural.com (robot automático)' : 'ref. local',
     categorias_full: categoriasFull,
     categorias: flatCats,
@@ -5161,7 +5150,7 @@ function updateMAGTable(p) {
   const usd = p.dolar_oficial || 1055;
   const colores = {
     'Novillo':'var(--amber)','Novillito':'var(--accent)','Vaquillona':'var(--purple)',
-    'Ternero M':'var(--green)','Ternera H':'#1abc9c','Vaca Invernada':'var(--blue)',
+    'Vaca Invernada':'var(--blue)',
     'Vaca Manufactura':'var(--text2)','Toro':'var(--red)',
     'Novillo 431/460':'var(--amber)','Novillo 461/490':'var(--amber)','Novillo 491/520':'var(--amber)',
     'Novillo +520':'var(--amber)','Novillo Reg.':'var(--amber)',
@@ -5169,8 +5158,7 @@ function updateMAGTable(p) {
     'Vaquillona 300/350':'var(--purple)','Vaquillona 351/390':'var(--purple)','Vaquillona 391/430':'var(--purple)','Vaquillona Reg.':'var(--purple)',
     'Vaca Buena/Esp.':'var(--blue)','Vaca Reg.':'var(--blue)',
     'Vaca Cons. Buena':'var(--text2)','Vaca Cons. Infer.':'var(--text2)',
-    'Toro Bueno/Esp.':'var(--red)','Toro Reg.':'var(--red)',
-    'Invernada Machos':'var(--green)','Invernada Hembras':'#1abc9c','Invernada Vientres':'var(--blue)'
+    'Toro Bueno/Esp.':'var(--red)','Toro Reg.':'var(--red)'
   };
   if(!Object.keys(cats).length) { tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">Sin datos MAG — Actualizá</td></tr>'; return; }
   tbody.innerHTML = Object.entries(cats).map(([cat,v])=>{
@@ -5219,7 +5207,7 @@ function updatePriceDisplay(p) {
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   s('t-nov','$'+(cats['Novillo']||'--'));
   s('tv-nov','▲ ref');
-  s('t-tern','$'+(cats['Ternero M']||'--'));
+  s('t-tern','$'+(cats['Novillito']||'--'));
   s('tv-tern','▲ ref');
   s('t-usd','$'+(p.dolar_oficial||'--'));
   s('tv-usd','oficial');
@@ -12335,7 +12323,7 @@ window.addEventListener('load', async ()=>{
 // una migración que lo inicializa sin romper datos viejos.
 // ════════════════════════════════════════════════════════
 
-const DB_SCHEMA_VERSION = 4; // incrementar con cada cambio de estructura
+const DB_SCHEMA_VERSION = 5; // incrementar con cada cambio de estructura
 
 const MIGRATIONS = {
   // v1 → v2: se agregaron encierres y nacimientos
@@ -12362,6 +12350,21 @@ const MIGRATIONS = {
         const cantidad = (db.animales||[]).filter(a => a.activo && a.potrero === nombre).length;
         db.saldosPotreros[nombre] = { cantidad, actualizado: Date.now() };
       });
+    }
+    return db;
+  },
+  // v4 → v5: módulos de nutrición/formulación, servicio-celo, protocolos IATF y objetivos de GDP
+  5: (db) => {
+    if (!db.celos) db.celos = [];
+    if (!db.servicios) db.servicios = [];
+    if (!db.protocolosIATF) db.protocolosIATF = [];
+    if (!db.objetivosGDP) db.objetivosGDP = {};
+    if (!db.formulacionRacion) db.formulacionRacion = { ingredientesCustom:[], historial:[], historialPrecios:{}, activaPorCategoria:{} };
+    else {
+      if (!db.formulacionRacion.ingredientesCustom) db.formulacionRacion.ingredientesCustom = [];
+      if (!db.formulacionRacion.historial) db.formulacionRacion.historial = [];
+      if (!db.formulacionRacion.historialPrecios) db.formulacionRacion.historialPrecios = {};
+      if (!db.formulacionRacion.activaPorCategoria) db.formulacionRacion.activaPorCategoria = {};
     }
     return db;
   }
