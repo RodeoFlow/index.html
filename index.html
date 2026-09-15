@@ -2254,6 +2254,7 @@
         <div class="tab active" onclick="switchTab('movimientos','compras')">Compras</div>
         <div class="tab" onclick="switchTab('movimientos','ventas')">Ventas</div>
         <div class="tab" onclick="switchTab('movimientos','traslados')">Traslados</div>
+        <div class="tab" onclick="switchTab('movimientos','resultado')">📊 Resultado</div>
       </div>
       <!-- Compras -->
       <div class="tab-content active">
@@ -2287,6 +2288,27 @@
         </div>
         <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>RP / Lote</th><th>Origen</th><th>Destino</th><th>Cant.</th><th>RPs</th><th>Acciones</th></tr></thead>
         <tbody id="traslados-tbody"></tbody></table></div>
+      </div>
+
+      <!-- Resultado -->
+      <div class="tab-content">
+        <div class="form-row" style="margin-bottom:12px">
+          <div class="form-group" style="max-width:200px"><label class="form-label">Desde</label><input type="date" id="res-desde" class="form-control" onchange="renderResultadoEconomico()"></div>
+          <div class="form-group" style="max-width:200px"><label class="form-label">Hasta</label><input type="date" id="res-hasta" class="form-control" onchange="renderResultadoEconomico()"></div>
+          <div class="form-group" style="align-self:flex-end"><button class="btn-secondary" onclick="document.getElementById('res-desde').value='';document.getElementById('res-hasta').value='';renderResultadoEconomico()">Ver todo el historial</button></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;border-left:3px solid var(--amber)">
+          <div class="card-title">⚖️ Relación Compra-Venta (Flaco / Gordo)</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Compara los kilos y el dinero de lo comprado (flaco) contra lo vendido (gordo) en el período elegido.</div>
+          <div id="res-compraventa"></div>
+        </div>
+
+        <div class="card" style="border-left:3px solid var(--green)">
+          <div class="card-title">🌾 Resultado por hectárea</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Tu resultado real (no de mercado), sobre las hectáreas activas de tus potreros. Comparalo contra el Índice Novillo Arrendamiento de la página Precios.</div>
+          <div id="res-porhectarea"></div>
+        </div>
       </div>
     </div>
 
@@ -4465,7 +4487,7 @@ function showPage(id) {
   if(id === 'sanidad') { renderVacunas(); renderTratamientos(); renderEnfermedades(); renderRaspaje(); renderSangrado(); renderCalendarioSanitario(); }
   if(id === 'tratamientos') { renderTratamientos(); renderEnfermedades(); }
   if(id === 'nutricion') { renderNutricion(); renderIngredientesTabla(); actualizarRequerimientosUI(); poblarCategoriasRodeo(); renderHistorialRaciones(); poblarPotrerosSuplementacion(); renderVentanasCriticas(); }
-  if(id === 'movimientos') { renderCompras(); renderVentas(); renderTraslados(); }
+  if(id === 'movimientos') { renderCompras(); renderVentas(); renderTraslados(); renderResultadoEconomico(); }
   if(id === 'reportes') renderResumen();
   if(id === 'mortalidad') renderMuertes();
   if(id === 'insumos') { renderInsumosCatalogo(); renderInsumosMovForm(); renderAlertasInsumos(); }
@@ -8012,6 +8034,29 @@ function cerrarFichaAnimal(){
 }
 function cerrarFichaAnimalEsc(e){ if(e.key==='Escape') cerrarFichaAnimal(); }
 
+// Costo total acumulado de un animal: alimentación (encierre asignado a su potrero en el rango de sus
+// pesadas) + sanidad (todas las vacunas y tratamientos que tiene cargados). No incluye estructura/mano
+// de obra ni un valor de compra si no lo tenés cargado como venta/compra individual (esos registros son
+// por lote, no por RP).
+function calcularCostoTotalAnimal(rp){
+  const pesadasRp = (DB.pesadas||[]).filter(p=>p.rp===rp).sort((x,y)=>new Date(x.fecha)-new Date(y.fecha));
+  let costoAlimentacion = 0, pesoGanado = null;
+  if(pesadasRp.length>=2){
+    const primera = pesadasRp[0], ultima = pesadasRp[pesadasRp.length-1];
+    pesoGanado = ultima.peso - primera.peso;
+    const potrero = ultima.potrero || primera.potrero;
+    const tDesde = new Date(primera.fecha).getTime(), tHasta = new Date(ultima.fecha).getTime();
+    costoAlimentacion = (DB.encierres||[]).filter(e=>e.potrero===potrero && new Date(e.fecha).getTime()>=tDesde && new Date(e.fecha).getTime()<=tHasta)
+      .reduce((s,e)=>s+(e.costoCab||0),0);
+  }
+  const costoVacunas = (DB.vacunas||[]).filter(v=>v.rp===rp).reduce((s,v)=>s+(v.costo||0),0);
+  const costoTratamientos = (DB.tratamientos||[]).filter(t=>t.rp===rp).reduce((s,t)=>s+(t.costo||0),0);
+  const costoSanidad = costoVacunas + costoTratamientos;
+  const costoTotal = costoAlimentacion + costoSanidad;
+  const costoPorKg = (pesoGanado && pesoGanado>0) ? costoTotal/pesoGanado : null;
+  return { costoAlimentacion, costoVacunas, costoTratamientos, costoSanidad, costoTotal, pesoGanado, costoPorKg };
+}
+
 function abrirFichaAnimal(rp){
   cerrarFichaAnimal(); // por si había una ficha abierta sin cerrar, evita overlays apilados
   const a = DB.animales.find(x=>x.rp===rp);
@@ -8032,6 +8077,7 @@ function abrirFichaAnimal(rp){
   const tactosRp = (DB.tactos||[]).filter(t=>t.rp===rp).sort((x,y)=>new Date(y.fecha)-new Date(x.fecha));
   const ultimoTacto = tactosRp[0];
   const partosComoMadre = (DB.nacimientos||[]).filter(n=>n.madre===rp);
+  const costo = calcularCostoTotalAnimal(rp);
 
   const win = document.createElement('div');
   win.className = 'ficha-animal-overlay';
@@ -8059,6 +8105,26 @@ function abrirFichaAnimal(rp){
     ${partosComoMadre.length ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--blue)">
       <b>🐮 Historial como madre:</b> ${partosComoMadre.length} parto(s) registrado(s)
     </div>` : ''}
+
+    <h3 style="margin:10px 0 6px;font-size:14px">💰 Costo y rentabilidad</h3>
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:13px;line-height:1.8">
+        Alimentación: <b>$${costo.costoAlimentacion.toLocaleString('es-AR',{maximumFractionDigits:0})}</b>
+        (según encierre asignado a su potrero en el período de sus pesadas)<br>
+        Sanidad: <b>$${costo.costoSanidad.toLocaleString('es-AR',{maximumFractionDigits:0})}</b>
+        (vacunas $${costo.costoVacunas.toLocaleString('es-AR',{maximumFractionDigits:0})} + tratamientos $${costo.costoTratamientos.toLocaleString('es-AR',{maximumFractionDigits:0})})<br>
+        <b style="font-size:16px;color:var(--blue)">Costo total: $${costo.costoTotal.toLocaleString('es-AR',{maximumFractionDigits:0})}</b>
+        ${costo.pesoGanado?` sobre ${costo.pesoGanado.toFixed(0)}kg ganados`:''}
+        ${costo.costoPorKg!==null?` — <b>$${costo.costoPorKg.toFixed(0)}/kg producido</b>`:''}
+      </div>
+      <div class="form-row" style="margin-top:10px">
+        <div class="form-group" style="max-width:220px"><label class="form-label">Precio venta $/kg (opcional)</label>
+          <input type="number" id="ficha-precio-venta" class="form-control" oninput="fichaRecalcularMargen('${rp}', ${costo.costoPorKg||'null'})">
+        </div>
+      </div>
+      <div id="ficha-margen-resultado" style="margin-top:6px;font-size:13px"></div>
+      ${!costo.pesoGanado?'<div style="color:var(--text3);font-size:12px;margin-top:6px">Faltan al menos 2 pesadas para calcular kg ganados y costo por kg.</div>':''}
+    </div>
 
     <h3 style="margin:10px 0 6px;font-size:14px">⚖️ Evolución de peso</h3>
     ${pesadasRp.length ? `<canvas id="chart-ficha-peso" width="760" height="160" style="display:block;width:100%;max-width:760px;margin-bottom:14px"></canvas>` : '<div style="color:var(--text3);font-size:13px;margin-bottom:14px">Sin pesadas registradas.</div>'}
@@ -8103,6 +8169,17 @@ function abrirFichaAnimal(rp){
   }
 }
 
+function fichaRecalcularMargen(rp, costoPorKg){
+  const div = document.getElementById('ficha-margen-resultado');
+  if(!div) return;
+  const precioVenta = parseFloat(document.getElementById('ficha-precio-venta')?.value)||0;
+  if(!precioVenta || costoPorKg===null){ div.innerHTML=''; return; }
+  const margen = precioVenta - costoPorKg;
+  div.innerHTML = margen>=0
+    ? `<span style="color:var(--green);font-weight:600">✅ Margen estimado: $${margen.toFixed(0)}/kg</span> (venta $${precioVenta} - costo $${costoPorKg.toFixed(0)})`
+    : `<span style="color:var(--red);font-weight:600">⚠️ Pérdida estimada: $${Math.abs(margen).toFixed(0)}/kg</span> (venta $${precioVenta} - costo $${costoPorKg.toFixed(0)})`;
+}
+
 function exportarFichaPDF(rp){
   if(typeof window.jspdf==='undefined'){ toast('No se pudo cargar el generador de PDF','err'); return; }
   const a = DB.animales.find(x=>x.rp===rp);
@@ -8114,6 +8191,10 @@ function exportarFichaPDF(rp){
   const edadMeses = edadMesesDe(a.fnac);
   const edadTxt = edadMeses!==null ? (edadMeses<12?`${Math.floor(edadMeses)}m`:`${(edadMeses/12).toFixed(1)}a`) : '--';
   doc.text(`${a.categoria} · ${a.raza||'--'} · ${a.sexo||'--'} · Nac. ${a.fnac||'--'} (${edadTxt}) · Peso: ${a.peso||'--'}kg · Potrero: ${a.potrero||'--'}`, 14, y);
+  y += 8;
+
+  const costo = calcularCostoTotalAnimal(rp);
+  doc.text(`Costo alimentación: $${costo.costoAlimentacion.toFixed(0)} · Sanidad: $${costo.costoSanidad.toFixed(0)} · Total: $${costo.costoTotal.toFixed(0)}${costo.costoPorKg!==null?` (${costo.costoPorKg.toFixed(0)}/kg producido)`:''}`, 14, y);
   y += 8;
 
   const pesadasRp = (DB.pesadas||[]).filter(p=>p.rp===rp).sort((x,y2)=>new Date(x.fecha)-new Date(y2.fecha));
@@ -10394,6 +10475,78 @@ function exportarRacionPDF(id){
   y += 6;
   doc.text(`Oligoelementos/vitaminas — Cu:${r.perfil.cu?.toFixed(1)||0}ppm Zn:${r.perfil.zn?.toFixed(1)||0}ppm Mn:${r.perfil.mn?.toFixed(1)||0}ppm Se:${r.perfil.se?.toFixed(2)||0}ppm Co:${r.perfil.co?.toFixed(2)||0}ppm I:${r.perfil.i?.toFixed(2)||0}ppm · VitA:${r.perfil.vitA?.toFixed(0)||0}UI VitD:${r.perfil.vitD?.toFixed(0)||0}UI VitE:${r.perfil.vitE?.toFixed(1)||0}mg`, 14, y);
   doc.save(nombreArchivoExport('Racion', 'pdf'));
+}
+
+// ═══ RESULTADO ECONÓMICO: relación compra-venta (flaco/gordo) y $/ha real ═══
+
+function renderResultadoEconomico(){
+  const divCV = document.getElementById('res-compraventa');
+  const divHa = document.getElementById('res-porhectarea');
+  if(!divCV || !divHa) return;
+
+  const desde = document.getElementById('res-desde')?.value || '';
+  const hasta = document.getElementById('res-hasta')?.value || '';
+  const enRango = f => (!desde || f>=desde) && (!hasta || f<=hasta);
+
+  const compras = (DB.compras||[]).filter(c=>enRango(c.fecha));
+  const ventas = (DB.ventas||[]).filter(v=>enRango(v.fecha));
+
+  const kgComprados = compras.reduce((s,c)=>s+((c.cant||0)*(c.peso||0)),0);
+  const $comprado = compras.reduce((s,c)=>s+(c.total||0),0);
+  const cabezasCompradas = compras.reduce((s,c)=>s+(c.cant||0),0);
+
+  const kgVendidos = ventas.reduce((s,v)=>s+(v.peso||0),0);
+  const $vendido = ventas.reduce((s,v)=>s+(v.total||0),0);
+  const cabezasVendidas = ventas.reduce((s,v)=>s+(v.cant||0),0);
+
+  if(!compras.length && !ventas.length){
+    divCV.innerHTML = '<span style="color:var(--text3)">Sin compras ni ventas cargadas en ese período.</span>';
+  } else {
+    const precioPromCompra = kgComprados>0 ? $comprado/kgComprados : 0;
+    const precioPromVenta = kgVendidos>0 ? $vendido/kgVendidos : 0;
+    const relacion = (precioPromCompra>0 && precioPromVenta>0) ? precioPromVenta/precioPromCompra : null;
+    const margenBruto = $vendido - $comprado;
+    divCV.innerHTML = `
+      <div class="grid-4" style="margin-bottom:10px">
+        <div class="kpi amber"><div class="kpi-label">Comprado (flaco)</div><div class="kpi-val">${kgComprados.toLocaleString('es-AR',{maximumFractionDigits:0})}</div><div class="kpi-sub">kg · ${cabezasCompradas} cab. · $${$comprado.toLocaleString('es-AR',{maximumFractionDigits:0})}</div></div>
+        <div class="kpi green"><div class="kpi-label">Vendido (gordo)</div><div class="kpi-val">${kgVendidos.toLocaleString('es-AR',{maximumFractionDigits:0})}</div><div class="kpi-sub">kg · ${cabezasVendidas} cab. · $${$vendido.toLocaleString('es-AR',{maximumFractionDigits:0})}</div></div>
+        <div class="kpi blue"><div class="kpi-label">Precio prom. compra/venta</div><div class="kpi-val" style="font-size:15px">$${precioPromCompra.toFixed(0)} / $${precioPromVenta.toFixed(0)}</div><div class="kpi-sub">$/kg</div></div>
+        <div class="kpi ${margenBruto>=0?'green':'red'}"><div class="kpi-label">Margen bruto</div><div class="kpi-val" style="font-size:16px">$${margenBruto.toLocaleString('es-AR',{maximumFractionDigits:0})}</div><div class="kpi-sub">vendido − comprado</div></div>
+      </div>
+      ${relacion!==null?`<div style="font-size:14px">
+        <b>Relación compra-venta: ${relacion.toFixed(2)}</b> — cada kilo de flaco comprado, se vende (en promedio) a ${relacion.toFixed(2)}x su precio de compra.
+        ${relacion>=1.15?`<span style="color:var(--green)"> ✅ Relación favorable para la invernada.</span>`:relacion>=1.0?`<span style="color:var(--amber)"> ⚠️ Relación ajustada — el margen depende de la eficiencia de conversión.</span>`:`<span style="color:var(--red)"> 🔴 Relación desfavorable — vendés más barato por kilo de lo que pagaste, hace falta que la ganancia de peso compense.</span>`}
+      </div>`:'<span style="color:var(--text3)">Falta compra o venta en el período para calcular la relación.</span>'}
+      <div style="font-size:12px;color:var(--text3);margin-top:8px">El margen bruto no descuenta alimentación, sanidad ni gastos de estructura — es la diferencia entre lo pagado y lo cobrado en el período.</div>
+    `;
+  }
+
+  const potrerosActivos = (DB.potreros||[]).filter(p=>p.estado==='Activo');
+  const haTotales = potrerosActivos.reduce((s,p)=>s+(p.ha||0),0);
+
+  if(haTotales<=0){
+    divHa.innerHTML = '<span style="color:var(--text3)">Cargá las hectáreas de tus potreros activos para calcular el resultado por hectárea.</span>';
+    return;
+  }
+  if(!compras.length && !ventas.length){
+    divHa.innerHTML = `<span style="color:var(--text3)">Sin compras ni ventas en el período (${haTotales.toLocaleString('es-AR')} ha activas disponibles).</span>`;
+    return;
+  }
+
+  const kgProducidosNeto = kgVendidos - kgComprados; // lo que realmente "creció" bajo tu manejo, no lo que ya venía crecido al comprarlo
+  const $resultado = $vendido - $comprado;
+  const kgPorHa = kgProducidosNeto/haTotales;
+  const $porHa = $resultado/haTotales;
+
+  divHa.innerHTML = `
+    <div class="grid-4">
+      <div class="kpi blue"><div class="kpi-label">Hectáreas activas</div><div class="kpi-val">${haTotales.toLocaleString('es-AR')}</div><div class="kpi-sub">${potrerosActivos.length} potreros</div></div>
+      <div class="kpi ${kgProducidosNeto>=0?'green':'red'}"><div class="kpi-label">Kg producidos (neto)</div><div class="kpi-val">${kgProducidosNeto.toLocaleString('es-AR',{maximumFractionDigits:0})}</div><div class="kpi-sub">vendido − comprado</div></div>
+      <div class="kpi ${kgPorHa>=0?'green':'red'}"><div class="kpi-label">Kg producidos / ha</div><div class="kpi-val">${kgPorHa.toFixed(1)}</div><div class="kpi-sub">en el período</div></div>
+      <div class="kpi ${$porHa>=0?'green':'red'}"><div class="kpi-label">Resultado $/ha</div><div class="kpi-val" style="font-size:16px">$${$porHa.toLocaleString('es-AR',{maximumFractionDigits:0})}</div><div class="kpi-sub">bruto, en el período</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-top:8px">"Kg producidos" = kg vendidos − kg comprados (lo que efectivamente engordaste vos, no lo que ya pesaba el animal al comprarlo). No descuenta costos de alimentación/sanidad/estructura — compará este $/ha contra el Índice Novillo Arrendamiento de la página Precios para ver si conviene más hacer invernada o arrendar el campo.</div>
+  `;
 }
 
 function renderCompras(){
