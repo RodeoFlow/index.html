@@ -8007,7 +8007,7 @@ const ICONOS_HISTORIAL = {
 
 function cerrarFichaAnimal(){
   document.querySelectorAll('.ficha-animal-overlay').forEach(el=>el.remove());
-  document.querySelectorAll('.ficha-cerrar-btn').forEach(el=>el.remove());
+  document.querySelectorAll('.ficha-btn-flotante').forEach(el=>el.remove());
   document.removeEventListener('keydown', cerrarFichaAnimalEsc);
 }
 function cerrarFichaAnimalEsc(e){ if(e.key==='Escape') cerrarFichaAnimal(); }
@@ -8043,7 +8043,6 @@ function abrirFichaAnimal(rp){
         <div style="color:var(--text2);font-size:13px;margin-top:2px">${a.categoria} · ${a.raza||'--'} · ${a.sexo||'--'} · Nac. ${a.fnac||'--'} (${edadTxt})</div>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn-secondary" onclick="exportarFichaPDF('${rp}')">📄 PDF</button>
       </div>
     </div>
 
@@ -8082,12 +8081,19 @@ function abrirFichaAnimal(rp){
   // de toda la app) y con el handler enganchado por JS directo — así no depende de que ningún
   // otro elemento de la página no lo tape ni de cómo burbujee el click.
   const btnCerrar = document.createElement('button');
-  btnCerrar.className = 'ficha-cerrar-btn';
+  btnCerrar.className = 'ficha-btn-flotante';
   btnCerrar.textContent = '✕';
   btnCerrar.setAttribute('aria-label','Cerrar ficha');
   btnCerrar.style.cssText = 'position:fixed;top:16px;right:16px;z-index:100000;width:44px;height:44px;border-radius:50%;background:var(--red,#c0392b);color:#fff;border:none;font-size:20px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.5)';
   btnCerrar.addEventListener('click', (e)=>{ e.stopPropagation(); cerrarFichaAnimal(); });
   document.body.appendChild(btnCerrar);
+
+  const btnPDF = document.createElement('button');
+  btnPDF.className = 'ficha-btn-flotante'; // misma clase: se limpia junto con el resto al cerrar
+  btnPDF.textContent = '📄 PDF';
+  btnPDF.style.cssText = 'position:fixed;top:16px;right:68px;z-index:100000;height:44px;padding:0 16px;border-radius:22px;background:var(--accent);color:#1a1a1a;border:none;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.5)';
+  btnPDF.addEventListener('click', (e)=>{ e.stopPropagation(); exportarFichaPDF(rp); });
+  document.body.appendChild(btnPDF);
 
   if(pesadasRp.length){
     setTimeout(()=>{
