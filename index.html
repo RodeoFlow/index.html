@@ -2815,6 +2815,25 @@
 
         <div style="text-align:center;color:var(--text3);font-size:14px;margin:8px 0">— o —</div>
 
+        <!-- GRABAR OFFLINE: funciona sin conexión, transcribe cuando vuelve la señal -->
+        <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:12px;border:1px solid var(--accent)">
+          <div style="font-size:13px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📴 Grabar nota de voz (sin conexión)</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Grabá donde no hay señal — queda guardada en el celular y se transcribe sola cuando vuelve la conexión.</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <button id="btn-voz-grabar" class="btn-primary" onclick="iniciarGrabacionVoz()" style="flex:1">🔴 Grabar</button>
+            <button id="btn-voz-detener" class="btn-danger" onclick="detenerGrabacionVoz()" style="display:none;flex:1">⏹ Detener y guardar</button>
+          </div>
+          <div id="voz-grabando-status" style="display:none;font-size:13px;color:var(--red);text-align:center;margin-bottom:8px">🔴 Grabando... tocá "Detener" cuando termines</div>
+
+          <div id="voz-pendientes-wrap" style="margin-top:10px">
+            <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">📋 Notas pendientes de transcribir: <span id="voz-pendientes-count">0</span></div>
+            <div id="voz-pendientes-lista"></div>
+            <button class="btn-secondary" style="width:100%;margin-top:8px" onclick="transcribirNotasPendientes()">☁️ Transcribir pendientes ahora</button>
+          </div>
+        </div>
+
+        <div style="text-align:center;color:var(--text3);font-size:14px;margin:8px 0">— o —</div>
+
         <!-- ESCRIBIR lo que dice la nota de voz de WhatsApp -->
         <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:12px">
           <div style="font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">✏️ Escribí lo que dice la nota de voz</div>
@@ -3158,7 +3177,8 @@
         <div class="form-group"><label class="form-label">Potrero</label><select id="na-potrero" class="form-control"><option value="">--</option></select></div>
         <div class="form-group"><label class="form-label">Veterinario / Operario</label><input type="text" id="na-vet" class="form-control"></div>
       </div>
-      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="na-obs" class="form-control" rows="2" placeholder="Dificultades al parto, condición de la cría, etc."></textarea></div>
+      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="na-obs" class="form-control" rows="2" placeholder="Dificultades al parto, condición de la cría, etc."></textarea>
+        <button type="button" id="na-obs-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('na-obs','na-obs-dictar-btn')">🎙️ Dictar</button></div>
     </div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-nacimiento')">Cancelar</button><button class="btn-primary" onclick="guardarNacimiento()">💾 Guardar</button></div>
   </div>
@@ -3283,7 +3303,8 @@
         </div>
       </div>
 
-      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="pr-obs" class="form-control" rows="2"></textarea></div>
+      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="pr-obs" class="form-control" rows="2"></textarea>
+        <button type="button" id="pr-obs-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('pr-obs','pr-obs-dictar-btn')">🎙️ Dictar</button></div>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal('modal-prenada')">Cancelar</button>
@@ -3309,7 +3330,8 @@
         <div class="form-group"><label class="form-label">Edad (días)</label><input type="number" id="de-edad" class="form-control"></div>
         <div class="form-group"><label class="form-label">Potrero destino</label><select id="de-potrero" class="form-control"><option value="">--</option></select></div>
       </div>
-      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="de-obs" class="form-control" rows="2" placeholder="Observaciones adicionales..."></textarea></div>
+      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="de-obs" class="form-control" rows="2" placeholder="Observaciones adicionales..."></textarea>
+        <button type="button" id="de-obs-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('de-obs','de-obs-dictar-btn')">🎙️ Dictar</button></div>
     </div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-destete')">Cancelar</button><button class="btn-primary" onclick="guardarDestete()">💾 Guardar</button></div>
   </div>
@@ -3334,7 +3356,8 @@
         <div class="form-group"><label class="form-label">Veterinario</label><input type="text" id="ab-vet" class="form-control"></div>
         <div class="form-group"><label class="form-label">Tratamiento</label><input type="text" id="ab-trat" class="form-control"></div>
       </div>
-      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="ab-obs" class="form-control" rows="2" placeholder="Observaciones adicionales..."></textarea></div>
+      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="ab-obs" class="form-control" rows="2" placeholder="Observaciones adicionales..."></textarea>
+        <button type="button" id="ab-obs-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('ab-obs','ab-obs-dictar-btn')">🎙️ Dictar</button></div>
     </div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-aborto')">Cancelar</button><button class="btn-primary" onclick="guardarAborto()">💾 Guardar</button></div>
   </div>
@@ -3367,7 +3390,8 @@
         </div>
         <div class="form-group"><label class="form-label">Día de protocolo IATF (opcional)</label><input type="text" id="celo-dia-protocolo" class="form-control" placeholder="Ej: Día 9"></div>
       </div>
-      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="celo-obs" class="form-control" rows="2"></textarea></div>
+      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="celo-obs" class="form-control" rows="2"></textarea>
+        <button type="button" id="celo-obs-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('celo-obs','celo-obs-dictar-btn')">🎙️ Dictar</button></div>
     </div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-celo')">Cancelar</button><button class="btn-primary" onclick="guardarCelo()">💾 Guardar</button></div>
   </div>
@@ -3397,7 +3421,8 @@
         <div class="form-group"><label class="form-label">Protocolo IATF (opcional)</label><input type="text" id="serv-protocolo" class="form-control" placeholder="Ej: Dispositivo + BE + PGF2α"></div>
         <div class="form-group"><label class="form-label">Operador / inseminador</label><input type="text" id="serv-operador" class="form-control"></div>
       </div>
-      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="serv-obs" class="form-control" rows="2"></textarea></div>
+      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="serv-obs" class="form-control" rows="2"></textarea>
+        <button type="button" id="serv-obs-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('serv-obs','serv-obs-dictar-btn')">🎙️ Dictar</button></div>
     </div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-servicio')">Cancelar</button><button class="btn-primary" onclick="guardarServicio()">💾 Guardar</button></div>
   </div>
@@ -3422,7 +3447,8 @@
         <div class="form-group"><label class="form-label">Motivo</label><input type="text" id="rc-motivo" class="form-control" placeholder="Edad, entore..."></div>
         <div class="form-group"><label class="form-label">Peso (kg)</label><input type="number" id="rc-peso" class="form-control"></div>
       </div>
-      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="rc-obs" class="form-control" rows="2" placeholder="Observaciones adicionales..."></textarea></div>
+      <div class="form-group"><label class="form-label">Observaciones</label><textarea id="rc-obs" class="form-control" rows="2" placeholder="Observaciones adicionales..."></textarea>
+        <button type="button" id="rc-obs-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('rc-obs','rc-obs-dictar-btn')">🎙️ Dictar</button></div>
     </div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-recat')">Cancelar</button><button class="btn-primary" onclick="guardarRecat()">💾 Guardar</button></div>
   </div>
@@ -4267,6 +4293,7 @@ function init(desdeSync) {
   // No cargar datos de muestra - app de producción
   renderEncierres();
   poblarSelectConvAlim();
+  cargarNotasVozPendientes();
   poblarSelectsGDP(); renderObjetivosGDP(); renderRankingGDP(); renderTendenciaGDP();
   const en = document.getElementById('estab-name');
   if(en) {
@@ -4596,6 +4623,127 @@ function alertaDatoRecibido(tipo, mensaje, elementId) {
   reproducirBeep(tipo);
 }
 
+// ═══ GRABACIÓN DE VOZ OFFLINE — funciona sin conexión, transcribe cuando vuelve la señal ═══
+const NOTAS_VOZ_KEY = 'notasVozPendientes';
+let _mediaRecorder = null;
+let _mediaChunks = [];
+let _notasVozCache = [];
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]); // saca el prefijo data:...;base64,
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function cargarNotasVozPendientes() {
+  try {
+    const raw = await idbGet(NOTAS_VOZ_KEY);
+    _notasVozCache = raw ? JSON.parse(raw) : [];
+  } catch(e) { _notasVozCache = []; }
+  renderNotasVozPendientes();
+}
+
+async function guardarNotasVozPendientes() {
+  await idbSet(NOTAS_VOZ_KEY, JSON.stringify(_notasVozCache));
+  renderNotasVozPendientes();
+}
+
+async function iniciarGrabacionVoz() {
+  if(!navigator.mediaDevices?.getUserMedia) {
+    toast('Tu navegador no soporta grabación de audio', 'err');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    _mediaChunks = [];
+    _mediaRecorder = new MediaRecorder(stream);
+    _mediaRecorder.ondataavailable = (e) => { if(e.data.size > 0) _mediaChunks.push(e.data); };
+    _mediaRecorder.onstop = async () => {
+      const mimeType = _mediaRecorder.mimeType || 'audio/webm';
+      const blob = new Blob(_mediaChunks, { type: mimeType });
+      const base64 = await blobToBase64(blob);
+      _notasVozCache.push({
+        id: 'voz_' + Date.now(),
+        fecha: new Date().toISOString(),
+        mimeType,
+        base64,
+        tamanioKB: Math.round(blob.size / 1024),
+      });
+      await guardarNotasVozPendientes();
+      stream.getTracks().forEach(t => t.stop());
+      toast('Nota de voz guardada — se transcribe cuando haya señal 📴✅', 'ok');
+    };
+    _mediaRecorder.start();
+    document.getElementById('btn-voz-grabar').style.display = 'none';
+    document.getElementById('btn-voz-detener').style.display = '';
+    document.getElementById('voz-grabando-status').style.display = 'block';
+  } catch(e) {
+    toast('No se pudo acceder al micrófono: ' + (e.message||''), 'err');
+  }
+}
+
+function detenerGrabacionVoz() {
+  if(_mediaRecorder && _mediaRecorder.state !== 'inactive') _mediaRecorder.stop();
+  document.getElementById('btn-voz-grabar').style.display = '';
+  document.getElementById('btn-voz-detener').style.display = 'none';
+  document.getElementById('voz-grabando-status').style.display = 'none';
+}
+
+function renderNotasVozPendientes() {
+  const cont = document.getElementById('voz-pendientes-lista');
+  const count = document.getElementById('voz-pendientes-count');
+  if(!cont || !count) return;
+  count.textContent = _notasVozCache.length;
+  if(!_notasVozCache.length) { cont.innerHTML = '<div style="color:var(--text3);font-size:12px">Sin notas pendientes.</div>'; return; }
+  cont.innerHTML = _notasVozCache.map(n => {
+    const fechaTxt = new Date(n.fecha).toLocaleString('es-AR');
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <audio controls style="height:32px;flex:1" src="data:${n.mimeType};base64,${n.base64}"></audio>
+      <span style="font-size:11px;color:var(--text3);white-space:nowrap">${fechaTxt} · ${n.tamanioKB}KB</span>
+      <button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarNotaVoz('${n.id}')">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+async function eliminarNotaVoz(id) {
+  _notasVozCache = _notasVozCache.filter(n => n.id !== id);
+  await guardarNotasVozPendientes();
+}
+
+async function transcribirNotasPendientes() {
+  if(!_notasVozCache.length) { toast('No hay notas pendientes', 'info'); return; }
+  if(!navigator.onLine) { toast('Sin conexión — probá de nuevo cuando tengas señal', 'err'); return; }
+
+  toast(`Transcribiendo ${_notasVozCache.length} nota(s)...`, 'info');
+  const fn = firebase.app().functions('us-central1').httpsCallable('transcribirAudioIA');
+  let exitosas = 0, fallidas = 0;
+  const restantes = [];
+
+  for(const nota of _notasVozCache) {
+    try {
+      const { data } = await fn({ audioBase64: nota.base64, mimeType: nota.mimeType });
+      if(data?.texto) {
+        exitosas++;
+        await interpretarTextoConIA(data.texto);
+      } else {
+        restantes.push(nota); // no se reconoció voz, se deja para reintentar o borrar a mano
+        fallidas++;
+      }
+    } catch(e) {
+      console.error('Error transcribiendo nota', nota.id, e);
+      restantes.push(nota); // falló (sin señal a mitad de camino, etc.) — se reintenta después
+      fallidas++;
+    }
+  }
+  _notasVozCache = restantes;
+  await guardarNotasVozPendientes();
+  toast(`✅ ${exitosas} transcripta(s)${fallidas?` · ⚠️ ${fallidas} pendiente(s) para reintentar`:''}`, exitosas ? 'ok' : 'err');
+}
+
+// ═══ VOZ: DICTADO (texto por voz) Y CONFIRMACIÓN HABLADA — para trabajar en el campo ═══
 // ═══ VOZ: DICTADO (texto por voz) Y CONFIRMACIÓN HABLADA — para trabajar en el campo ═══
 
 // ── Dictado por voz: convierte lo que decís en texto, en el campo que elijas ──
@@ -11158,59 +11306,15 @@ async function procesarMensajeWA() {
 async function interpretarTextoConIA(texto) {
   toast('Interpretando con IA...','info');
   try {
-    const hoy = new Date().toISOString().split('T')[0];
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST', headers:{'Content-Type':'application/json','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body: JSON.stringify({
-        model:'claude-sonnet-4-20250514', max_tokens:2000,
-        system:`Sos asistente ganadero argentino. Tu única tarea es convertir texto de campo en registros estructurados.
-
-REGLA CRÍTICA: Respondé ÚNICAMENTE con un array JSON válido. Sin texto antes ni después. Sin markdown. Sin explicaciones. Solo el array [].
-
-Tipos válidos y sus campos en "datos":
-- Pesada: {rp, peso, potrero, operador, fecha}
-- Vacuna: {rp, vacuna, dosis, lab, operador, fecha}  
-- Tratamiento: {rp, diag, med, dosis, via, dias, vet, fecha}
-- Animal: {rp, categoria, raza, sexo, peso, potrero, fnac}
-- Compra: {cant, cat, peso, precio, prov, potrero, fecha}
-- Venta: {cant, cat, peso, precio, comp, destino, fecha}
-- Tacto: {rp, resultado, meses, parto, vet, fecha}
-- Destete: {ternero, madre, peso, potrero, fecha}
-- Aborto: {rp, meses, causa, vet, fecha}
-- Traslado: {rp, cant, origen, destino, fecha}
-
-Fecha default si no se menciona: ${hoy}
-Para múltiples animales en un mensaje, crear un registro por cada uno.
-Si el texto no tiene datos ganaderos claros, devolvé: []
-
-EJEMPLO entrada: "pesé RP 1023 420 kg potrero norte"
-EJEMPLO salida: [{"tipo":"Pesada","rp":"1023","datos":{"rp":"1023","peso":420,"potrero":"norte","fecha":"${hoy}"},"descripcion":"Pesada RP 1023: 420 kg, potrero norte"}]`,
-        messages:[{role:'user',content: String(texto)}]
-      })
-    });
-    const data = await r.json();
-    if(data.error) { toast('Error API: '+data.error.message,'err'); return; }
-    let text = (data.content?.map(c=>c.text||'').join('')||'').trim();
-    // Limpiar cualquier wrapper de markdown
-    text = text.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    // Extraer solo el array si hay texto extra
-    const arrayMatch = text.match(/\[[\s\S]*\]/);
-    if(arrayMatch) text = arrayMatch[0];
-    let registros;
-    try {
-      registros = JSON.parse(text);
-    } catch(parseErr) {
-      console.error('JSON parse error:', parseErr, 'Raw text:', text);
-      toast('La IA no devolvió JSON válido. Intentá con un mensaje más simple.','err');
-      return;
-    }
-    if(!Array.isArray(registros)) { toast('Respuesta inesperada de la IA','err'); return; }
+    const fn = firebase.app().functions('us-central1').httpsCallable('interpretarTextoIA');
+    const { data } = await fn({ texto: String(texto) });
+    const registros = data?.registros || [];
     if(registros.length === 0) { toast('No se encontraron datos ganaderos en el texto','info'); return; }
     waRegistrosPendientes = registros;
     mostrarRegistrosPendientes(registros);
   } catch(e) {
     console.error('interpretarTextoConIA error:', e);
-    toast('Error al interpretar: '+e.message,'err');
+    toast('Error al interpretar: '+(e?.message||'sin conexión'),'err');
   }
 }
 
