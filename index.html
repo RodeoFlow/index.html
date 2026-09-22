@@ -4545,6 +4545,14 @@ document.addEventListener('click', e => { if(e.target.classList.contains('modal-
 
 // ─── TOAST ───
 let toastTimer;
+// Escapa HTML para evitar XSS almacenado: cualquier texto libre tipeado por un usuario
+// (observaciones, causas, motivos, nombres, etc.) pasa por acá antes de insertarse en
+// innerHTML, para que un "<img onerror=...>" o similar quede como texto plano, no como
+// código ejecutable.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function toast(msg, type='info') {
   const el = document.getElementById('toast');
   el.className = 'toast toast-' + (type==='ok'?'ok':type==='err'?'err':type==='warn'?'warn':'info');
@@ -4887,19 +4895,19 @@ function mostrarAlertaSanitaria(animal, info) {
   const diasRestantes = info.fechaApto ? Math.round((info.fechaApto - hoy)/86400000) : null;
   texto.innerHTML = `
     <div style="font-size:17px;font-weight:800;margin-bottom:8px">🚫 RP ${animal.rp} — ${animal.categoria}</div>
-    <div><b>Motivo:</b> ${info.motivo}</div>
-    <div><b>Diagnóstico:</b> ${t.diag||'--'} · <b>Medicamento:</b> ${t.med||'--'}</div>
+    <div><b>Motivo:</b> ${esc(info.motivo)}</div>
+    <div><b>Diagnóstico:</b> ${esc(t.diag||'--')} · <b>Medicamento:</b> ${esc(t.med||'--')}</div>
     <div><b>Fecha de tratamiento:</b> ${t.fecha||'--'}</div>
     ${info.fechaApto
       ? `<div style="margin-top:8px;color:#ff8888;font-weight:700">⛔ NO APTO PARA FRIGORÍFICO hasta el ${info.fechaApto.toISOString().split('T')[0]} (${diasRestantes} día(s) más)</div>`
       : `<div style="margin-top:8px;color:#ff8888;font-weight:700">⛔ NO APTO PARA FRIGORÍFICO — tratamiento todavía en curso</div>`}
-    <div style="margin-top:4px">Veterinario: ${t.vet||'--'}</div>
+    <div style="margin-top:4px">Veterinario: ${esc(t.vet||'--')}</div>
   `;
   _rpAlertaSanitariaActual = animal.rp;
   overlay.style.display = 'flex';
   reproducirBeep('sanitaria');
   if(DB.settings.notificaciones?.activadas && DB.settings.notificaciones?.categorias?.sanitaria!==false){
-    mostrarNotificacionPush('🚫 Alerta sanitaria', `RP ${animal.rp} no apto para frigorífico — ${info.motivo}`, 'sanitaria-'+animal.rp);
+    mostrarNotificacionPush('🚫 Alerta sanitaria', `RP ${animal.rp} no apto para frigorífico — ${esc(info.motivo)}`, 'sanitaria-'+animal.rp);
   }
 }
 
@@ -4921,18 +4929,18 @@ function updateAllDropdowns() {
     if(!sel) return;
     const cur = sel.value;
     sel.innerHTML = '<option value="">-- Sin asignar --</option>';
-    DB.potreros.forEach(p => { sel.innerHTML += `<option value="${p.nombre}" ${cur===p.nombre?'selected':''}>${p.nombre}</option>`; });
+    DB.potreros.forEach(p => { sel.innerHTML += `<option value="${esc(p.nombre)}" ${cur===p.nombre?'selected':''}>${esc(p.nombre)}</option>`; });
   });
   const filtro = document.getElementById('filtro-potrero');
   if(filtro) {
     filtro.innerHTML = '<option value="">Todos los potreros</option>';
-    DB.potreros.forEach(p => filtro.innerHTML += `<option value="${p.nombre}">${p.nombre}</option>`);
+    DB.potreros.forEach(p => filtro.innerHTML += `<option value="${esc(p.nombre)}">${esc(p.nombre)}</option>`);
   }
   const sanglPot = document.getElementById('sangl-potrero');
   if(sanglPot) {
     const cur = sanglPot.value;
     sanglPot.innerHTML = '<option value="TODOS">Todos los potreros</option>';
-    DB.potreros.forEach(p => sanglPot.innerHTML += `<option value="${p.nombre}" ${cur===p.nombre?'selected':''}>${p.nombre}</option>`);
+    DB.potreros.forEach(p => sanglPot.innerHTML += `<option value="${esc(p.nombre)}" ${cur===p.nombre?'selected':''}>${esc(p.nombre)}</option>`);
   }
   // Transportistas dropdowns
   const transSelects = ['tl-trans','vj-trans','co-trans','ve-trans'];
@@ -4941,7 +4949,7 @@ function updateAllDropdowns() {
     if(!sel) return;
     const cur = sel.value;
     sel.innerHTML = '<option value="">-- Sin transporte --</option>';
-    DB.transportistas.forEach(t => { sel.innerHTML += `<option value="${t.id}" ${cur===String(t.id)?'selected':''}>${t.nombre} – ${t.patente}</option>`; });
+    DB.transportistas.forEach(t => { sel.innerHTML += `<option value="${t.id}" ${cur===String(t.id)?'selected':''}>${esc(t.nombre)} – ${t.patente}</option>`; });
   });
   // Clientes datalists
   const provs = DB.clientes.filter(c=>c.tipo==='Proveedor').map(c=>c.nombre);
@@ -5069,7 +5077,7 @@ function renderActivityFeed() {
   if(!acts.length){el.innerHTML='<div style="color:var(--text3);font-size:14px;padding:8px">Sin actividades registradas</div>';return;}
   el.innerHTML=acts.map(a=>`<div style="padding:5px 0;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:flex-start">
     <span>${icons[a.tipo]||'📌'}</span>
-    <div><div style="color:var(--text)">${a.desc}</div>
+    <div><div style="color:var(--text)">${esc(a.desc)}</div>
     <div style="color:var(--text3);font-size:13px">${a.fecha}${a.responsable?' · '+a.responsable:''}</div></div>
   </div>`).join('');
 }
@@ -5501,7 +5509,7 @@ function mostrarAltaRapida(rfid, pesoSugerido){
   const arPeso=document.getElementById('ar-peso'); if(arPeso) arPeso.value = pesoSugerido!=null?pesoSugerido:'';
   const arRp=document.getElementById('ar-rp'); if(arRp) arRp.value='';
   const potSel=document.getElementById('ar-potrero');
-  if(potSel){ potSel.innerHTML='<option value="">-- Sin asignar --</option>'+DB.potreros.map(p=>`<option>${p.nombre}</option>`).join(''); }
+  if(potSel){ potSel.innerHTML='<option value="">-- Sin asignar --</option>'+DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join(''); }
   const panel=document.getElementById('alta-rapida-panel');
   if(panel) panel.style.display='block';
   if(arRp) arRp.focus();
@@ -5541,12 +5549,12 @@ function guardarAltaRapida(){
 function renderTropaPotreroSelect(){
   const sel=document.getElementById('tropa-potrero'); if(!sel)return;
   const cur=sel.value;
-  sel.innerHTML='<option value="">-- Seleccionar --</option>'+DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  sel.innerHTML='<option value="">-- Seleccionar --</option>'+DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
   sel.value=cur;
   const dest=document.getElementById('tropa-destino');
-  if(dest) dest.innerHTML='<option value="">-- Seleccionar --</option>'+DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  if(dest) dest.innerHTML='<option value="">-- Seleccionar --</option>'+DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
   const diarioPot=document.getElementById('diario-potrero');
-  if(diarioPot) diarioPot.innerHTML='<option value="">-- Sin asignar --</option>'+DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  if(diarioPot) diarioPot.innerHTML='<option value="">-- Sin asignar --</option>'+DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
   const hoy=new Date().toISOString().split('T')[0];
   const tf=document.getElementById('tropa-traslado-fecha'); if(tf&&!tf.value)tf.value=hoy;
   const pf=document.getElementById('tropa-pesada-fecha'); if(pf&&!pf.value)pf.value=hoy;
@@ -5676,7 +5684,7 @@ function renderDiario(){
       <span style="font-size:13px"><strong>${iconos[d.categoria]||'📝'} ${d.categoria}</strong> ${d.potrero?`· ${d.potrero}`:''} <span style="color:var(--text3)">· ${d.fecha}</span></span>
       <span style="cursor:pointer;color:var(--red);font-size:13px" onclick="eliminarDiario(${d.id})">🗑</span>
     </div>
-    <div style="font-size:13px;color:var(--text2)">${d.texto}</div>
+    <div style="font-size:13px;color:var(--text2)">${esc(d.texto)}</div>
   </div>`).join('');
 }
 
@@ -5774,7 +5782,7 @@ function renderClima(data, cfg){
     <div style="font-size:40px">${curInfo.icono}</div>
     <div>
       <div style="font-size:22px;font-weight:700">${Math.round(cur.temperature_2m)}°C</div>
-      <div style="font-size:12px;color:var(--text3)">${curInfo.desc} · ${cfg.nombre||''}</div>
+      <div style="font-size:12px;color:var(--text3)">${esc(curInfo.desc)} · ${esc(cfg.nombre||'')}</div>
     </div>
     <div style="font-size:12px;color:var(--text2);margin-left:auto">💧 ${cur.relative_humidity_2m}% · 💨 ${Math.round(cur.wind_speed_10m)} km/h</div>
   </div>`;
@@ -5804,7 +5812,7 @@ function renderClima(data, cfg){
     alertas.slice(0,5).forEach(a=>{
       const textoEscapado=a.texto.replace(/'/g,"\\'");
       html+=`<div style="display:flex;justify-content:space-between;align-items:center;background:#f0c060;border:1px solid #c99a3a;border-radius:8px;padding:10px 12px;margin-bottom:6px;font-size:16px;color:#1a1400;font-weight:600">
-        <span>${a.icono} ${a.texto}</span>
+        <span>${a.icono} ${esc(a.texto)}</span>
         <span style="cursor:pointer;color:#3a2a05;white-space:nowrap;margin-left:8px;font-weight:700" onclick="agregarAlertaClimaDiario('${textoEscapado}')">📔 Anotar</span>
       </div>`;
     });
@@ -5932,7 +5940,7 @@ function prepararResumenWA(){
   const alertas=obtenerVencimientos(7);
   if(alertas.length){
     txt+=`*🔔 Próximos vencimientos (7 días):*\n`;
-    alertas.slice(0,6).forEach(a=>{ txt+=`  ${a.icono} ${a.texto}\n`; });
+    alertas.slice(0,6).forEach(a=>{ txt+=`  ${a.icono} ${esc(a.texto)}\n`; });
     if(alertas.length>6) txt+=`  …y ${alertas.length-6} más\n`;
   } else {
     txt+=`✅ Sin vencimientos próximos en 7 días.`;
@@ -6007,7 +6015,7 @@ function obtenerVencimientos(diasVentana){
     if(fin<=limite){
       const dias=Math.round((fin-hoy)/86400000);
       items.push({fecha:fin.toISOString().split('T')[0],dias,icono:'🩺',
-        texto:`Fin tratamiento ${t.med||t.diag||''} · RP ${t.rp} — ${dias<0?`venció hace ${Math.abs(dias)}d`:dias===0?'hoy':`en ${dias}d`}`});
+        texto:`Fin tratamiento ${esc(t.med||t.diag||'')} · RP ${t.rp} — ${dias<0?`venció hace ${Math.abs(dias)}d`:dias===0?'hoy':`en ${dias}d`}`});
     }
   });
 
@@ -6478,7 +6486,7 @@ function obtenerAnimalesRentabilidad(){
 function renderRentabilidadPotreroSelect(){
   const sel=document.getElementById('rent-potrero'); if(!sel)return;
   const cur=sel.value;
-  sel.innerHTML='<option value="">-- Todos los potreros --</option>'+DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  sel.innerHTML='<option value="">-- Todos los potreros --</option>'+DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
   sel.value=cur;
 }
 
@@ -6606,7 +6614,7 @@ function guardarPesada(){
   addHistorial('Pesada',`RP ${rp}: ${peso}kg`+(chk.anormal?' ⚠️ PESO ATÍPICO':''),rp,p.operador);
   renderPesadas();updateKPIs();
   if(chk.anormal){
-    toast(`⚠️ RP ${rp}: ${chk.motivo}`,'warn');
+    toast(`⚠️ RP ${rp}: ${esc(chk.motivo)}`,'warn');
     hablar(`Atención. RP ${rp}, peso atípico. ${peso} kilos.`);
   } else {
     toast(`Pesada guardada: RP ${rp} · ${peso}kg`,'ok');
@@ -6634,7 +6642,7 @@ function openModalAnimal() {
   const potSel = document.getElementById('a-potrero');
   if(potSel) {
     potSel.innerHTML = '<option value="">-- Sin asignar --</option>';
-    DB.potreros.forEach(p => potSel.innerHTML += `<option value="${p.nombre}">${p.nombre}</option>`);
+    DB.potreros.forEach(p => potSel.innerHTML += `<option value="${esc(p.nombre)}">${esc(p.nombre)}</option>`);
   }
   openModal('modal-animal');
 }
@@ -6724,7 +6732,7 @@ function guardarRaspaje(){
   const r={id:Date.now(),rp,fecha:$v('rasp-fecha')||new Date().toISOString().split('T')[0],parte:$v('rasp-parte'),diag:$v('rasp-diag'),resultado:$v('rasp-resultado'),vet:$v('rasp-vet'),obs:$v('rasp-obs')};
   if(!DB.raspajes)DB.raspajes=[];
   DB.raspajes.push(r);
-  addHistorial('Raspaje',`RP ${rp}: ${r.diag||'raspaje'} (${r.parte||'--'}) — ${r.resultado||'pendiente'}`,rp,r.vet);
+  addHistorial('Raspaje',`RP ${rp}: ${esc(r.diag||'raspaje')} (${r.parte||'--'}) — ${r.resultado||'pendiente'}`,rp,r.vet);
   closeModal('modal-raspaje');renderRaspaje();
   saveToStorage();
   toast('Raspaje guardado ✅','ok');
@@ -6749,10 +6757,10 @@ function renderRaspaje(){
     <td class="td-mono">${r.fecha}</td>
     <td class="td-mono">${r.rp}</td>
     <td>${r.parte||'--'}</td>
-    <td>${r.diag||'--'}</td>
+    <td>${esc(r.diag||'--')}</td>
     <td><span class="badge ${badgeRes(r.resultado)}">${r.resultado||'Pendiente'}</span></td>
-    <td>${r.vet||'--'}</td>
-    <td style="font-size:12px;color:var(--text3)">${r.obs||'--'}</td>
+    <td>${esc(r.vet||'--')}</td>
+    <td style="font-size:12px;color:var(--text3)">${esc(r.obs||'--')}</td>
     <td><button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarRaspaje(${r.id})">🗑</button></td>
   </tr>`).join('');
 }
@@ -6816,10 +6824,10 @@ function renderSangrado(){
     <td class="td-mono">${s.fecha}</td>
     <td class="td-mono">${s.rp}</td>
     <td>${s.enfermedad||'--'}</td>
-    <td>${s.lab||'--'}</td>
+    <td>${esc(s.lab||'--')}</td>
     <td><span class="badge ${badgeRes(s.resultado)}">${s.resultado||'Pendiente'}</span></td>
-    <td>${s.vet||'--'}</td>
-    <td style="font-size:12px;color:var(--text3)">${s.obs||'--'}</td>
+    <td>${esc(s.vet||'--')}</td>
+    <td style="font-size:12px;color:var(--text3)">${esc(s.obs||'--')}</td>
     <td><button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarSangrado(${s.id})">🗑</button></td>
   </tr>`).join('');
 }
@@ -6829,7 +6837,7 @@ function guardarTratamiento(){
   if(!rp){toast('RP obligatorio','err');return;}
   const t={id:Date.now(),rp,fecha:$v('tr-fecha'),diag:$v('tr-diag'),med:$v('tr-med'),dosis:$v('tr-dosis'),via:$v('tr-via'),dias:$v('tr-dias'),vet:$v('tr-vet'),estado:$v('tr-estado'),costo:parseFloat($v('tr-costo'))||0,retiro:parseInt($v('tr-retiro'))||0};
   DB.tratamientos.push(t);
-  addHistorial('Tratamiento',`RP ${rp}: ${t.diag} · ${t.med}`,rp,t.vet);
+  addHistorial('Tratamiento',`RP ${rp}: ${esc(t.diag)} · ${esc(t.med)}`,rp,t.vet);
   closeModal('modal-tratamiento');renderTratamientos();updateKPIs();
   toast('Tratamiento guardado','ok');
   hablar(`Tratamiento guardado. RP ${rp}.`);
@@ -6840,7 +6848,7 @@ function guardarEnfermedad(){
   if(!rp){toast('RP obligatorio','err');return;}
   const e={id:Date.now(),rp,fecha:$v('en-fecha'),nombre:$v('en-nombre'),sint:$v('en-sint'),res:$v('en-res'),vet:$v('en-vet')};
   DB.enfermedades.push(e);
-  addHistorial('Tratamiento',`RP ${rp}: Enf. ${e.nombre}`,rp,e.vet);
+  addHistorial('Tratamiento',`RP ${rp}: Enf. ${esc(e.nombre)}`,rp,e.vet);
   closeModal('modal-enfermedad');renderEnfermedades();
   toast('Enfermedad registrada','ok');
 }
@@ -6955,7 +6963,7 @@ function guardarAborto(){
   DB.abortos.push(a);
   const animal=DB.animales.find(x=>x.rp===rp);
   if(animal)animal.prenada='No';
-  addHistorial('Aborto',`RP ${rp}: aborto ${a.meses} meses · ${a.causa}`,rp,a.vet);
+  addHistorial('Aborto',`RP ${rp}: aborto ${a.meses} meses · ${esc(a.causa)}`,rp,a.vet);
   closeModal('modal-aborto');renderAbortos();updateKPIs();
   toast('Aborto registrado','ok');
 }
@@ -7090,7 +7098,7 @@ function guardarTraslado(){
       }
     }
   });
-  addHistorial('Traslado',`${t.tipo}: ${t.rp||t.cant+' animales'} – ${t.origen}→${t.destino}`,t.rp||rps.join(', '),'');
+  addHistorial('Traslado',`${t.tipo}: ${t.rp||t.cant+' animales'} – ${esc(t.origen)}→${esc(t.destino)}`,t.rp||rps.join(', '),'');
   actualizarSaldosPotreros(t.origen, t.destino);
   closeModal('modal-traslado');renderTraslados();updateKPIs();if(cambios)renderAnimales();
   const msg=cambios?' · '+cambios+' RP actualizados':'';
@@ -7138,7 +7146,7 @@ function guardarCompra(){
       altas++;
     }
   });
-  addHistorial('Compra',`Compra: ${c.cant} ${c.cat} – ${c.prov} · $${c.total.toLocaleString('es-AR')}`,rps.join(', '),c.prov);
+  addHistorial('Compra',`Compra: ${c.cant} ${c.cat} – ${esc(c.prov)} · $${c.total.toLocaleString('es-AR')}`,rps.join(', '),c.prov);
   actualizarSaldosPotreros(c.potrero);
   closeModal('modal-compra');renderCompras();updateKPIs();if(altas)renderAnimales();
   const msg=altas?' · '+altas+' RP dados de alta':'';
@@ -7168,7 +7176,7 @@ function guardarVenta(){
     }
   });
   actualizarSaldosPotreros(...potrerosAfectados);
-  addHistorial('Venta',`Venta: ${v.cant} ${v.cat} – ${v.comp} · $${v.total.toLocaleString('es-AR')}`,rps.join(', '),v.comp);
+  addHistorial('Venta',`Venta: ${v.cant} ${v.cat} – ${esc(v.comp)} · $${v.total.toLocaleString('es-AR')}`,rps.join(', '),v.comp);
   closeModal('modal-venta');renderVentas();updateKPIs();if(bajas)renderAnimales();
   const msg=bajas?' · '+bajas+' RP dados de baja':'';
   toast('Venta registrada: '+v.cant+' animales'+msg,'ok');
@@ -7196,7 +7204,7 @@ function guardarMuerte(){
   DB.muertes.push(m);
   const animal=DB.animales.find(a=>a.rp===rp);
   if(animal){animal.activo=false; actualizarSaldosPotreros(animal.potrero);}
-  addHistorial('Mortandad',`RP ${rp}: ${m.tipo} · ${m.causa||'--'}`,rp,m.vet);
+  addHistorial('Mortandad',`RP ${rp}: ${m.tipo} · ${esc(m.causa||'--')}`,rp,m.vet);
   closeModal('modal-muerte');renderMuertes();updateKPIs();renderAnimales();
   toast(`Baja registrada: RP ${rp}`,'info');
 }
@@ -7218,7 +7226,7 @@ function guardarViaje(){
   const trans=DB.transportistas.find(t=>String(t.id)===transId);
   const v={id:Date.now(),fecha:$v('vj-fecha'),transId,transNombre:trans?.nombre||'',patente:trans?.patente||$v('vj-patente'),origen:$v('vj-origen'),destino:$v('vj-destino'),animales:parseInt($v('vj-animales'))||0,cat:$v('vj-cat'),guia:$v('vj-guia'),peso:parseFloat($v('vj-peso'))||0,flete:parseFloat($v('vj-flete'))||0};
   DB.viajes.push(v);
-  addHistorial('Traslado',`Viaje: ${v.transNombre} (${v.patente}) – ${v.origen}→${v.destino} – ${v.animales} animales`,''  ,'');
+  addHistorial('Traslado',`Viaje: ${v.transNombre} (${v.patente}) – ${esc(v.origen)}→${esc(v.destino)} – ${v.animales} animales`,''  ,'');
   closeModal('modal-viaje');renderViajes();
   toast('Viaje registrado','ok');
 }
@@ -7229,7 +7237,7 @@ function renderTransportistas(){
   list.innerHTML=DB.transportistas.map(t=>`
     <div class="transporte-card">
       <div class="transporte-header">
-        <div class="transporte-nombre">🚛 ${t.nombre}</div>
+        <div class="transporte-nombre">🚛 ${esc(t.nombre)}</div>
         <div style="display:flex;align-items:center;gap:8px">
           <div class="transporte-patente">${t.patente}</div>
           <button class="btn-danger" style="padding:3px 10px;font-size:13px" onclick="bajaTransportista(${t.id})">🗑 Baja</button>
@@ -7251,9 +7259,9 @@ function renderViajes(){
   tbody.innerHTML=[...DB.viajes].reverse().map(v=>`<tr>
     <td>${v.fecha}</td><td>${v.transNombre}</td>
     <td class="td-mono" style="color:var(--accent)">${v.patente}</td>
-    <td>${v.origen||'--'}</td><td>${v.destino||'--'}</td>
+    <td>${esc(v.origen||'--')}</td><td>${esc(v.destino||'--')}</td>
     <td class="td-mono">${v.animales}</td>
-    <td class="td-mono">${v.guia||'--'}</td>
+    <td class="td-mono">${esc(v.guia||'--')}</td>
   </tr>`).join('');
 }
 
@@ -7319,7 +7327,7 @@ function renderClientes(){
       <div class="cliente-avatar">${c.nombre.charAt(0).toUpperCase()}</div>
       <div class="cliente-info">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div class="cliente-nombre">${c.nombre}</div>
+          <div class="cliente-nombre">${esc(c.nombre)}</div>
           <div style="display:flex;gap:6px;flex-shrink:0;margin-left:8px">
             <button class="btn-secondary" style="padding:3px 10px;font-size:13px" onclick="abrirModalCliente(${c.id})">✏️ Editar</button>
             <button class="btn-danger" style="padding:3px 10px;font-size:13px" onclick="bajaCliente(${c.id})">🗑 Baja</button>
@@ -7331,7 +7339,7 @@ function renderClientes(){
           ${c.tel?`<span style="font-size:13px;color:var(--text2)">📞 ${c.tel}</span>`:''}
           ${c.email?`<span style="font-size:13px;color:var(--text2)">✉ ${c.email}</span>`:''}
         </div>
-        ${c.notas?`<div style="font-size:12.5px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">📝 ${c.notas}</div>`:''}
+        ${c.notas?`<div style="font-size:12.5px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">📝 ${esc(c.notas)}</div>`:''}
       </div>
     </div>`).join('');
 }
@@ -7491,7 +7499,7 @@ function renderConfigUbicacion(){
   if(inp) inp.value=DB.settings.clima?.nombre||'';
   if(res){
     res.innerHTML = DB.settings.clima?.lat
-      ? `📍 Guardado: ${DB.settings.clima.nombre||''} (${DB.settings.clima.lat.toFixed(3)}, ${DB.settings.clima.lon.toFixed(3)})`
+      ? `📍 Guardado: ${esc(DB.settings.clima.nombre||'')} (${DB.settings.clima.lat.toFixed(3)}, ${DB.settings.clima.lon.toFixed(3)})`
       : 'Sin ubicación configurada todavía.';
   }
   const renspa=document.getElementById('config-renspa');
@@ -7635,7 +7643,7 @@ function renderPesadas(){
   const tbody=document.getElementById('pesadas-tbody');if(!tbody)return;
   tbody.innerHTML=[...DB.pesadas].reverse().map(p=>{
     const a=DB.animales.find(x=>x.rp===p.rp);const gdp=a?calcGDP(a):'--';
-    return `<tr><td>${p.fecha}</td><td class="td-mono">${p.rp}</td><td class="td-mono" style="font-size:13px">${p.rfid||'--'}</td><td class="td-mono text-green">${p.peso} kg</td><td>${p.potrero||'--'}</td><td>${p.operador||'--'}</td><td class="td-mono">${gdp} g/d</td></tr>`;
+    return `<tr><td>${p.fecha}</td><td class="td-mono">${p.rp}</td><td class="td-mono" style="font-size:13px">${p.rfid||'--'}</td><td class="td-mono text-green">${p.peso} kg</td><td>${p.potrero||'--'}</td><td>${esc(p.operador||'--')}</td><td class="td-mono">${gdp} g/d</td></tr>`;
   }).join('')||emptyRow(7);
   renderUltimasPesadas();
 }
@@ -7665,7 +7673,7 @@ function openModalEncierre() {
   const sel = document.getElementById('enc-potrero');
   if(sel) {
     sel.innerHTML = '<option value="">-- Seleccionar --</option>' +
-      DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+      DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
   }
   const fd = document.getElementById('enc-fecha');
   if(fd && !fd.value) fd.value = new Date().toISOString().split('T')[0];
@@ -8041,7 +8049,7 @@ function renderEncierres() {
       <td class="td-mono">${e.balanceado||0} kg</td>
       <td class="td-mono text-green">${(e.totalKg||0).toLocaleString('es-AR')} kg</td>
       <td class="td-mono">$ ${(e.costoCab||0).toLocaleString('es-AR',{maximumFractionDigits:0})}</td>
-      <td style="font-size:13px;color:var(--text3)">${e.obs||'--'}</td>
+      <td style="font-size:13px;color:var(--text3)">${esc(e.obs||'--')}</td>
       <td><button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="bajaEncierre(${e.id})">🗑</button></td>
     </tr>`).join('') || emptyRow(11);
 
@@ -8133,7 +8141,7 @@ function verObsAnimal(rp){
   win.style.cssText='position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:24px';
   win.innerHTML=`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:480px;width:100%;cursor:default" onclick="event.stopPropagation()">
     <div style="color:var(--accent);font-weight:700;margin-bottom:10px">RP ${a.rp} · Observaciones</div>
-    <div style="color:var(--text);white-space:pre-wrap;line-height:1.5">${a.obs}</div>
+    <div style="color:var(--text);white-space:pre-wrap;line-height:1.5">${esc(a.obs)}</div>
     <div style="color:var(--text3);font-size:12px;margin-top:16px;text-align:right">Tocá afuera para cerrar</div>
   </div>`;
   win.onclick=()=>win.remove();
@@ -8270,7 +8278,7 @@ function abrirFichaAnimal(rp){
       ${eventos.length ? eventos.map(h=>`<div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
         <span style="color:var(--text3);font-family:var(--font-mono)">${h.fecha}</span>
         <b style="margin-left:6px">${ICONOS_HISTORIAL[h.tipo]||'•'} ${h.tipo}</b>
-        <span style="color:var(--text2)"> — ${h.desc}</span>
+        <span style="color:var(--text2)"> — ${esc(h.desc)}</span>
         ${h.responsable?`<span style="color:var(--text3);font-size:11px"> (${h.responsable})</span>`:''}
       </div>`).join('') : '<div style="padding:14px;color:var(--text3);font-size:13px">Sin eventos registrados para este animal.</div>'}
     </div>
@@ -8361,7 +8369,7 @@ function filtrarAnimales(){
 
 function renderVacunas(){
   const tbody=document.getElementById('vacunas-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.vacunas].reverse().map(v=>`<tr><td>${v.fecha}</td><td class="td-mono">${v.rp}</td><td>${v.vacuna}</td><td class="td-mono">${v.dosis} ml</td><td>${v.lab||'--'}</td><td class="td-mono">${v.refuerzo||'--'}</td><td>${v.operador||'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaVacuna(${v.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(8);
+  tbody.innerHTML=[...DB.vacunas].reverse().map(v=>`<tr><td>${v.fecha}</td><td class="td-mono">${v.rp}</td><td>${v.vacuna}</td><td class="td-mono">${v.dosis} ml</td><td>${esc(v.lab||'--')}</td><td class="td-mono">${v.refuerzo||'--'}</td><td>${esc(v.operador||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaVacuna(${v.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(8);
 }
 
 // ═══ CALENDARIO SANITARIO PREVENTIVO ═══
@@ -8464,10 +8472,10 @@ function renderCalendarioSanitario(){
       <td class="td-mono">${f.a.rp}</td>
       <td>${f.a.categoria||'--'}</td>
       <td class="td-mono">${edadTxt}</td>
-      <td>${f.protocolo.nombre}</td>
+      <td>${esc(f.protocolo.nombre)}</td>
       <td class="td-mono">${f.ultima||'--'}</td>
       <td style="color:${color};font-weight:600">${estadoTxt}</td>
-      <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirModalVacunaDesdeCalendario('${f.a.rp}','${f.protocolo.nombre}')">＋ Vacunar</button></td>
+      <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirModalVacunaDesdeCalendario('${f.a.rp}','${esc(f.protocolo.nombre)}')">＋ Vacunar</button></td>
     </tr>`;
   }).join('');
 }
@@ -8480,12 +8488,12 @@ function abrirModalVacunaDesdeCalendario(rp, nombreVacuna){
 
 function renderTratamientos(){
   const tbody=document.getElementById('tratamientos-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.tratamientos].reverse().map(t=>`<tr><td>${t.fecha}</td><td class="td-mono">${t.rp}</td><td>${t.diag||'--'}</td><td>${t.med||'--'}</td><td class="td-mono">${t.dosis||'--'}</td><td class="td-mono">${t.dias||'--'}</td><td>${t.vet||'--'}</td><td><span class="badge ${t.estado==='En Curso'?'badge-amber':t.estado==='Completado'?'badge-green':'badge-gray'}">${t.estado}</span></td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaTratamiento(${t.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
+  tbody.innerHTML=[...DB.tratamientos].reverse().map(t=>`<tr><td>${t.fecha}</td><td class="td-mono">${t.rp}</td><td>${esc(t.diag||'--')}</td><td>${esc(t.med||'--')}</td><td class="td-mono">${t.dosis||'--'}</td><td class="td-mono">${t.dias||'--'}</td><td>${esc(t.vet||'--')}</td><td><span class="badge ${t.estado==='En Curso'?'badge-amber':t.estado==='Completado'?'badge-green':'badge-gray'}">${t.estado}</span></td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaTratamiento(${t.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
 }
 
 function renderEnfermedades(){
   const tbody=document.getElementById('enf-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.enfermedades].reverse().map(e=>`<tr><td>${e.fecha}</td><td class="td-mono">${e.rp}</td><td>${e.nombre||'--'}</td><td>${e.sint||'--'}</td><td><span class="badge badge-gray">${e.res||'--'}</span></td><td>${e.vet||'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaEnfermedad(${e.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
+  tbody.innerHTML=[...DB.enfermedades].reverse().map(e=>`<tr><td>${e.fecha}</td><td class="td-mono">${e.rp}</td><td>${esc(e.nombre||'--')}</td><td>${e.sint||'--'}</td><td><span class="badge badge-gray">${e.res||'--'}</span></td><td>${esc(e.vet||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaEnfermedad(${e.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
 }
 
 function renderNacimientos(){
@@ -8499,7 +8507,7 @@ function renderNacimientos(){
     <td>${n.raza||'--'}</td>
     <td class="td-mono">${n.peso?n.peso+' kg':'--'}</td>
     <td>${n.potrero||'--'}</td>
-    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">${n.obs||'--'}</td>
+    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">${esc(n.obs||'--')}</td>
     <td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaNacimiento(${n.id})">🗑 Baja</button></td>
   </tr>`).join('');
 }
@@ -8663,13 +8671,13 @@ function dibujarBarrasMetodos(id, metodos){
 function renderDestetes(){
   const tbody=document.getElementById('destete-tbody');if(!tbody)return;
   if(!DB.destetes){tbody.innerHTML=emptyRow(8);return;}
-  tbody.innerHTML=[...DB.destetes].reverse().map(d=>`<tr><td>${d.fecha}</td><td class="td-mono">${d.ternero}</td><td class="td-mono">${d.madre||'--'}</td><td class="td-mono">${d.peso||'--'} kg</td><td class="td-mono">${d.edad||'--'}</td><td>${d.potrero||'--'}</td><td style="color:var(--text2);max-width:200px;white-space:normal">${d.obs||'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaDestete(${d.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(8);
+  tbody.innerHTML=[...DB.destetes].reverse().map(d=>`<tr><td>${d.fecha}</td><td class="td-mono">${d.ternero}</td><td class="td-mono">${d.madre||'--'}</td><td class="td-mono">${d.peso||'--'} kg</td><td class="td-mono">${d.edad||'--'}</td><td>${d.potrero||'--'}</td><td style="color:var(--text2);max-width:200px;white-space:normal">${esc(d.obs||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaDestete(${d.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(8);
 }
 
 function renderAbortos(){
   const tbody=document.getElementById('aborto-tbody');if(!tbody)return;
   if(!DB.abortos){tbody.innerHTML=emptyRow(7);return;}
-  tbody.innerHTML=[...DB.abortos].reverse().map(a=>`<tr><td>${a.fecha}</td><td class="td-mono">${a.rp}</td><td class="td-mono">${a.meses||'--'}</td><td><span class="badge badge-red">${a.causa||'--'}</span></td><td>${a.vet||'--'}</td><td style="color:var(--text2);max-width:200px;white-space:normal">${a.obs||'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaAborto(${a.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
+  tbody.innerHTML=[...DB.abortos].reverse().map(a=>`<tr><td>${a.fecha}</td><td class="td-mono">${a.rp}</td><td class="td-mono">${a.meses||'--'}</td><td><span class="badge badge-red">${esc(a.causa||'--')}</span></td><td>${esc(a.vet||'--')}</td><td style="color:var(--text2);max-width:200px;white-space:normal">${esc(a.obs||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaAborto(${a.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
 }
 
 function renderCelos(){
@@ -8678,7 +8686,7 @@ function renderCelos(){
     <td>${c.fecha}</td><td class="td-mono">${c.hora||'--'}</td><td class="td-mono">${c.rp}</td>
     <td>${c.metodo||'--'}</td><td><span class="badge ${c.intensidad==='Alta'?'badge-green':c.intensidad==='Media'?'badge-amber':'badge-red'}">${c.intensidad||'--'}</span></td>
     <td class="td-mono">${c.diaProtocolo||'--'}</td>
-    <td style="color:var(--text2);max-width:180px;white-space:normal">${c.obs||'--'}</td>
+    <td style="color:var(--text2);max-width:180px;white-space:normal">${esc(c.obs||'--')}</td>
     <td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaCelo(${c.id})">🗑</button></td>
   </tr>`).join('')||emptyRow(8);
 }
@@ -8687,8 +8695,8 @@ function renderServicios(){
   const tbody=document.getElementById('servicio-tbody');if(!tbody)return;
   tbody.innerHTML=[...(DB.servicios||[])].reverse().map(s=>`<tr>
     <td>${s.fecha}</td><td class="td-mono">${s.rp}</td><td>${s.tipo||'--'}</td>
-    <td class="td-mono">${s.toro||'--'}</td><td>${s.protocolo||'--'}</td><td>${s.operador||'--'}</td>
-    <td style="color:var(--text2);max-width:180px;white-space:normal">${s.obs||'--'}</td>
+    <td class="td-mono">${s.toro||'--'}</td><td>${s.protocolo||'--'}</td><td>${esc(s.operador||'--')}</td>
+    <td style="color:var(--text2);max-width:180px;white-space:normal">${esc(s.obs||'--')}</td>
     <td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaServicio(${s.id})">🗑</button></td>
   </tr>`).join('')||emptyRow(8);
 }
@@ -8725,7 +8733,7 @@ function poblarPotrerosIATF(){
   const sel = document.getElementById('iatf-potrero');
   if(!sel) return;
   const cur = sel.value;
-  sel.innerHTML = DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  sel.innerHTML = DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
   sel.value = cur;
 }
 
@@ -8842,7 +8850,7 @@ function renderProtocolosIATF(){
 function renderRecats(){
   const tbody=document.getElementById('recat-tbody');if(!tbody)return;
   if(!DB.recategorizaciones){tbody.innerHTML=emptyRow(6);return;}
-  tbody.innerHTML=[...DB.recategorizaciones].reverse().map(r=>`<tr><td>${r.fecha}</td><td class="td-mono">${r.rp}</td><td>${r.catAnt||'--'}</td><td>${r.catNueva}</td><td>${r.motivo||'--'}</td><td class="td-mono">${r.peso||'--'} kg</td><td style="color:var(--text2);max-width:200px;white-space:normal">${r.obs||'--'}</td></tr>`).join('')||emptyRow(7);
+  tbody.innerHTML=[...DB.recategorizaciones].reverse().map(r=>`<tr><td>${r.fecha}</td><td class="td-mono">${r.rp}</td><td>${r.catAnt||'--'}</td><td>${r.catNueva}</td><td>${esc(r.motivo||'--')}</td><td class="td-mono">${r.peso||'--'} kg</td><td style="color:var(--text2);max-width:200px;white-space:normal">${esc(r.obs||'--')}</td></tr>`).join('')||emptyRow(7);
 }
 
 // ── CRÍA ──
@@ -8951,7 +8959,7 @@ function renderListosDestetar(){
       <td class="td-mono">${madre}</td>
       <td class="td-mono">${f.meses!==null?f.meses.toFixed(1)+'m':'--'}</td>
       <td class="td-mono">${f.peso>0?f.peso+' kg':'--'}</td>
-      <td style="color:var(--amber)">${f.motivo}</td>
+      <td style="color:var(--amber)">${esc(f.motivo)}</td>
       <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirDesteteDesdeAlerta('${f.a.rp}','${madre}',${f.peso})">＋ Destetar</button></td>
     </tr>`;
   }).join('');
@@ -9206,7 +9214,7 @@ function calendarioAnimal(a){
 function renderCalendarioReproductivoPotreroSelect(){
   const sel=document.getElementById('calrep-potrero'); if(!sel)return;
   const cur=sel.value;
-  sel.innerHTML='<option value="">-- Todos los potreros --</option>'+DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  sel.innerHTML='<option value="">-- Todos los potreros --</option>'+DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
   sel.value=cur;
 }
 
@@ -9346,7 +9354,7 @@ function estimarFactorAltura(tipoTexto){
 function abrirModalMedicionForraje(){
   const sel = document.getElementById('mf-potrero');
   const cur = sel.value;
-  sel.innerHTML = '<option value="">-- Elegir --</option>' + DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  sel.innerHTML = '<option value="">-- Elegir --</option>' + DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
   sel.value = cur;
   document.getElementById('mf-metodo').value = 'regla';
   document.getElementById('mf-altura').value = '';
@@ -9507,7 +9515,7 @@ function renderForraje(){
       ? `📏 Medido (${calc.medicionDiasAtras}d)`
       : `📈 Estimado`;
     return `<tr>
-      <td>${p.nombre}</td>
+      <td>${esc(p.nombre)}</td>
       <td>${p.pasto||'--'}</td>
       <td class="td-mono">${calc.diasDescanso}</td>
       <td class="td-mono">${Math.round(calc.forrajeEstimado).toLocaleString('es-AR')}</td>
@@ -9594,8 +9602,8 @@ function generarPlanRotacion(){
       const urgenciaColor = m.calc.diasRestantes<=5 ? 'var(--red)' : m.calc.diasRestantes<=10 ? 'var(--amber)' : 'var(--text2)';
       const listoTxt = m.listo.diasDesdeHoy===0 ? 'ya está listo' : `listo en ${m.listo.diasDesdeHoy} día(s) (${m.listo.fecha})`;
       return `<div class="card" style="margin-bottom:10px;border-left:3px solid ${urgenciaColor}">
-        <b>Movimiento ${idx+1}:</b> Lote de <b>${m.origen.nombre}</b> (${m.calc.animales} cabezas, rota en <span style="color:${urgenciaColor};font-weight:600">${m.calc.diasRestantes} día(s)</span>)
-        → mover a <b>${m.destino.nombre}</b> (${m.destino.ha||'--'} ha) — ${listoTxt}, sostendría ~${m.listo.diasQueAlcanza} días de pastoreo
+        <b>Movimiento ${idx+1}:</b> Lote de <b>${esc(m.origen.nombre)}</b> (${m.calc.animales} cabezas, rota en <span style="color:${urgenciaColor};font-weight:600">${m.calc.diasRestantes} día(s)</span>)
+        → mover a <b>${esc(m.destino.nombre)}</b> (${m.destino.ha||'--'} ha) — ${listoTxt}, sostendría ~${m.listo.diasQueAlcanza} días de pastoreo
         ${m.alertaCarga?`<br><span style="color:var(--amber)">${m.alertaCarga}</span>`:''}
       </div>`;
     }).join('');
@@ -9610,7 +9618,7 @@ function renderPotreros(){
   const tbody=document.getElementById('potreros-tbody');if(!tbody)return;
   tbody.innerHTML=DB.potreros.map((p,i)=>{
     const animales=saldoPotrero(p.nombre);
-    return `<tr><td>${p.nombre}</td><td class="td-mono">${p.ha||'--'} ha</td><td class="td-mono text-green">${animales}</td><td>${p.pasto||'--'}</td><td><span class="badge ${p.estado==='Activo'?'badge-green':'badge-gray'}">${p.estado}</span></td><td>
+    return `<tr><td>${esc(p.nombre)}</td><td class="td-mono">${p.ha||'--'} ha</td><td class="td-mono text-green">${animales}</td><td>${p.pasto||'--'}</td><td><span class="badge ${p.estado==='Activo'?'badge-green':'badge-gray'}">${p.estado}</span></td><td>
       <button class="btn-secondary" style="padding:2px 10px;font-size:13px" onclick="irAMapaPotrero(${p.id})">🛰️ Mapa</button>
       <button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaPotrero(${i})">🗑 Baja</button>
     </td></tr>`;
@@ -9621,7 +9629,7 @@ function renderPotreros(){
 function renderAguadasPotreroSelect(){
   const sel = document.getElementById('agu-potrero'); if(!sel) return;
   const cur = sel.value;
-  sel.innerHTML = '<option value="">-- Elegir --</option>' + DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  sel.innerHTML = '<option value="">-- Elegir --</option>' + DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
   sel.value = cur;
 }
 
@@ -9703,7 +9711,7 @@ function renderAguadas(){
       <td style="color:${colorEstado};font-weight:600">${a.estado}</td>
       <td class="td-mono">${a.ultimaRevision||'--'}</td>
       <td class="td-mono" style="color:${colorDias}">${dias===null?'--':dias+'d'}</td>
-      <td style="font-size:12px;color:var(--text3)">${a.obs||'--'}</td>
+      <td style="font-size:12px;color:var(--text3)">${esc(a.obs||'--')}</td>
       <td>
         <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="marcarAguadaRevisada(${a.id})">✓ Revisada hoy</button>
         <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="abrirModalAguada(${a.id})">✏️</button>
@@ -9726,7 +9734,7 @@ let _marcadoresDibujo=[];
 function renderPotrerosMapaSelect(){
   const sel=document.getElementById('mappot-select'); if(!sel)return;
   const cur=sel.value;
-  sel.innerHTML='<option value="">-- Elegir potrero --</option>'+DB.potreros.map(p=>`<option value="${p.id}">${p.nombre}${p.poligono?' 🛰️':''}</option>`).join('');
+  sel.innerHTML='<option value="">-- Elegir potrero --</option>'+DB.potreros.map(p=>`<option value="${p.id}">${esc(p.nombre)}${p.poligono?' 🛰️':''}</option>`).join('');
   sel.value=cur;
 }
 
@@ -9790,7 +9798,7 @@ function dibujarPotrerosGuardados(){
     });
     _marcadorEstablecimiento = L.marker([clima.lat, clima.lon], {icon: iconoEstab, zIndexOffset: 1000})
       .addTo(_mapaPotreros)
-      .bindPopup(`<b>🏠 ${clima.nombre||'Establecimiento'}</b><br>Ubicación registrada`);
+      .bindPopup(`<b>🏠 ${esc(clima.nombre||'Establecimiento')}</b><br>Ubicación registrada`);
     bounds.push([clima.lat, clima.lon]);
   }
 
@@ -9801,7 +9809,7 @@ function dibujarPotrerosGuardados(){
     const opacidad = p.estado==='Activo' ? 0.35 : 0.15;
     const poly=L.polygon(p.poligono, {color, weight:3, fillOpacity:opacidad}).addTo(_mapaPotreros);
     poly.bindTooltip(p.nombre, {permanent:true, direction:'center', className:'mappot-label'});
-    poly.bindPopup(`<b>${p.nombre}</b><br>${(p.ha||0).toFixed(1)} ha · ${animales} animal(es)<br>Estado: ${p.estado}`);
+    poly.bindPopup(`<b>${esc(p.nombre)}</b><br>${(p.ha||0).toFixed(1)} ha · ${animales} animal(es)<br>Estado: ${p.estado}`);
     _capasPotreros.push(poly);
     p.poligono.forEach(pt=>bounds.push(pt));
   });
@@ -9835,7 +9843,7 @@ function iniciarDibujoPotrero(){
   _puntosDibujo=[];
   limpiarDibujoTemp();
   actualizarInfoDibujo();
-  toast(`Hacé clic sobre el mapa para marcar los límites de "${_potreroEnEdicion.nombre}"`,'info');
+  toast(`Hacé clic sobre el mapa para marcar los límites de "${esc(_potreroEnEdicion.nombre)}"`,'info');
 }
 
 function onClickMapaPotrero(e){
@@ -9873,7 +9881,7 @@ function actualizarInfoDibujo(){
   const info=document.getElementById('mappot-info'); if(!info)return;
   if(!_dibujoActivo){ info.textContent=''; return; }
   const ha=calcularHectareas(_puntosDibujo);
-  info.innerHTML=`✏️ Dibujando límite de <b>${_potreroEnEdicion.nombre}</b> — ${_puntosDibujo.length} punto(s) marcado(s)${_puntosDibujo.length>=3?` · Superficie estimada: <b>${ha.toFixed(1)} ha</b>`:' (marcá al menos 3 puntos)'}`;
+  info.innerHTML=`✏️ Dibujando límite de <b>${esc(_potreroEnEdicion.nombre)}</b> — ${_puntosDibujo.length} punto(s) marcado(s)${_puntosDibujo.length>=3?` · Superficie estimada: <b>${ha.toFixed(1)} ha</b>`:' (marcá al menos 3 puntos)'}`;
 }
 
 function finalizarDibujoPotrero(){
@@ -9883,7 +9891,7 @@ function finalizarDibujoPotrero(){
   _potreroEnEdicion.poligono=_puntosDibujo.slice();
   const actualizarHa = confirm(`Superficie calculada: ${haCalc.toFixed(1)} ha (antes: ${_potreroEnEdicion.ha||0} ha).\n\n¿Actualizar el campo "Hectáreas" del potrero con este valor?`);
   if(actualizarHa) _potreroEnEdicion.ha=Math.round(haCalc*10)/10;
-  addHistorial('Potrero',`Límites actualizados en el mapa: ${_potreroEnEdicion.nombre} (${haCalc.toFixed(1)} ha)`,'','');
+  addHistorial('Potrero',`Límites actualizados en el mapa: ${esc(_potreroEnEdicion.nombre)} (${haCalc.toFixed(1)} ha)`,'','');
   _dibujoActivo=false;
   limpiarDibujoTemp();
   _puntosDibujo=[];
@@ -9892,7 +9900,7 @@ function finalizarDibujoPotrero(){
   renderPotrerosMapaSelect();
   dibujarPotrerosGuardados();
   saveToStorage();
-  toast(`Límites de "${_potreroEnEdicion.nombre}" guardados ✅`,'ok');
+  toast(`Límites de "${esc(_potreroEnEdicion.nombre)}" guardados ✅`,'ok');
   _potreroEnEdicion=null;
 }
 
@@ -9923,7 +9931,7 @@ function renderPastoreos(){
 
 function renderNutricion(){
   const tbody=document.getElementById('nutricion-tbody');if(!tbody)return;
-  tbody.innerHTML=DB.nutricion.map(n=>`<tr><td>${n.lote||'--'}</td><td class="td-mono">${n.rp||'--'}</td><td>${n.cat}</td><td>${n.foraje||'--'}</td><td class="td-mono">${n.suple||'--'} kg</td><td class="td-mono">${n.gdp||'--'} g/d</td><td class="td-mono">${n.inicio||'--'}</td><td>${n.obs||'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaNutricion(${n.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
+  tbody.innerHTML=DB.nutricion.map(n=>`<tr><td>${n.lote||'--'}</td><td class="td-mono">${n.rp||'--'}</td><td>${n.cat}</td><td>${n.foraje||'--'}</td><td class="td-mono">${n.suple||'--'} kg</td><td class="td-mono">${n.gdp||'--'} g/d</td><td class="td-mono">${n.inicio||'--'}</td><td>${esc(n.obs||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaNutricion(${n.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
 }
 
 // ═══ FORMULACIÓN DE RACIÓN (optimización por programación lineal) ═══
@@ -10045,7 +10053,7 @@ function poblarPotrerosSuplementacion(){
   const sel = document.getElementById('se-potrero');
   if(!sel) return;
   const cur = sel.value;
-  sel.innerHTML = DB.potreros.map(p=>`<option>${p.nombre}</option>`).join('');
+  sel.innerHTML = DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
   if([...sel.options].some(o=>o.value===cur)) sel.value = cur;
 }
 
@@ -10109,7 +10117,7 @@ function analizarSuplementacionUI(){
 
   if(r.sinDeficit){
     div.innerHTML = `<div class="card" style="border-left:4px solid var(--green)">
-      ✅ <b>Sin déficit.</b> El pasto base (${r.pasto.nombre}: ${r.pasto.pb}% PB, ${r.pasto.em} Mcal/kgMS) ya cubre el requerimiento de esta categoría
+      ✅ <b>Sin déficit.</b> El pasto base (${esc(r.pasto.nombre)}: ${r.pasto.pb}% PB, ${r.pasto.em} Mcal/kgMS) ya cubre el requerimiento de esta categoría
       (PB ≥${r.req.pb.toFixed(1)}%, EM ≥${r.req.em.toFixed(2)}). No haría falta suplementar para ese objetivo de ganancia.
     </div>`;
     return;
@@ -10136,19 +10144,19 @@ function analizarSuplementacionUI(){
 
   div.innerHTML = `<div class="card">
     <div style="font-size:14px;line-height:1.7">
-      Pasto base: <b>${r.pasto.nombre}</b> (${r.pasto.pb}% PB · ${r.pasto.em} Mcal/kgMS) · Requerimiento: PB ≥${r.req.pb.toFixed(1)}% · EM ≥${r.req.em.toFixed(2)}<br>
+      Pasto base: <b>${esc(r.pasto.nombre)}</b> (${r.pasto.pb}% PB · ${r.pasto.em} Mcal/kgMS) · Requerimiento: PB ≥${r.req.pb.toFixed(1)}% · EM ≥${r.req.em.toFixed(2)}<br>
       <b style="color:var(--amber)">Déficit: ${r.deficitEM>0?`EM ${r.deficitEM.toFixed(2)} Mcal/kgMS`:''}${r.deficitEM>0&&r.deficitPB>0?' · ':''}${r.deficitPB>0?`PB ${r.deficitPB.toFixed(1)} puntos`:''}</b><br>
       Consumo estimado del animal: ${r.consumoMS.toFixed(1)} kg MS/día
     </div>
     <div style="margin-top:10px;font-size:14px">
       <b>Suplemento más económico que cierra la brecha:</b><br>
-      <b style="font-size:16px;color:var(--blue)">${mejor.ing.nombre} — ${mejor.kgTalCual.toFixed(2)} kg/cab/día</b>
+      <b style="font-size:16px;color:var(--blue)">${esc(mejor.ing.nombre)} — ${mejor.kgTalCual.toFixed(2)} kg/cab/día</b>
       (${(mejor.fraccion*100).toFixed(0)}% de la dieta en MS) · Costo: <b>$${mejor.costoDia.toFixed(0)}/cab/día</b>
       ${costoPorKgGanado!==null?`<br>Costo por kg de carne extra: <b>$${costoPorKgGanado.toFixed(0)}/kg</b> (a GDP objetivo ${r.gdpObjetivo} kg/día)`:''}
       ${veredicto}
     </div>
     ${r.opciones.length>1?`<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Otras opciones</th><th>kg/cab/día</th><th>% dieta</th><th>Costo/cab/día</th></tr></thead><tbody>
-      ${r.opciones.slice(1,6).map(o=>`<tr><td>${o.ing.nombre}</td><td class="td-mono">${o.kgTalCual.toFixed(2)}</td><td class="td-mono">${(o.fraccion*100).toFixed(0)}%</td><td class="td-mono">$${o.costoDia.toFixed(0)}</td></tr>`).join('')}
+      ${r.opciones.slice(1,6).map(o=>`<tr><td>${esc(o.ing.nombre)}</td><td class="td-mono">${o.kgTalCual.toFixed(2)}</td><td class="td-mono">${(o.fraccion*100).toFixed(0)}%</td><td class="td-mono">$${o.costoDia.toFixed(0)}</td></tr>`).join('')}
     </tbody></table></div>`:''}
   </div>`;
 }
@@ -10195,7 +10203,7 @@ function renderVentanasCriticas(){
   tbody.innerHTML = filas.map(f=>`<tr>
     <td class="td-mono">${f.rp}</td>
     <td>${f.ventana}</td>
-    <td style="color:var(--text2);white-space:normal">${f.detalle}</td>
+    <td style="color:var(--text2);white-space:normal">${esc(f.detalle)}</td>
   </tr>`).join('');
 }
 
@@ -10206,7 +10214,7 @@ function renderIngredientesTabla(){
   const etiquetaTipo = {forraje:'🌿 Forraje', concentrado:'🌽 Concentrado', mineral:'🧂 Mineral'};
   tbody.innerHTML = lista.map(ing => `<tr data-ing="${ing.id}" data-tipo="${ing.tipo}">
     <td><input type="checkbox" class="ing-incluir" checked></td>
-    <td>${ing.nombre}${ing.custom?' <span class="badge" style="font-size:10px">propio</span>':''}</td>
+    <td>${esc(ing.nombre)}${ing.custom?' <span class="badge" style="font-size:10px">propio</span>':''}</td>
     <td style="font-size:12px;white-space:nowrap">${etiquetaTipo[ing.tipo]||ing.tipo}</td>
     <td class="td-mono">${ing.ms}</td>
     <td class="td-mono">${ing.pb}</td>
@@ -10444,7 +10452,7 @@ function optimizarRacion(){
     if(prev && prev.costo>0){
       const variacion = ((a.costo - prev.costo)/prev.costo)*100;
       if(Math.abs(variacion)>=15){
-        alertasPrecio.push(`${a.nombre}: ${variacion>0?'+':''}${variacion.toFixed(0)}% desde $${prev.costo} (${prev.fecha.split('T')[0]})`);
+        alertasPrecio.push(`${esc(a.nombre)}: ${variacion>0?'+':''}${variacion.toFixed(0)}% desde $${prev.costo} (${prev.fecha.split('T')[0]})`);
       }
     }
   });
@@ -10505,7 +10513,7 @@ function optimizarRacion(){
     cuLogrado += fraccion*(a.cu||0); znLogrado += fraccion*(a.zn||0); mnLogrado += fraccion*(a.mn||0);
     seLogrado += fraccion*(a.se||0); coLogrado += fraccion*(a.co||0); iLogrado += fraccion*(a.i||0);
     vitALogrado += fraccion*(a.vitA||0); vitDLogrado += fraccion*(a.vitD||0); vitELogrado += fraccion*(a.vitE||0);
-    return `<tr><td>${a.nombre}</td><td class="td-mono">${(fraccion*100).toFixed(1)}%</td><td class="td-mono">${kgMSdia.toFixed(2)} kg</td><td class="td-mono">${(kgTalCualDia*cabezas).toFixed(1)} kg</td><td class="td-mono">$${costoDia.toFixed(0)}</td></tr>`;
+    return `<tr><td>${esc(a.nombre)}</td><td class="td-mono">${(fraccion*100).toFixed(1)}%</td><td class="td-mono">${kgMSdia.toFixed(2)} kg</td><td class="td-mono">${(kgTalCualDia*cabezas).toFixed(1)} kg</td><td class="td-mono">$${costoDia.toFixed(0)}</td></tr>`;
   }).join('');
 
   const costoPorKgGanado = gdpObjetivo>0 ? costoTotalDia/gdpObjetivo : null;
@@ -10514,7 +10522,7 @@ function optimizarRacion(){
 
   div.innerHTML = `
     <div class="card">
-      <h3 style="margin-top:0">Ración óptima — ${req.nombre}</h3>
+      <h3 style="margin-top:0">Ración óptima — ${esc(req.nombre)}</h3>
       ${alertasPrecio.length?`<div style="background:#fff3cd;border-left:4px solid #f0ad4e;padding:8px 12px;margin-bottom:10px;font-size:13px">⚠️ <b>Cambios de precio detectados:</b><br>${alertasPrecio.join('<br>')}</div>`:''}
       <div class="tbl-wrap"><table><thead><tr><th>Ingrediente</th><th>% inclusión (MS)</th><th>kg MS/cab/día</th><th>kg tal cual/día (lote, ${cabezas} cab.)</th><th>Costo/cab/día</th></tr></thead>
       <tbody>${filasResultado}</tbody></table></div>
@@ -10687,24 +10695,24 @@ function renderResultadoEconomico(){
 
 function renderCompras(){
   const tbody=document.getElementById('compras-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.compras].reverse().map(c=>`<tr><td>${c.fecha}</td><td>${c.prov||'--'}</td><td>${c.cat}</td><td class="td-mono">${c.cant}</td><td class="td-mono">${c.peso||'--'} kg</td><td class="td-mono">$${(c.precio||0).toLocaleString('es-AR')}</td><td class="td-mono text-amber">$${(c.total||0).toLocaleString('es-AR')}</td><td>${c.potrero||'--'}</td><td class="td-mono">${c.guia||'--'}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(c.rps&&c.rps.length)?c.rps.join(', '):'--'}</td></tr>`).join('')||emptyRow(10);
+  tbody.innerHTML=[...DB.compras].reverse().map(c=>`<tr><td>${c.fecha}</td><td>${esc(c.prov||'--')}</td><td>${c.cat}</td><td class="td-mono">${c.cant}</td><td class="td-mono">${c.peso||'--'} kg</td><td class="td-mono">$${(c.precio||0).toLocaleString('es-AR')}</td><td class="td-mono text-amber">$${(c.total||0).toLocaleString('es-AR')}</td><td>${c.potrero||'--'}</td><td class="td-mono">${esc(c.guia||'--')}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(c.rps&&c.rps.length)?c.rps.join(', '):'--'}</td></tr>`).join('')||emptyRow(10);
 }
 
 function renderVentas(){
   const tbody=document.getElementById('ventas-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.ventas].reverse().map(v=>`<tr><td>${v.fecha}</td><td>${v.comp||'--'}</td><td>${v.cat}</td><td class="td-mono">${v.cant}</td><td class="td-mono">${v.peso||'--'} kg</td><td class="td-mono">$${(v.precio||0).toLocaleString('es-AR')}</td><td class="td-mono text-green">$${(v.total||0).toLocaleString('es-AR')}</td><td class="td-mono">${v.guia||'--'}</td><td>${v.dest||'--'}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(v.rps&&v.rps.length)?v.rps.join(', '):'--'}</td></tr>`).join('')||emptyRow(10);
+  tbody.innerHTML=[...DB.ventas].reverse().map(v=>`<tr><td>${v.fecha}</td><td>${esc(v.comp||'--')}</td><td>${v.cat}</td><td class="td-mono">${v.cant}</td><td class="td-mono">${v.peso||'--'} kg</td><td class="td-mono">$${(v.precio||0).toLocaleString('es-AR')}</td><td class="td-mono text-green">$${(v.total||0).toLocaleString('es-AR')}</td><td class="td-mono">${esc(v.guia||'--')}</td><td>${v.dest||'--'}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(v.rps&&v.rps.length)?v.rps.join(', '):'--'}</td></tr>`).join('')||emptyRow(10);
 }
 
 function renderTraslados(){
   const tbody=document.getElementById('traslados-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.traslados].reverse().map(t=>`<tr><td>${t.fecha}</td><td class="td-mono">${t.rp||'lote'}</td><td>${t.origen||'--'}</td><td>${t.destino||'--'}</td><td class="td-mono">${t.cant||'--'}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(t.rps&&t.rps.length)?t.rps.join(', '):'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaTraslado(${t.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
+  tbody.innerHTML=[...DB.traslados].reverse().map(t=>`<tr><td>${t.fecha}</td><td class="td-mono">${t.rp||'lote'}</td><td>${esc(t.origen||'--')}</td><td>${esc(t.destino||'--')}</td><td class="td-mono">${t.cant||'--'}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(t.rps&&t.rps.length)?t.rps.join(', '):'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaTraslado(${t.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
 }
 
 function renderHistorial(filtrados){
   const tbody=document.getElementById('historial-tbody');if(!tbody)return;
   const lista=filtrados||[...DB.historial].reverse();
   const icons={Pesada:'⚖️',Vacuna:'💉',Tratamiento:'🩺',Traslado:'🚛',Tacto:'🔬',Destete:'🍼',Compra:'📥',Venta:'📤',Aborto:'⚠️',Mortandad:'☠️',Animal:'🐄',Potrero:'🗺️'};
-  tbody.innerHTML=lista.map(h=>`<tr><td>${h.fecha}</td><td class="td-mono">${h.rp||'--'}</td><td><span style="margin-right:4px">${icons[h.tipo]||'📌'}</span>${h.tipo||'--'}</td><td>${h.desc||'--'}</td><td>${h.valor||'--'}</td><td>${h.responsable||'--'}</td></tr>`).join('')||emptyRow(6);
+  tbody.innerHTML=lista.map(h=>`<tr><td>${h.fecha}</td><td class="td-mono">${h.rp||'--'}</td><td><span style="margin-right:4px">${icons[h.tipo]||'📌'}</span>${h.tipo||'--'}</td><td>${esc(h.desc||'--')}</td><td>${h.valor||'--'}</td><td>${h.responsable||'--'}</td></tr>`).join('')||emptyRow(6);
 }
 
 function filtrarHistorial(){
@@ -10716,7 +10724,7 @@ function filtrarHistorial(){
 
 function renderMuertes(){
   const tbody=document.getElementById('muertes-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.muertes].reverse().map(m=>`<tr><td>${m.fecha}</td><td class="td-mono">${m.rp}</td><td>${DB.animales.find(a=>a.rp===m.rp)?.categoria||'--'}</td><td class="td-mono">${m.peso||'--'} kg</td><td><span class="badge badge-red">${m.causa||'--'}</span></td><td>${m.potrero||'--'}</td><td>${m.diag||'--'}</td><td>${m.vet||'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaMuerte(${m.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
+  tbody.innerHTML=[...DB.muertes].reverse().map(m=>`<tr><td>${m.fecha}</td><td class="td-mono">${m.rp}</td><td>${DB.animales.find(a=>a.rp===m.rp)?.categoria||'--'}</td><td class="td-mono">${m.peso||'--'} kg</td><td><span class="badge badge-red">${esc(m.causa||'--')}</span></td><td>${m.potrero||'--'}</td><td>${esc(m.diag||'--')}</td><td>${esc(m.vet||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaMuerte(${m.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
 }
 
 // ═══ CONTROL DE STOCK DE INSUMOS ═══
@@ -10756,7 +10764,7 @@ function renderInsumosCatalogo(){
   const tbody=document.getElementById('insumos-stock-tbody');
   if(!sel||!tbody)return;
   const cur=sel.value;
-  sel.innerHTML='<option value="">-- Seleccionar --</option>'+(DB.insumos||[]).map(i=>`<option value="${i.id}">${i.nombre}</option>`).join('');
+  sel.innerHTML='<option value="">-- Seleccionar --</option>'+(DB.insumos||[]).map(i=>`<option value="${i.id}">${esc(i.nombre)}</option>`).join('');
   sel.value=cur;
 
   if(!(DB.insumos||[]).length){
@@ -10776,7 +10784,7 @@ function renderInsumosCatalogo(){
     }
     const estado=bajo?'🔴 Bajo stock':'🟢 OK';
     return `<tr>
-      <td>${i.nombre}</td>
+      <td>${esc(i.nombre)}</td>
       <td>${i.categoria}</td>
       <td>${i.unidad}</td>
       <td class="td-mono" style="color:${bajo?'var(--red)':'var(--text)'};font-weight:${bajo?700:400}">${stock}</td>
@@ -10805,7 +10813,7 @@ function renderInsumosLotes(){
     return `<tr>
       <td>${insumo?insumo.nombre:'--'}</td>
       <td class="td-mono">${l.lote||'--'}</td>
-      <td>${l.proveedor||'--'}</td>
+      <td>${esc(l.proveedor||'--')}</td>
       <td class="td-mono">${l.fechaIngreso||'--'}</td>
       <td class="td-mono" style="color:${vencColor}">${l.vencimiento||'--'}</td>
       <td class="td-mono">${l.cantidadInicial} ${insumo?insumo.unidad:''}</td>
@@ -10899,7 +10907,7 @@ function renderAlertasInsumos(){
   (DB.insumos||[]).forEach(i=>{
     const stock=stockActualInsumo(i.id);
     if(stock<i.stockMinimo){
-      alertas.push({icono:'🔴',texto:`Stock bajo: ${i.nombre} — quedan ${stock} ${i.unidad} (mínimo ${i.stockMinimo})`});
+      alertas.push({icono:'🔴',texto:`Stock bajo: ${esc(i.nombre)} — quedan ${stock} ${i.unidad} (mínimo ${i.stockMinimo})`});
     }
   });
   (DB.insumoLotes||[]).forEach(l=>{
@@ -10916,7 +10924,7 @@ function renderAlertasInsumos(){
     return;
   }
   box.innerHTML=alertas.map(a=>`<div style="display:flex;align-items:center;gap:8px;background:#2a1a05;border:1px solid var(--amber);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px">
-    <span>${a.icono} ${a.texto}</span>
+    <span>${a.icono} ${esc(a.texto)}</span>
   </div>`).join('');
 }
 
@@ -11327,8 +11335,8 @@ function mostrarRegistrosPendientes(registros) {
     <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
       <input type="checkbox" checked id="wa-check-${i}" style="margin-top:3px">
       <div>
-        <div style="font-weight:700;font-size:13px">${iconos[r.tipo]||'📌'} ${r.tipo} ${r.rp?'· RP '+r.rp:''}</div>
-        <div style="font-size:14px;color:var(--text2)">${r.descripcion||JSON.stringify(r.datos)}</div>
+        <div style="font-weight:700;font-size:13px">${iconos[r.tipo]||'📌'} ${esc(r.tipo)} ${r.rp?'· RP '+esc(r.rp):''}</div>
+        <div style="font-size:14px;color:var(--text2)">${esc(r.descripcion||JSON.stringify(r.datos))}</div>
       </div>
     </div>`).join('');
   container.style.display = 'block';
@@ -11365,7 +11373,7 @@ async function confirmarRegistrosWA() {
         const rp = r.rp || d.rp;
         if(rp) {
           DB.tratamientos.push({id:Date.now()+i,rp,fecha:d.fecha||hoy,diag:d.diag||d.diagnostico||'',med:d.med||d.medicamento||'',dosis:d.dosis||'',via:d.via||'IM',dias:d.dias||'',vet:d.vet||d.veterinario||'',estado:'En Curso'});
-          addHistorial('Tratamiento',`RP ${rp}: ${d.diag||''} (WA)`,rp,'');
+          addHistorial('Tratamiento',`RP ${rp}: ${esc(d.diag||'')} (WA)`,rp,'');
           guardados++;
         }
       } else if(r.tipo==='Animal') {
@@ -12357,7 +12365,7 @@ function verificarYNotificar(){
       if(stock!==null && stock < i.stockMinimo){
         const clave = 'stock_'+i.id;
         if(!yaSeAviso(clave)){
-          mostrarNotificacionPush('📦 Stock bajo', `${i.nombre}: quedan ${stock} ${i.unidad} (mínimo ${i.stockMinimo})`, 'stock');
+          mostrarNotificacionPush('📦 Stock bajo', `${esc(i.nombre)}: quedan ${stock} ${i.unidad} (mínimo ${i.stockMinimo})`, 'stock');
           marcarAvisado(clave);
         }
       }
@@ -12928,11 +12936,11 @@ async function renderSelectorEstab() {
     const activo = e.id === ESTAB_ID_ACTIVO;
     return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;margin-bottom:6px;background:${activo ? 'var(--green-dim,#1a2e1a)' : 'var(--bg3)'};border:1px solid ${activo ? 'var(--green)' : 'var(--border)'}">
       <div style="flex:1;cursor:pointer" onclick="cambiarEstablecimiento('${e.id}')">
-        <div style="font-weight:600;font-size:14px;color:var(--text)">${e.nombre}</div>
+        <div style="font-weight:600;font-size:14px;color:var(--text)">${esc(e.nombre)}</div>
         <div style="font-size:12px;color:var(--text3)">Creado ${new Date(e.creadoEn).toLocaleDateString('es-AR')}${activo ? ' · <span style=\"color:var(--green)\">activo</span>' : ''}</div>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="btn-icon" title="Renombrar" onclick="(async()=>{const n=prompt('Nuevo nombre:','${e.nombre}');if(n)await renombrarEstablecimiento('${e.id}',n)})()">✏️</button>
+        <button class="btn-icon" title="Renombrar" onclick="(async()=>{const n=prompt('Nuevo nombre:','${esc(e.nombre)}');if(n)await renombrarEstablecimiento('${e.id}',n)})()">✏️</button>
         ${!activo ? `<button class="btn-icon" title="Eliminar" onclick="eliminarEstablecimiento('${e.id}')">🗑️</button>` : ''}
       </div>
     </div>`;
