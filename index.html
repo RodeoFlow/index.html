@@ -2321,7 +2321,7 @@
           </div>
         </div>
         <div id="rm-kpis" style="margin-bottom:12px"></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Frigorífico</th><th>Venta</th><th>Cab.</th><th>Kg vivo</th><th>Kg res</th><th>Rinde</th><th>$/kg res</th><th>Total</th><th>Acciones</th></tr></thead>
+        <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Frigorífico</th><th>Venta</th><th>Cab.</th><th>Kg vivo</th><th>Kg res</th><th>Rinde</th><th>$/kg res</th><th>Neto</th><th>Acciones</th></tr></thead>
         <tbody id="romaneos-tbody"></tbody></table></div>
       </div>
     </div>
@@ -3780,7 +3780,7 @@
 
 <!-- Modal: Romaneo -->
 <div id="modal-romaneo" class="modal-overlay">
-  <div class="modal" style="max-width:820px">
+  <div class="modal" style="max-width:1040px">
     <div class="modal-header"><div class="modal-title">🥩 Romaneo de faena</div><button class="modal-close" onclick="closeModal('modal-romaneo')">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="rm-id">
@@ -3790,27 +3790,40 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Venta vinculada (opcional)</label><select id="rm-venta" class="form-control" onchange="romaneoElegirVenta()"><option value="">-- Sin vincular --</option></select></div>
-        <div class="form-group"><label class="form-label">Categoría</label><input type="text" id="rm-cat" class="form-control" placeholder="Novillo, Vaca..."></div>
+        <div class="form-group"><label class="form-label">Categoría (por defecto)</label><input type="text" id="rm-cat" class="form-control" placeholder="Novillo, Vaca..." oninput="romaneoCalcular()"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">N° de tropa / Guía</label><input type="text" id="rm-tropa" class="form-control"></div>
-        <div class="form-group"><label class="form-label">Precio $/kg res</label><input type="number" id="rm-precio" class="form-control" oninput="romaneoCalcular()"></div>
+        <div class="form-group"><label class="form-label">Precio general $/kg res</label><input type="number" id="rm-precio" class="form-control" oninput="romaneoCalcular()"></div>
       </div>
-      <div style="margin:8px 0 6px;font-size:13px;color:var(--text3)">Cargá animal por animal, pegá la planilla del frigorífico, o completá solo los totales.</div>
+      <div class="form-group">
+        <label class="form-label">Precios por categoría o tipificación (opcional) — una línea por precio: <code>Novillo=4200</code></label>
+        <textarea id="rm-tabla" class="form-control" rows="2" placeholder="Novillo=4200&#10;JJ=4350" oninput="romaneoCalcular()"></textarea>
+      </div>
+      <div style="margin:8px 0 6px;font-size:13px;color:var(--text3)">Cargá animal por animal, pegá la planilla del frigorífico, o completá solo los totales. Prioridad de precio: fila → tipificación → categoría → general.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
         <button class="btn-secondary" onclick="romaneoAgregarFila()">＋ Fila</button>
         <button class="btn-secondary" onclick="romaneoPegar()">📋 Pegar lista</button>
         <button class="btn-secondary" onclick="romaneoLimpiar()">🧹 Vaciar filas</button>
       </div>
-      <div class="tbl-wrap" style="max-height:260px;overflow-y:auto"><table><thead><tr><th>Garrón</th><th>RP</th><th>Kg vivo</th><th>Kg res</th><th>Tipif.</th><th>Rinde</th><th></th></tr></thead>
+      <div class="tbl-wrap" style="max-height:280px;overflow:auto"><table><thead><tr><th>Garrón</th><th>RP</th><th>Categoría</th><th>Kg vivo</th><th>½ Izq</th><th>½ Der</th><th>Kg res</th><th>Decom.</th><th>Tipif.</th><th>$/kg</th><th>Rinde</th><th></th></tr></thead>
       <tbody id="rm-filas"></tbody></table></div>
       <div class="form-row" style="margin-top:10px">
         <div class="form-group"><label class="form-label">Cabezas (si no hay filas)</label><input type="number" id="rm-cant" class="form-control" oninput="romaneoCalcular()"></div>
         <div class="form-group"><label class="form-label">Kg vivo total</label><input type="number" id="rm-kgvivo" class="form-control" oninput="romaneoCalcular()"></div>
         <div class="form-group"><label class="form-label">Kg res total</label><input type="number" id="rm-kgres" class="form-control" oninput="romaneoCalcular()"></div>
+        <div class="form-group"><label class="form-label">Kg decomiso total</label><input type="number" id="rm-decomiso" class="form-control" oninput="romaneoCalcular()"></div>
       </div>
-      <div id="rm-resumen" class="kpi blue" style="padding:10px 14px;font-size:14px"></div>
-      <div class="form-group" style="margin-top:8px"><label class="form-label">Decomisos / observaciones</label><input type="text" id="rm-obs" class="form-control"></div>
+      <div style="margin:6px 0 4px;font-size:13px;color:var(--text3)">Descuentos y gastos (opcional)</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Faena $</label><input type="number" id="rm-faena" class="form-control" oninput="romaneoCalcular()"></div>
+        <div class="form-group"><label class="form-label">Flete $</label><input type="number" id="rm-flete" class="form-control" oninput="romaneoCalcular()"></div>
+        <div class="form-group"><label class="form-label">Comisión %</label><input type="number" id="rm-compct" class="form-control" step="0.1" oninput="romaneoCalcular()"></div>
+        <div class="form-group"><label class="form-label">IVA % (se suma)</label><input type="number" id="rm-ivapct" class="form-control" step="0.1" oninput="romaneoCalcular()"></div>
+        <div class="form-group"><label class="form-label">Otros descuentos $</label><input type="number" id="rm-otros" class="form-control" oninput="romaneoCalcular()"></div>
+      </div>
+      <div id="rm-resumen" class="kpi blue" style="padding:10px 14px;font-size:14px;line-height:1.7"></div>
+      <div class="form-group" style="margin-top:8px"><label class="form-label">Observaciones</label><input type="text" id="rm-obs" class="form-control"></div>
     </div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-romaneo')">Cancelar</button><button class="btn-primary" onclick="guardarRomaneo()">💾 Guardar</button></div>
   </div>
@@ -7633,6 +7646,7 @@ function usarUbicacionActual(){
 
 function updateTrialStatus(){
   const el=document.getElementById('trial-status-info'); if(!el) return;
+  if(!el._rfTap){ el._rfTap=1; el.addEventListener('click',trialTapSecreto); }
   const elapsed=Date.now()-(DB.settings.trialStart||Date.now());
   const daysUsed=Math.floor(elapsed/86400000);
   const daysLeft=Math.max(0,TRIAL_DAYS-daysUsed);
@@ -7648,6 +7662,33 @@ function updateTrialStatus(){
   } else {
     el.innerHTML=`<div style="color:var(--red);font-size:16px;font-weight:600">⛔ Período de prueba expirado</div><div style="color:var(--text2);font-size:14px;margin-top:4px">Activá tu suscripción para continuar</div>`;
   }
+}
+
+// ── Reinicio de prueba (solo titular/desarrollador) ──
+// Se activa tocando 5 veces seguidas la tarjeta de estado de prueba, y solo
+// si el rol es Dueño y el establecimiento tiene registrado el teléfono maestro.
+// OJO: es un control del lado del cliente (comodidad, no seguridad); la
+// seguridad real de cobro vive en suscripciones/{estabId} (servidor).
+const RF_TEL_MAESTRO = '2314446643';
+let _rfTaps = 0, _rfTapT = null;
+function esTitularMaestro(){
+  if(rolActual() !== 'Dueño') return false;
+  return (DB.settings.phones||[]).some(p => String(p).replace(/\D/g,'').endsWith(RF_TEL_MAESTRO));
+}
+function trialTapSecreto(){
+  if(!esTitularMaestro()) return;
+  _rfTaps++; clearTimeout(_rfTapT); _rfTapT = setTimeout(()=>{_rfTaps=0;}, 2000);
+  if(_rfTaps >= 5){
+    _rfTaps = 0;
+    if(confirm('¿Reiniciar la prueba gratuita a 30 días desde hoy?')) reiniciarTrialTitular();
+  }
+}
+async function reiniciarTrialTitular(){
+  if(!esTitularMaestro()) return;
+  DB.settings.trialStart = Date.now();
+  await saveToStorage();
+  updateTrialStatus();
+  toast('Prueba reiniciada: 30 días desde hoy','ok');
 }
 
 // ── Recordatorio de prueba gratuita por vencer ──
@@ -10766,16 +10807,17 @@ function renderResultadoEconomico(){
 // ═══ ROMANEO DE FAENA ═══
 const fmtN0=n=>(n||0).toLocaleString('es-AR',{maximumFractionDigits:0});
 const fmtN1=n=>(n||0).toLocaleString('es-AR',{maximumFractionDigits:1});
+const rmNum=id=>parseFloat(document.getElementById(id)?.value)||0;
 
 function romaneoFilaHTML(f){
   f=f||{};
-  const v=x=>x===undefined||x===null?'':esc(String(x));
-  return `<tr>
-    <td><input class="form-control rm-g" style="min-width:64px" value="${v(f.garron)}"></td>
-    <td><input class="form-control rm-rp" style="min-width:70px" value="${v(f.rp)}"></td>
-    <td><input type="number" class="form-control rm-v" style="min-width:74px" value="${v(f.kgVivo)}" oninput="romaneoCalcular()"></td>
-    <td><input type="number" class="form-control rm-r" style="min-width:74px" value="${v(f.kgRes)}" oninput="romaneoCalcular()"></td>
-    <td><input class="form-control rm-t" style="min-width:56px" value="${v(f.tipif)}"></td>
+  const v=x=>x===undefined||x===null||x===0?'':esc(String(x));
+  const inp=(c,w,val,ex)=>`<td><input class="form-control ${c}" style="min-width:${w}px" value="${val}" ${ex||''}></td>`;
+  const num=(c,w,val,ex)=>`<td><input type="number" class="form-control ${c}" style="min-width:${w}px" value="${val}" ${ex||''}></td>`;
+  return `<tr>${inp('rm-g',60,v(f.garron))}${inp('rm-rp',70,v(f.rp))}${inp('rm-c',80,v(f.cat))}
+    ${num('rm-v',70,v(f.kgVivo),'oninput="romaneoCalcular()"')}${num('rm-i',64,v(f.izq),'oninput="romaneoSuma(this)"')}${num('rm-d',64,v(f.der),'oninput="romaneoSuma(this)"')}
+    ${num('rm-r',70,v(f.kgRes),'oninput="romaneoCalcular()"')}${num('rm-dec',60,v(f.decomiso),'oninput="romaneoCalcular()"')}
+    ${inp('rm-t',52,v(f.tipif),'oninput="romaneoCalcular()"')}${num('rm-p',64,v(f.precio),'oninput="romaneoCalcular()"')}
     <td class="td-mono rm-rin">--</td>
     <td><button class="btn-icon" onclick="this.closest('tr').remove();romaneoCalcular()">🗑</button></td></tr>`;
 }
@@ -10785,19 +10827,34 @@ function romaneoAgregarFila(f){
 }
 function romaneoLimpiar(){document.getElementById('rm-filas').innerHTML='';romaneoCalcular();}
 
-// Pegar planilla: una línea por animal. Columnas separadas por tab, ; o espacios: garrón, kg res [, kg vivo, RP, tipif]
+// Si se cargan las medias reses, el kg de res es la suma de ambas
+function romaneoSuma(el){
+  const tr=el.closest('tr');
+  const i=parseFloat(tr.querySelector('.rm-i').value)||0,d=parseFloat(tr.querySelector('.rm-d').value)||0;
+  if(i||d) tr.querySelector('.rm-r').value=+(i+d).toFixed(2);
+  romaneoCalcular();
+}
+
+// Pegar planilla: una línea por animal (separado por tab, ; o espacios)
 function romaneoPegar(){
-  const txt=prompt('Pegá una línea por animal:\nGarrón  KgRes  [KgVivo]  [RP]  [Tipif]\n(separado por espacios, tab o ;)');
+  const conMedias=confirm('¿La planilla trae media res izquierda y derecha?\n\nAceptar = Garrón, ½ Izq, ½ Der, [Kg vivo], [RP], [Tipif.]\nCancelar = Garrón, Kg res, [Kg vivo], [RP], [Tipif.]');
+  const txt=prompt('Pegá una línea por animal:');
   if(!txt) return;
-  const num=x=>parseFloat(String(x).replace(/\./g,'').replace(',','.'));
+  const num=x=>{x=String(x).trim();return parseFloat(x.includes(',')?x.replace(/\./g,'').replace(',','.'):x);};
+  const ok=x=>x!==undefined&&!isNaN(num(x));
   let n=0;
   txt.split(/\r?\n/).forEach(l=>{
-    const c=l.trim().split(/[\t;]+|\s{1,}/).filter(x=>x);
-    if(c.length<2) return;
-    const kgRes=num(c[1]); if(isNaN(kgRes)) return;
-    const kgVivo=c[2]!==undefined&&!isNaN(num(c[2]))?num(c[2]):'';
-    document.getElementById('rm-filas').insertAdjacentHTML('beforeend',
-      romaneoFilaHTML({garron:c[0],kgRes,kgVivo,rp:c[3]||'',tipif:c[4]||''}));
+    const c=l.trim().split(/[\t;]+|\s+/).filter(x=>x);
+    let f;
+    if(conMedias){
+      if(c.length<3||!ok(c[1])||!ok(c[2])) return;
+      const izq=num(c[1]),der=num(c[2]);
+      f={garron:c[0],izq,der,kgRes:+(izq+der).toFixed(2),kgVivo:ok(c[3])?num(c[3]):'',rp:c[4]||'',tipif:c[5]||''};
+    } else {
+      if(c.length<2||!ok(c[1])) return;
+      f={garron:c[0],kgRes:num(c[1]),kgVivo:ok(c[2])?num(c[2]):'',rp:c[3]||'',tipif:c[4]||''};
+    }
+    document.getElementById('rm-filas').insertAdjacentHTML('beforeend',romaneoFilaHTML(f));
     n++;
   });
   romaneoCalcular();
@@ -10805,51 +10862,80 @@ function romaneoPegar(){
 }
 
 function romaneoLeerFilas(){
-  return [...document.querySelectorAll('#rm-filas tr')].map(tr=>({
-    garron:tr.querySelector('.rm-g').value.trim(),
-    rp:tr.querySelector('.rm-rp').value.trim(),
-    kgVivo:parseFloat(tr.querySelector('.rm-v').value)||0,
-    kgRes:parseFloat(tr.querySelector('.rm-r').value)||0,
-    tipif:tr.querySelector('.rm-t').value.trim()
-  })).filter(f=>f.kgRes>0||f.kgVivo>0||f.garron||f.rp);
+  const g=(tr,c)=>tr.querySelector(c).value;
+  return [...document.querySelectorAll('#rm-filas tr')].map(tr=>{
+    const izq=parseFloat(g(tr,'.rm-i'))||0,der=parseFloat(g(tr,'.rm-d'))||0;
+    return {garron:g(tr,'.rm-g').trim(),rp:g(tr,'.rm-rp').trim(),cat:g(tr,'.rm-c').trim(),
+      kgVivo:parseFloat(g(tr,'.rm-v'))||0,izq,der,
+      kgRes:(izq||der)?izq+der:(parseFloat(g(tr,'.rm-r'))||0),
+      decomiso:parseFloat(g(tr,'.rm-dec'))||0,tipif:g(tr,'.rm-t').trim(),precio:parseFloat(g(tr,'.rm-p'))||0};
+  }).filter(f=>f.kgRes>0||f.kgVivo>0||f.garron||f.rp);
+}
+
+function romaneoTablaPrecios(txt){
+  const m={};
+  String(txt||'').split(/\r?\n/).forEach(l=>{
+    const x=l.trim().match(/^(.+?)\s*[=:]\s*([\d.,]+)$/); if(!x) return;
+    const val=parseFloat(x[2].includes(',')?x[2].replace(/\./g,'').replace(',','.'):x[2]);
+    if(!isNaN(val)) m[x[1].trim().toLowerCase()]=val;
+  });
+  return m;
+}
+function romaneoPrecioFila(f,catDef,general,tabla){
+  if(f.precio>0) return f.precio;
+  const t=(f.tipif||'').toLowerCase(),c=(f.cat||catDef||'').toLowerCase();
+  return (t&&tabla[t])||(c&&tabla[c])||general;
 }
 
 function romaneoTotales(){
   const filas=romaneoLeerFilas();
-  let cant,kgVivo,kgRes;
+  const catDef=document.getElementById('rm-cat').value.trim();
+  const general=rmNum('rm-precio');
+  const tablaTxt=document.getElementById('rm-tabla').value;
+  const tabla=romaneoTablaPrecios(tablaTxt);
+  let cant,kgVivo,kgRes,kgDec,bruto;
   if(filas.length){
     cant=filas.length;
     kgVivo=filas.reduce((s,f)=>s+f.kgVivo,0);
     kgRes=filas.reduce((s,f)=>s+f.kgRes,0);
+    kgDec=filas.reduce((s,f)=>s+f.decomiso,0);
+    bruto=filas.reduce((s,f)=>s+Math.max(0,f.kgRes-f.decomiso)*romaneoPrecioFila(f,catDef,general,tabla),0);
   } else {
-    cant=parseInt($v('rm-cant'))||0;
-    kgVivo=parseFloat($v('rm-kgvivo'))||0;
-    kgRes=parseFloat($v('rm-kgres'))||0;
+    cant=parseInt(document.getElementById('rm-cant').value)||0;
+    kgVivo=rmNum('rm-kgvivo');kgRes=rmNum('rm-kgres');kgDec=rmNum('rm-decomiso');
+    bruto=Math.max(0,kgRes-kgDec)*general;
   }
-  const precio=parseFloat($v('rm-precio'))||0;
   const rinde=kgVivo>0?kgRes/kgVivo*100:0;
-  return {filas,cant,kgVivo,kgRes,precio,rinde,total:kgRes*precio};
+  const faena=rmNum('rm-faena'),flete=rmNum('rm-flete'),otros=rmNum('rm-otros'),comPct=rmNum('rm-compct'),ivaPct=rmNum('rm-ivapct');
+  const comision=bruto*comPct/100,iva=bruto*ivaPct/100;
+  const neto=bruto+iva-comision-faena-flete-otros;
+  // resumen por categoría
+  const porCat={};
+  filas.forEach(f=>{const k=f.cat||catDef||'Sin categoría';const o=porCat[k]||(porCat[k]={cant:0,kgVivo:0,kgRes:0});o.cant++;o.kgVivo+=f.kgVivo;o.kgRes+=f.kgRes;});
+  return {filas,cant,kgVivo,kgRes,kgDec,rinde,precio:general,tablaTxt,bruto,faena,flete,otros,comPct,ivaPct,comision,iva,neto,porCat};
 }
 
 function romaneoCalcular(){
   document.querySelectorAll('#rm-filas tr').forEach(tr=>{
-    const v=parseFloat(tr.querySelector('.rm-v').value)||0,r=parseFloat(tr.querySelector('.rm-r').value)||0;
+    const v=parseFloat(tr.querySelector('.rm-v').value)||0;
+    const i=parseFloat(tr.querySelector('.rm-i').value)||0,d=parseFloat(tr.querySelector('.rm-d').value)||0;
+    const r=(i||d)?i+d:(parseFloat(tr.querySelector('.rm-r').value)||0);
     tr.querySelector('.rm-rin').textContent=(v>0&&r>0)?(r/v*100).toFixed(1)+'%':'--';
   });
   const t=romaneoTotales();
   const el=document.getElementById('rm-resumen'); if(!el) return;
-  el.innerHTML=`<b>${t.cant}</b> cab. · Vivo <b>${fmtN0(t.kgVivo)}</b> kg · Res <b>${fmtN0(t.kgRes)}</b> kg · Rinde <b>${t.rinde?t.rinde.toFixed(2)+'%':'--'}</b> · Promedio res <b>${t.cant?fmtN1(t.kgRes/t.cant):'--'}</b> kg · Total <b>$${fmtN0(t.total)}</b>`;
+  const cats=Object.keys(t.porCat);
+  const catHTML=cats.length>1||(cats.length===1&&cats[0]!=='Sin categoría')?`<br>Por categoría: `+cats.map(k=>{const o=t.porCat[k];return `${esc(k)}: <b>${o.cant}</b> cab · ${fmtN0(o.kgRes)} kg res${o.kgVivo>0?' · '+(o.kgRes/o.kgVivo*100).toFixed(1)+'%':''}`;}).join(' | '):'';
+  el.innerHTML=`<b>${t.cant}</b> cab. · Vivo <b>${fmtN0(t.kgVivo)}</b> kg · Res <b>${fmtN0(t.kgRes)}</b> kg · Decomiso <b>${fmtN0(t.kgDec)}</b> kg · Rinde <b>${t.rinde?t.rinde.toFixed(2)+'%':'--'}</b> · Prom. res <b>${t.cant?fmtN1(t.kgRes/t.cant):'--'}</b> kg
+  <br>Bruto <b>$${fmtN0(t.bruto)}</b> · IVA <b>$${fmtN0(t.iva)}</b> · Comisión <b>-$${fmtN0(t.comision)}</b> · Faena/Flete/Otros <b>-$${fmtN0(t.faena+t.flete+t.otros)}</b> · <span style="color:var(--green)">Neto a cobrar <b>$${fmtN0(t.neto)}</b></span>${catHTML}`;
 }
 
 function romaneoElegirVenta(){
-  const id=$v('rm-venta'); if(!id) return;
+  const id=document.getElementById('rm-venta').value; if(!id) return;
   const ve=(DB.ventas||[]).find(x=>String(x.id)===id); if(!ve) return;
-  if(!$v('rm-frigo')) document.getElementById('rm-frigo').value=ve.dest||'';
-  if(!$v('rm-cat')) document.getElementById('rm-cat').value=ve.cat||'';
-  if(!$v('rm-tropa')) document.getElementById('rm-tropa').value=ve.guia||'';
-  if(!$v('rm-cant')) document.getElementById('rm-cant').value=ve.cant||'';
-  if(!$v('rm-kgvivo')) document.getElementById('rm-kgvivo').value=ve.peso||'';
-  if(!$v('rm-fecha')) document.getElementById('rm-fecha').value=ve.fecha||'';
+  const setIf=(k,val)=>{const e=document.getElementById(k);if(!e.value)e.value=val||'';};
+  setIf('rm-frigo',ve.dest);setIf('rm-cat',ve.cat);setIf('rm-tropa',ve.guia);
+  setIf('rm-cant',ve.cant);setIf('rm-kgvivo',ve.peso);setIf('rm-fecha',ve.fecha);
   romaneoCalcular();
 }
 
@@ -10859,23 +10945,28 @@ function abrirRomaneo(id){
   sel.innerHTML='<option value="">-- Sin vincular --</option>'+[...(DB.ventas||[])].reverse().map(v=>
     `<option value="${v.id}">${esc(v.fecha)} · ${esc(v.comp||'--')} · ${v.cant} ${esc(v.cat||'')}</option>`).join('');
   const set=(k,val)=>{document.getElementById(k).value=val===undefined||val===null?'':val;};
+  const conDet=r&&(r.detalle||[]).length>0;
   set('rm-id',r?r.id:''); set('rm-fecha',r?r.fecha:new Date().toISOString().split('T')[0]);
   set('rm-frigo',r?r.frigo:''); set('rm-venta',r?(r.ventaId||''):''); set('rm-cat',r?r.cat:'');
-  set('rm-tropa',r?r.tropa:''); set('rm-precio',r?r.precio:'');
-  set('rm-cant',r&&!(r.detalle||[]).length?r.cant:''); set('rm-kgvivo',r&&!(r.detalle||[]).length?r.kgVivo:'');
-  set('rm-kgres',r&&!(r.detalle||[]).length?r.kgRes:''); set('rm-obs',r?r.obs:'');
-  document.getElementById('rm-filas').innerHTML=r&&r.detalle?r.detalle.map(romaneoFilaHTML).join(''):'';
+  set('rm-tropa',r?r.tropa:''); set('rm-precio',r?r.precio:''); set('rm-tabla',r?r.tablaPrecios:'');
+  set('rm-cant',r&&!conDet?r.cant:''); set('rm-kgvivo',r&&!conDet?r.kgVivo:'');
+  set('rm-kgres',r&&!conDet?r.kgRes:''); set('rm-decomiso',r&&!conDet?r.kgDecomiso:'');
+  set('rm-faena',r?r.faena:''); set('rm-flete',r?r.flete:''); set('rm-compct',r?r.comPct:'');
+  set('rm-ivapct',r?r.ivaPct:''); set('rm-otros',r?r.otros:''); set('rm-obs',r?r.obs:'');
+  document.getElementById('rm-filas').innerHTML=conDet?r.detalle.map(romaneoFilaHTML).join(''):'';
   romaneoCalcular(); openModal('modal-romaneo');
 }
 
 function guardarRomaneo(){
   const t=romaneoTotales();
   if(!t.cant||!t.kgRes){toast('Ingresá cabezas y kg de res (o cargá las filas)','err');return;}
-  const idEdit=parseInt($v('rm-id'))||0;
-  const ventaId=$v('rm-venta');
-  const r={id:idEdit||Date.now(),fecha:$v('rm-fecha'),frigo:$v('rm-frigo'),ventaId:ventaId?parseInt(ventaId):null,
-    cat:$v('rm-cat'),tropa:$v('rm-tropa'),cant:t.cant,kgVivo:t.kgVivo,kgRes:t.kgRes,rinde:t.rinde,
-    precio:t.precio,total:t.total,obs:$v('rm-obs'),detalle:t.filas};
+  const g=k=>document.getElementById(k).value;
+  const idEdit=parseInt(g('rm-id'))||0;
+  const ventaId=g('rm-venta');
+  const r={id:idEdit||Date.now(),fecha:g('rm-fecha'),frigo:g('rm-frigo').trim(),ventaId:ventaId?parseInt(ventaId):null,
+    cat:g('rm-cat').trim(),tropa:g('rm-tropa').trim(),cant:t.cant,kgVivo:t.kgVivo,kgRes:t.kgRes,kgDecomiso:t.kgDec,rinde:t.rinde,
+    precio:t.precio,tablaPrecios:t.tablaTxt,bruto:t.bruto,comPct:t.comPct,ivaPct:t.ivaPct,faena:t.faena,flete:t.flete,otros:t.otros,
+    comision:t.comision,iva:t.iva,total:t.neto,obs:g('rm-obs').trim(),detalle:t.filas};
   if(!DB.romaneos)DB.romaneos=[];
   if(idEdit){const i=DB.romaneos.findIndex(x=>x.id===idEdit);if(i>=0)DB.romaneos[i]=r;else DB.romaneos.push(r);}
   else DB.romaneos.push(r);
@@ -10890,44 +10981,52 @@ function bajaRomaneo(id){
   saveToStorage();renderRomaneos();toast('Romaneo eliminado','info');
 }
 
+function romaneoPrecioMedio(r){
+  const liq=(r.kgRes||0)-(r.kgDecomiso||0);
+  return (r.bruto&&liq>0)?r.bruto/liq:(r.precio||0);
+}
+
 function renderRomaneos(){
   const tbody=document.getElementById('romaneos-tbody');if(!tbody)return;
   const lista=[...(DB.romaneos||[])].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
   tbody.innerHTML=lista.map(r=>{
     const ve=r.ventaId?(DB.ventas||[]).find(v=>v.id===r.ventaId):null;
     return `<tr><td>${esc(r.fecha||'--')}</td><td>${esc(r.frigo||'--')}</td><td style="font-size:13px">${ve?esc(ve.comp||'--'):'--'}</td>
-    <td class="td-mono">${r.cant}</td><td class="td-mono">${fmtN0(r.kgVivo)}</td><td class="td-mono">${fmtN0(r.kgRes)}</td>
-    <td class="td-mono">${r.rinde?r.rinde.toFixed(1)+'%':'--'}</td><td class="td-mono">$${fmtN0(r.precio)}</td>
+    <td class="td-mono">${r.cant}</td><td class="td-mono">${fmtN0(r.kgVivo)}</td><td class="td-mono">${fmtN0(r.kgRes)}${r.kgDecomiso?`<div style="font-size:11px;color:var(--text3)">-${fmtN0(r.kgDecomiso)} decom.</div>`:''}</td>
+    <td class="td-mono">${r.rinde?r.rinde.toFixed(1)+'%':'--'}</td><td class="td-mono">$${fmtN0(romaneoPrecioMedio(r))}</td>
     <td class="td-mono text-green">$${fmtN0(r.total)}</td>
     <td style="white-space:nowrap"><button class="btn-icon" title="Editar" onclick="abrirRomaneo(${r.id})">✏️</button><button class="btn-icon" title="PDF" onclick="exportarRomaneoPDF(${r.id})">📄</button><button class="btn-icon" title="Eliminar" onclick="bajaRomaneo(${r.id})">🗑</button></td></tr>`;
   }).join('')||emptyRow(10);
   const k=document.getElementById('rm-kpis'); if(!k) return;
   if(!lista.length){k.innerHTML='';return;}
-  const cab=lista.reduce((s,r)=>s+(r.cant||0),0),kv=lista.reduce((s,r)=>s+(r.kgVivo||0),0),kr=lista.reduce((s,r)=>s+(r.kgRes||0),0),tot=lista.reduce((s,r)=>s+(r.total||0),0);
-  const kvConRes=lista.filter(r=>r.kgVivo>0).reduce((s,r)=>s+r.kgVivo,0),krConVivo=lista.filter(r=>r.kgVivo>0).reduce((s,r)=>s+r.kgRes,0);
+  const cab=lista.reduce((s,r)=>s+(r.cant||0),0),kr=lista.reduce((s,r)=>s+(r.kgRes||0),0),tot=lista.reduce((s,r)=>s+(r.total||0),0);
+  const conVivo=lista.filter(r=>r.kgVivo>0),kvConRes=conVivo.reduce((s,r)=>s+r.kgVivo,0),krConVivo=conVivo.reduce((s,r)=>s+r.kgRes,0);
   const rin=kvConRes>0?krConVivo/kvConRes*100:0;
   k.innerHTML=`<div class="grid-4">
     <div class="kpi amber"><div class="kpi-label">Faenados</div><div class="kpi-val">${fmtN0(cab)}</div><div class="kpi-sub">cabezas · ${lista.length} romaneos</div></div>
     <div class="kpi blue"><div class="kpi-label">Kg res</div><div class="kpi-val">${fmtN0(kr)}</div><div class="kpi-sub">prom. ${cab?fmtN1(kr/cab):'--'} kg/res</div></div>
     <div class="kpi green"><div class="kpi-label">Rinde promedio</div><div class="kpi-val">${rin?rin.toFixed(1)+'%':'--'}</div><div class="kpi-sub">res / vivo</div></div>
-    <div class="kpi purple"><div class="kpi-label">Total liquidado</div><div class="kpi-val" style="font-size:20px">$${fmtN0(tot)}</div><div class="kpi-sub">${kr?'$'+fmtN0(tot/kr)+'/kg res':''}</div></div></div>`;
+    <div class="kpi purple"><div class="kpi-label">Neto a cobrar</div><div class="kpi-val" style="font-size:20px">$${fmtN0(tot)}</div><div class="kpi-sub">${kr?'$'+fmtN0(tot/kr)+'/kg res':''}</div></div></div>`;
 }
 
 function exportarRomaneoPDF(id){
   if(typeof window.jspdf==='undefined'){toast('No se pudo cargar el generador de PDF','err');return;}
   const r=(DB.romaneos||[]).find(x=>x.id===id); if(!r) return;
-  const {jsPDF}=window.jspdf; const doc=new jsPDF();
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({orientation:'landscape'});
   doc.setFontSize(16);doc.setFont(undefined,'bold');doc.text(DB.settings.establecimiento||'Mi Establecimiento',14,15);
   doc.setFontSize(12);doc.setFont(undefined,'normal');doc.text('Romaneo de faena',14,22);
   doc.setFontSize(9);doc.setTextColor(120);doc.text(`Generado el ${new Date().toLocaleDateString('es-AR')}`,14,28);doc.setTextColor(0);
   doc.setFontSize(10);
   doc.text(`Fecha: ${r.fecha||'--'}    Frigorífico: ${r.frigo||'--'}    Tropa/Guía: ${r.tropa||'--'}    Categoría: ${r.cat||'--'}`,14,36);
-  doc.text(`Cabezas: ${r.cant}    Kg vivo: ${fmtN0(r.kgVivo)}    Kg res: ${fmtN0(r.kgRes)}    Rinde: ${r.rinde?r.rinde.toFixed(2)+'%':'--'}`,14,42);
-  doc.text(`Precio $/kg res: ${fmtN0(r.precio)}    Total: $${fmtN0(r.total)}`,14,48);
-  let y=54;
+  doc.text(`Cabezas: ${r.cant}    Kg vivo: ${fmtN0(r.kgVivo)}    Kg res: ${fmtN0(r.kgRes)}    Decomiso: ${fmtN0(r.kgDecomiso)} kg    Rinde: ${r.rinde?r.rinde.toFixed(2)+'%':'--'}`,14,42);
+  doc.text(`Bruto: $${fmtN0(r.bruto)}    IVA: $${fmtN0(r.iva)}    Comisión: -$${fmtN0(r.comision)}    Faena: -$${fmtN0(r.faena)}    Flete: -$${fmtN0(r.flete)}    Otros: -$${fmtN0(r.otros)}`,14,48);
+  doc.setFont(undefined,'bold');doc.text(`NETO A COBRAR: $${fmtN0(r.total)}`,14,54);doc.setFont(undefined,'normal');
+  let y=60;
   if((r.detalle||[]).length){
-    doc.autoTable({startY:y,head:[['Garrón','RP','Kg vivo','Kg res','Rinde %','Tipif.']],
-      body:r.detalle.map(f=>[f.garron||'--',f.rp||'--',f.kgVivo||'--',f.kgRes||'--',(f.kgVivo>0&&f.kgRes>0)?(f.kgRes/f.kgVivo*100).toFixed(1):'--',f.tipif||'--']),
+    const tabla=romaneoTablaPrecios(r.tablaPrecios);
+    doc.autoTable({startY:y,
+      head:[['Garrón','RP','Categoría','Kg vivo','½ Izq','½ Der','Kg res','Decom.','Tipif.','$/kg','Rinde %']],
+      body:r.detalle.map(f=>[f.garron||'--',f.rp||'--',f.cat||r.cat||'--',f.kgVivo||'--',f.izq||'--',f.der||'--',f.kgRes||'--',f.decomiso||'--',f.tipif||'--',fmtN0(romaneoPrecioFila(f,r.cat,r.precio,tabla)),(f.kgVivo>0&&f.kgRes>0)?(f.kgRes/f.kgVivo*100).toFixed(1):'--']),
       styles:{fontSize:8},headStyles:{fillColor:[240,192,96],textColor:20},margin:{left:14,right:14}});
     y=doc.lastAutoTable.finalY+8;
   }
@@ -10939,8 +11038,8 @@ function exportarRomaneosExcel(){
   const lista=DB.romaneos||[];
   if(!lista.length){toast('No hay romaneos cargados','err');return;}
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(lista.map(r=>({Fecha:r.fecha,Frigorifico:r.frigo,Tropa:r.tropa,Categoria:r.cat,Cabezas:r.cant,KgVivo:r.kgVivo,KgRes:r.kgRes,RindePct:r.rinde?+r.rinde.toFixed(2):'',PrecioKgRes:r.precio,Total:r.total,Obs:r.obs}))),'Romaneos');
-  const det=[];lista.forEach(r=>(r.detalle||[]).forEach(f=>det.push({Fecha:r.fecha,Frigorifico:r.frigo,Garron:f.garron,RP:f.rp,KgVivo:f.kgVivo,KgRes:f.kgRes,RindePct:(f.kgVivo>0&&f.kgRes>0)?+(f.kgRes/f.kgVivo*100).toFixed(2):'',Tipif:f.tipif})));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(lista.map(r=>({Fecha:r.fecha,Frigorifico:r.frigo,Tropa:r.tropa,Categoria:r.cat,Cabezas:r.cant,KgVivo:r.kgVivo,KgRes:r.kgRes,KgDecomiso:r.kgDecomiso||0,RindePct:r.rinde?+r.rinde.toFixed(2):'',PrecioKgRes:r.precio,Bruto:r.bruto||r.total,IVA:r.iva||0,Comision:r.comision||0,Faena:r.faena||0,Flete:r.flete||0,Otros:r.otros||0,NetoACobrar:r.total,Obs:r.obs}))),'Romaneos');
+  const det=[];lista.forEach(r=>(r.detalle||[]).forEach(f=>det.push({Fecha:r.fecha,Frigorifico:r.frigo,Garron:f.garron,RP:f.rp,Categoria:f.cat||r.cat,KgVivo:f.kgVivo,MediaIzq:f.izq||'',MediaDer:f.der||'',KgRes:f.kgRes,Decomiso:f.decomiso||0,Tipif:f.tipif,PrecioKg:f.precio||'',RindePct:(f.kgVivo>0&&f.kgRes>0)?+(f.kgRes/f.kgVivo*100).toFixed(2):''})));
   if(det.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(det),'Detalle animales');
   XLSX.writeFile(wb,nombreArchivoExport('Romaneos','xlsx'));toast('Excel de Romaneos generado','ok');
 }
@@ -11349,9 +11448,10 @@ function exportExcelCompleto(){
   addSheet('Romaneos', (DB.romaneos||[]).map(r=>({
     'Fecha': r.fecha, 'Frigorífico': r.frigo||'--', 'Tropa/Guía': r.tropa||'--',
     'Categoría': r.cat||'--', 'Cabezas': r.cant||0, 'Kg vivo': r.kgVivo||0,
-    'Kg res': r.kgRes||0, 'Rinde %': r.rinde?+r.rinde.toFixed(2):'--',
-    '$/kg res': r.precio||0, 'Total $': r.total||0, 'Observaciones': r.obs||'--'
-  })), ['Fecha','Frigorífico','Tropa/Guía','Categoría','Cabezas','Kg vivo','Kg res','Rinde %','$/kg res','Total $','Observaciones']);
+    'Kg res': r.kgRes||0, 'Decomiso kg': r.kgDecomiso||0, 'Rinde %': r.rinde?+r.rinde.toFixed(2):'--',
+    '$/kg res': r.precio||0, 'Bruto $': r.bruto||r.total||0, 'Gastos $': (r.comision||0)+(r.faena||0)+(r.flete||0)+(r.otros||0),
+    'Neto $': r.total||0, 'Observaciones': r.obs||'--'
+  })), ['Fecha','Frigorífico','Tropa/Guía','Categoría','Cabezas','Kg vivo','Kg res','Decomiso kg','Rinde %','$/kg res','Bruto $','Gastos $','Neto $','Observaciones']);
 
   // ── PESADAS ──
   addSheet('Pesadas', DB.pesadas.map(p=>({
