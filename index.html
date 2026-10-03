@@ -913,6 +913,7 @@
     <div class="nav-section">Reportes</div>
     <div class="nav-item" onclick="showPage('historial')"><span class="nav-icon">📋</span>Historial</div>
     <div class="nav-item" onclick="showPage('reportes')"><span class="nav-icon">📈</span>Reportes</div>
+    <div class="nav-item" onclick="showPage('ia')"><span class="nav-icon">🤖</span>Preguntale a RodeoFlow</div>
     <div class="nav-item" onclick="showPage('rentabilidad')"><span class="nav-icon">💰</span>Rentabilidad</div>
     <div class="nav-item" onclick="showPage('administracion')"><span class="nav-icon">🗂️</span>Administración</div>
 
@@ -2604,6 +2605,21 @@
       </div>
     </div>
 
+    <!-- ═══ INTELIGENCIA ARTIFICIAL ═══ -->
+    <div id="page-ia" class="page">
+      <div class="page-header"><div class="page-title">🤖 Preguntale a RodeoFlow</div></div>
+      <div class="card">
+        <div style="font-size:14px;color:var(--text2);margin-bottom:12px">RodeoFlow usa inteligencia artificial para transformar los datos de tu establecimiento en información fácil de interpretar. Las respuestas salen de lo que tenés registrado en el sistema.</div>
+        <div id="ia-chips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
+        <div id="ia-chat" style="min-height:120px;max-height:52vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="ia-input" class="form-control" maxlength="400" placeholder="Escribí tu pregunta... ej: ¿Cuántos terneros tengo?" style="flex:1">
+          <button class="btn-primary" id="ia-enviar" onclick="iaPreguntar()">Preguntar</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px">Se envía a la IA un resumen de los datos de tu establecimiento solo para responder tu consulta. Requiere conexión a internet. Verificá los datos importantes antes de decidir.</div>
+      </div>
+    </div>
+
     <!-- ═══ CONFIGURACIÓN ═══ -->
     <div id="page-configuracion" class="page">
       <div class="page-header"><div class="page-title">⚙️ Configuración</div></div>
@@ -4234,16 +4250,38 @@ const WHATSAPP_PAGO = '5492314446643'; // Número real de contacto/pagos
 function openMercadoPago() { mostrarDatosPago(); } // compatibilidad
 function openNaranja()     { mostrarDatosPago(); } // compatibilidad
 
-function mostrarDatosPago() {
+function cerrarDatosPago() {
   document.querySelectorAll('.datos-pago-overlay').forEach(el => el.remove());
-  const mensajeWA = encodeURIComponent('Hola, realicé el pago de RodeoFlow. Adjunto comprobante.');
-  const linkWA = 'https://wa.me/' + WHATSAPP_PAGO + '?text=' + mensajeWA;
+  document.removeEventListener('keydown', _datosPagoEsc);
+}
+function _datosPagoEsc(e) { if (e.key === 'Escape') cerrarDatosPago(); }
 
+// Abre WhatsApp con el mensaje de comprobante. Funciona también en PWA/webview:
+// si el navegador bloquea la ventana nueva, navega en la misma pestaña.
+function abrirWhatsAppComprobante() {
+  const estab = (DB.settings && DB.settings.establecimiento) || '';
+  const msg = 'Hola, realicé el pago de RodeoFlow. Adjunto comprobante.' + (estab ? '\nEstablecimiento: ' + estab : '');
+  const link = 'https://wa.me/' + WHATSAPP_PAGO + '?text=' + encodeURIComponent(msg);
+  const w = window.open(link, '_blank', 'noopener');
+  if (!w) window.location.href = link;
+}
+
+function copiarAliasPago() {
+  const fin = () => toast('Alias copiado: ' + CVU_ALIAS, 'ok');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(CVU_ALIAS).then(fin).catch(() => toast('Alias: ' + CVU_ALIAS, 'info'));
+  } else { toast('Alias: ' + CVU_ALIAS, 'info'); }
+}
+
+function mostrarDatosPago() {
+  cerrarDatosPago();
   const win = document.createElement('div');
   win.className = 'datos-pago-overlay';
-  win.style.cssText = 'position:fixed;inset:0;z-index:9700;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:20px';
-  win.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:420px;width:100%" onclick="event.stopPropagation()">
-    <div style="font-size:16px;font-weight:700;color:var(--accent);margin-bottom:12px">💰 Suscripción RodeoFlow</div>
+  // z-index por encima de cualquier otro overlay/botón flotante; scroll propio para pantallas chicas
+  win.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(0,0,0,0.85);overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom))';
+  win.innerHTML = `<div class="datos-pago-card" style="position:relative;margin:auto;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:420px;width:100%">
+    <button type="button" data-act="cerrar" aria-label="Cerrar" style="position:absolute;top:8px;right:8px;width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:16px;cursor:pointer">✕</button>
+    <div style="font-size:16px;font-weight:700;color:var(--accent);margin:0 36px 12px 0">💰 Suscripción RodeoFlow</div>
     <div style="font-size:14px;line-height:1.7;color:var(--text)">
       Precio: <b>USD 46 / mes</b><br><br>
       Transferí por:<br>
@@ -4252,10 +4290,23 @@ function mostrarDatosPago() {
       Una vez transferido, enviá el comprobante por WhatsApp para recibir tu código de activación.<br><br>
       <span style="font-size:12px;color:var(--text3)">🔄 Renovación automática: se cobra cada 30 días hasta que canceles. Cancelación en cualquier momento desde Configuración, se procesa en hasta 2 días hábiles.</span>
     </div>
-    <a href="${linkWA}" target="_blank" rel="noopener" class="btn-primary" style="display:block;text-align:center;margin-top:18px;text-decoration:none;padding:12px">📲 Abrir WhatsApp para enviar comprobante</a>
-    <button class="btn-secondary" style="width:100%;margin-top:8px" onclick="document.querySelectorAll('.datos-pago-overlay').forEach(el=>el.remove())">Cerrar</button>
+    <button type="button" data-act="copiar" class="btn-secondary" style="width:100%;margin-top:14px">📋 Copiar alias</button>
+    <button type="button" data-act="wa" class="btn-primary" style="width:100%;justify-content:center;margin-top:8px;padding:12px">📲 Abrir WhatsApp para enviar comprobante</button>
+    <button type="button" data-act="cerrar" class="btn-secondary" style="width:100%;margin-top:8px">Cerrar</button>
   </div>`;
-  win.onclick = () => win.remove();
+  // Un solo manejador de eventos (sin atributos inline): botones y clic fuera de la tarjeta
+  win.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (btn) {
+      e.stopPropagation();
+      if (btn.dataset.act === 'cerrar') cerrarDatosPago();
+      else if (btn.dataset.act === 'wa') abrirWhatsAppComprobante();
+      else if (btn.dataset.act === 'copiar') copiarAliasPago();
+      return;
+    }
+    if (!e.target.closest('.datos-pago-card')) cerrarDatosPago();
+  });
+  document.addEventListener('keydown', _datosPagoEsc);
   document.body.appendChild(win);
 }
 
@@ -4535,7 +4586,7 @@ function toggleSidebar() {
 // Peón: solo carga de campo (balanza, sanidad, insumos, campo).
 const ROLE_PAGES = {
   'Dueño': null, // null = sin restricciones (todas las páginas)
-  'Capataz': ['dashboard','scanner','animales','sanidad','tratamientos','mortalidad','insumos','campo','reproduccion','potreros','nutricion','movimientos','precios','historial'],
+  'Capataz': ['dashboard','scanner','animales','sanidad','tratamientos','mortalidad','insumos','campo','reproduccion','potreros','nutricion','movimientos','precios','historial','ia'],
   'Peón': ['dashboard','scanner','sanidad','tratamientos','mortalidad','insumos','campo','potreros'],
   'Veterinario': ['dashboard','animales','sanidad','tratamientos','mortalidad','reproduccion','insumos','historial']
 };
@@ -4606,6 +4657,7 @@ function showPage(id) {
   if(id === 'campo') { renderTropaPotreroSelect(); renderDiario(); renderGDPResumen(); actualizarClima(); }
   if(id === 'administracion') { renderVencimientos(); prepararResumenWA(); renderSenasaResumen(); }
   if(id === 'rentabilidad') { renderRentabilidadPotreroSelect(); renderRentabilidad(); }
+  if(id === 'ia') iaRender();
   if(id === 'configuracion') { renderConfigPhones(); updateTrialStatus(); renderBackupHistorial(); actualizarEstadoBackup(); actualizarPanelSync(); renderConfigUbicacion(); renderNotifEstado(); renderPrefVoz(); }
   // Close sidebar on mobile
   document.getElementById('sidebar').classList.remove('mobile-open');
@@ -11042,6 +11094,354 @@ function exportarRomaneosExcel(){
   const det=[];lista.forEach(r=>(r.detalle||[]).forEach(f=>det.push({Fecha:r.fecha,Frigorifico:r.frigo,Garron:f.garron,RP:f.rp,Categoria:f.cat||r.cat,KgVivo:f.kgVivo,MediaIzq:f.izq||'',MediaDer:f.der||'',KgRes:f.kgRes,Decomiso:f.decomiso||0,Tipif:f.tipif,PrecioKg:f.precio||'',RindePct:(f.kgVivo>0&&f.kgRes>0)?+(f.kgRes/f.kgVivo*100).toFixed(2):''})));
   if(det.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(det),'Detalle animales');
   XLSX.writeFile(wb,nombreArchivoExport('Romaneos','xlsx'));toast('Excel de Romaneos generado','ok');
+}
+
+// ═══ IA: PREGUNTALE A RODEOFLOW ═══
+const IA_EJEMPLOS=['¿Cuántos terneros tengo?','¿Cuál fue la ganancia diaria del lote 4?','¿Cuántas vacas están sin tactar?','¿Qué animales bajaron de peso?','¿Cuál fue el rendimiento promedio del último romaneo?','¿Cuánto gasté en alimentación este mes?',
+ '¿Cuántos animales tengo por categoría y por potrero?','¿Cuál es el peso promedio de los novillos?','¿Cuáles son los animales con mejor y peor ganancia diaria?','¿Cuántos animales nacieron este año?',
+ '¿Cuántas vacas están preñadas y cuántas vacías?','¿Cuál es el porcentaje de preñez del último tacto?','¿Qué vacas tienen parto estimado en los próximos 30 días?','¿Cuántos terneros se destetaron este año?','¿Cuántos abortos registré?',
+ '¿Qué animales tienen tratamiento en curso?','¿Cuáles tienen la vacuna vencida o pendiente?','¿Qué animales están en período de espera para vender?','¿Cuántas muertes registré y de qué categoría?',
+ '¿Cuánto vendí y cuánto compré este mes?','¿Cuál fue el margen de la última venta?','¿Cuánto gasté en sanidad este mes?','¿Cuánto me queda de stock de balanceado?','¿Qué insumos están por vencer o por agotarse?',
+ '¿Cuánto llovió este mes?','¿Qué potreros están sobrecargados?'];
+const IA_VISIBLES=6;
+window._iaChat=window._iaChat||[];
+let _iaOcupado=false;
+
+function iaRender(){
+  const ch=document.getElementById('ia-chips');
+  if(ch&&!ch.dataset.listo){
+    ch.innerHTML=IA_EJEMPLOS.map((q,i)=>`<button class="btn-secondary ia-chip" style="font-size:13px;${i>=IA_VISIBLES?'display:none':''}" onclick="iaPreguntar(IA_EJEMPLOS[${i}])">${esc(q)}</button>`).join('')+
+      `<button class="btn-secondary" id="ia-mas" style="font-size:13px" onclick="iaVerMas()">＋ Ver más preguntas</button>`;
+    ch.dataset.listo='1';
+    document.getElementById('ia-input').addEventListener('keydown',e=>{if(e.key==='Enter')iaPreguntar();});
+  }
+  iaPintarChat();
+}
+function iaFmtRespuesta(t){return esc(String(t||'')).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>');}
+function iaPintarChat(){
+  const el=document.getElementById('ia-chat'); if(!el) return;
+  el.innerHTML=window._iaChat.map(m=>m.rol==='u'
+    ?`<div style="align-self:flex-end;max-width:85%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px">${esc(m.texto)}</div>`
+    :`<div style="align-self:flex-start;max-width:92%;background:var(--bg2);border:1px solid ${m.error?'var(--red)':'var(--accent)'};border-radius:10px;padding:10px 14px;font-size:14px;line-height:1.6">${m.cargando?'<span style="color:var(--text3)">Analizando tus datos…</span>':iaFmtRespuesta(m.texto)}</div>`
+  ).join('');
+  el.scrollTop=el.scrollHeight;
+}
+
+// ── Arma el resumen de datos que se le manda a la IA ──
+function iaConstruirContexto(){
+  const hoy=new Date().toISOString().split('T')[0], mes=hoy.slice(0,7);
+  const f1=n=>(n===null||n===undefined||isNaN(n))?'':(Math.round(n*100)/100);
+  const activos=(DB.animales||[]).filter(a=>a.activo);
+  // pesadas por RP, ordenadas
+  const pes={}; (DB.pesadas||[]).forEach(p=>{(pes[p.rp]||(pes[p.rp]=[])).push(p);});
+  Object.values(pes).forEach(l=>l.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)));
+  const info=a=>{
+    const l=pes[a.rp]||[]; const u=l[l.length-1], pr=l[l.length-2], pri=l[0];
+    let gdp=null; if(l.length>=2){const d=(new Date(u.fecha)-new Date(pri.fecha))/86400000; if(d>=1) gdp=(u.peso-pri.peso)/d;}
+    return {pesoAct:u?u.peso:(a.peso||null),fechaAct:u?u.fecha:'',pesoPrev:pr?pr.peso:null,gdp};
+  };
+  const cuenta=(arr,fn)=>{const o={};arr.forEach(x=>{const k=fn(x)||'--';o[k]=(o[k]||0)+1;});return o;};
+  const T=[]; const sec=(t,c)=>T.push('## '+t+'\n'+c);
+
+  sec('GENERAL',`Fecha de hoy: ${hoy}\nEstablecimiento: ${DB.settings?.establecimiento||'--'}\nAnimales activos: ${activos.length}\nPor categoría: ${JSON.stringify(cuenta(activos,a=>a.categoria))}\nPor sexo: ${JSON.stringify(cuenta(activos,a=>a.sexo))}\nPor potrero: ${JSON.stringify(cuenta(activos,a=>a.potrero))}`);
+  sec('LOTES (pastoreos: lote → potrero)',(DB.pastoreos||[]).map(p=>`${p.lote}→${p.potrero} entrada:${p.entrada||''} salida:${p.salida||''}`).join('\n')||'(sin datos)');
+
+  // precalculados
+  const infos=activos.map(a=>({a,i:info(a)}));
+  const gdpPotrero={}; infos.forEach(({a,i})=>{if(i.gdp!==null){const o=gdpPotrero[a.potrero||'--']||(gdpPotrero[a.potrero||'--']={s:0,n:0});o.s+=i.gdp;o.n++;}});
+  sec('PRECALCULADO: GDP promedio (kg/día, primera→última pesada) por potrero',Object.entries(gdpPotrero).map(([k,o])=>`${k}: ${f1(o.s/o.n)} (${o.n} animales con 2+ pesadas)`).join('\n')||'(sin pesadas suficientes)');
+  const bajaron=infos.filter(({i})=>i.pesoPrev!==null&&i.pesoAct!==null&&i.pesoAct<i.pesoPrev).map(({a,i})=>({rp:a.rp,cat:a.categoria,prev:i.pesoPrev,act:i.pesoAct,dif:i.pesoAct-i.pesoPrev,fecha:i.fechaAct})).sort((x,y)=>x.dif-y.dif);
+  sec(`PRECALCULADO: Animales que bajaron de peso entre las dos últimas pesadas (${bajaron.length})`,bajaron.slice(0,60).map(b=>`RP ${b.rp} (${b.cat}): ${b.prev}→${b.act} kg (${f1(b.dif)}) el ${b.fecha}`).join('\n')||'(ninguno)');
+  const tact={}; (DB.tactos||[]).forEach(t=>{const x=tact[t.rp];if(!x||new Date(t.fecha)>=new Date(x.fecha))tact[t.rp]=t;});
+  const catHembraRep=['Vaca','Vaquillona','Invernada Vientres'];
+  const sinTactar=activos.filter(a=>a.sexo==='Hembra'&&catHembraRep.includes(a.categoria)&&!tact[a.rp]);
+  sec(`PRECALCULADO: Hembras reproductoras (Vaca/Vaquillona/Invernada Vientres) activas SIN ningún tacto registrado: ${sinTactar.length}`,sinTactar.slice(0,80).map(a=>`RP ${a.rp} (${a.categoria})`).join(', ')||'(ninguna)');
+  const tc=cuenta(Object.values(tact),t=>t.resultado); sec('PRECALCULADO: Último tacto por animal (resultado → cantidad)',JSON.stringify(tc));
+
+  // alimentación del mes
+  const enc=(DB.encierres||[]).filter(e=>(e.fecha||'').startsWith(mes));
+  const gEnc=enc.reduce((s,e)=>s+(e.costoTotal||0),0);
+  const insAl={}; (DB.insumos||[]).forEach(i=>{if(['Balanceado','Sales minerales'].includes(i.categoria))insAl[i.id]=i;});
+  const entr=(DB.insumoLotes||[]).filter(l=>insAl[l.insumoId]&&(l.fechaIngreso||'').startsWith(mes));
+  const gIns=entr.reduce((s,l)=>s+(l.cantidadInicial||0)*(insAl[l.insumoId].costoUnitario||0),0);
+  sec(`PRECALCULADO: Gasto en alimentación del mes ${mes}`,`Encierres/raciones: $${Math.round(gEnc)} (${enc.length} registros)\nCompras de balanceado y sales (entradas de stock × costo unitario): $${Math.round(gIns)} (${entr.length} ingresos)\nTotal estimado: $${Math.round(gEnc+gIns)}`);
+
+  // romaneos
+  const rom=[...(DB.romaneos||[])].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  sec('ROMANEOS (más reciente primero)',rom.slice(0,8).map(r=>`${r.fecha} ${r.frigo||''} · ${r.cant} cab · vivo ${Math.round(r.kgVivo||0)}kg · res ${Math.round(r.kgRes||0)}kg · decomiso ${Math.round(r.kgDecomiso||0)}kg · rinde ${r.rinde?r.rinde.toFixed(2)+'%':'--'} · neto $${Math.round(r.total||0)}`).join('\n')||'(sin romaneos)');
+  if(rom[0]) sec('PRECALCULADO: Último romaneo',`Rinde ${rom[0].rinde?rom[0].rinde.toFixed(2)+'%':'sin kg vivo'} (res/vivo) · ${rom[0].cant} cabezas · promedio ${rom[0].cant?Math.round(rom[0].kgRes/rom[0].cant):'--'} kg/res`);
+
+  // ventas/compras/sanidad resumen
+  sec('VENTAS (últimas 8)',(DB.ventas||[]).slice(-8).map(v=>`${v.fecha} ${v.comp||''} ${v.cant} ${v.cat||''} ${v.peso||''}kg $${Math.round(v.total||0)}`).join('\n')||'(sin ventas)');
+  sec('COMPRAS (últimas 8)',(DB.compras||[]).slice(-8).map(c=>`${c.fecha} ${c.prov||''} ${c.cant} ${c.cat||''} $${Math.round(c.total||0)}`).join('\n')||'(sin compras)');
+  sec('SANIDAD',`Tratamientos en curso: ${(DB.tratamientos||[]).filter(t=>t.estado==='En Curso').length}. Muertes registradas: ${(DB.muertes||[]).length}.`);
+
+  // secciones adicionales para preguntas de reproducción, sanidad, stock, clima y potreros
+  const d30=new Date(Date.now()+30*86400000).toISOString().split('T')[0];
+  const partos=Object.values(tact).filter(t=>t.parto&&t.parto>=hoy&&t.parto<=d30).sort((a,b)=>a.parto.localeCompare(b.parto));
+  sec('REPRODUCCIÓN (partos estimados en los próximos 30 días)',partos.map(t=>`RP ${t.rp}: ${t.parto}`).join('\n')||'(ninguno)');
+  sec('REPRODUCCIÓN (destetes y abortos)',`Destetes ${hoy.slice(0,4)}: ${(DB.destetes||[]).filter(d=>(d.fecha||'').startsWith(hoy.slice(0,4))).length}. Abortos ${hoy.slice(0,4)}: ${(DB.abortos||[]).filter(d=>(d.fecha||'').startsWith(hoy.slice(0,4))).length}. Abortos totales: ${(DB.abortos||[]).length}.`);
+  sec('TRATAMIENTOS EN CURSO',(DB.tratamientos||[]).filter(t=>t.estado==='En Curso').slice(0,40).map(t=>`RP ${t.rp}: ${t.diag||''} · ${t.med||''} desde ${t.fecha||''}`).join('\n')||'(ninguno)');
+  const vacUlt={}; (DB.vacunas||[]).forEach(v=>{const k=v.rp+'|'+v.vacuna;if(!vacUlt[k]||v.fecha>vacUlt[k].fecha)vacUlt[k]=v;});
+  sec('VACUNAS CON REFUERZO VENCIDO O VENCE EN 30 DÍAS',Object.values(vacUlt).filter(v=>v.refuerzo&&v.refuerzo<=d30).slice(0,40).map(v=>`RP ${v.rp}: ${v.vacuna} refuerzo ${v.refuerzo}`).join('\n')||'(ninguna)');
+  const reten=activos.map(a=>({a,r:chequearRetencionAnimal(a.rp)})).filter(x=>x.r);
+  sec('ANIMALES EN RETENCIÓN (período de espera o tratamiento en curso)',reten.slice(0,40).map(({a,r})=>`RP ${a.rp}: ${r.motivo}${r.fechaApto?' hasta '+r.fechaApto.toISOString().split('T')[0]:''}`).join('\n')||'(ninguno)');
+  sec('INSUMOS (stock)',(DB.insumos||[]).map(i=>`${i.nombre} (${i.categoria}): ${stockActualInsumo(i.id)} ${i.unidad||''} · mínimo ${i.stockMinimo||0}`).join('\n')||'(sin insumos)');
+  sec('CLIMA',`Lluvia del mes ${mes}: ${(DB.precipitaciones||[]).filter(x=>(x.fecha||'').startsWith(mes)).reduce((s,x)=>s+(parseFloat(x.mm)||0),0)} mm`);
+  sec('POTREROS (ha, carga máx., cabezas)',(DB.potreros||[]).map(p=>`${p.nombre}: ${p.ha||'?'} ha · cargaMax ${p.cargaMax||'?'} · ${activos.filter(a=>a.potrero===p.nombre).length} cab.`).join('\n')||'(sin potreros)');
+  sec('MUERTES (por tipo)',JSON.stringify(cuenta(DB.muertes||[],m=>m.tipo))+` · total ${(DB.muertes||[]).length}`);
+  const enMes=(arr)=>(arr||[]).filter(x=>(x.fecha||'').startsWith(mes));
+  sec('VENTAS Y COMPRAS DEL MES',`Ventas: ${enMes(DB.ventas).length} por $${Math.round(enMes(DB.ventas).reduce((s,x)=>s+(x.total||0),0))}. Compras: ${enMes(DB.compras).length} por $${Math.round(enMes(DB.compras).reduce((s,x)=>s+(x.total||0),0))}. Gasto en tratamientos del mes: $${Math.round(enMes(DB.tratamientos).reduce((s,x)=>s+(x.costo||0),0))}.`);
+
+  // listado de animales (compacto, tope para no pasarse de tamaño)
+  const tope=activos.length>900?600:900;
+  const filas=infos.slice(0,tope).map(({a,i})=>[a.rp,a.categoria,(a.sexo||'')[0]||'',a.potrero||'',a.fnac||'',i.pesoAct??'',i.pesoPrev??'',f1(i.gdp),a.prenada||''].join('|'));
+  sec(`ANIMALES ACTIVOS (rp|categoría|sexo|potrero|fnac|pesoAct|pesoPrev|GDP|preñez)${activos.length>tope?` — mostrando ${tope} de ${activos.length}`:''}`,filas.join('\n'));
+  return T.join('\n\n').slice(0,110000);
+}
+
+// ═══ IA LOCAL: responde sin internet con los datos del teléfono (sin costo) ═══
+const iaNorm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+const iaMoney=n=>'$'+fmtN0(n);
+function iaVerMas(){
+  document.querySelectorAll('.ia-chip').forEach(b=>b.style.display='');
+  const m=document.getElementById('ia-mas'); if(m) m.remove();
+}
+function iaListar(arr,max,fn){
+  if(!arr.length) return '';
+  const l=arr.slice(0,max).map(fn).join('\n');
+  return l+(arr.length>max?`\n… y ${arr.length-max} más`:'');
+}
+function iaPesos(){
+  const idx={}; (DB.pesadas||[]).forEach(p=>{(idx[p.rp]||(idx[p.rp]=[])).push(p);});
+  Object.values(idx).forEach(l=>l.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)));
+  return a=>{
+    const l=idx[a.rp]||[], u=l[l.length-1], pr=l[l.length-2], pri=l[0];
+    let gdp=null; if(l.length>=2){const d=(new Date(u.fecha)-new Date(pri.fecha))/86400000; if(d>=1) gdp=(u.peso-pri.peso)/d;}
+    return {pesoAct:u?u.peso:(a.peso||null),pesoPrev:pr?pr.peso:null,gdp,fecha:u?u.fecha:''};
+  };
+}
+// Categorías mencionadas (terneros → Ternero M y Ternera H; vacas → Vaca; etc.)
+function iaCategorias(qn,animales){
+  const stem=w=>w.replace(/(es|s)$/,'').replace(/[oa]$/,'');
+  const qs=new Set(qn.split(' ').map(stem).filter(w=>w.length>=3));
+  const cats=[...new Set(animales.map(a=>a.categoria).filter(Boolean))];
+  return cats.filter(c=>qs.has(stem(iaNorm(c).split(' ')[0])));
+}
+// Potrero o lote mencionado, según el NOMBRE que le hayas puesto en Potreros
+function iaPotreroEn(qn){
+  const pots=(DB.potreros||[]).map(p=>p.nombre).filter(Boolean);
+  const dentro=n=>(' '+qn+' ').includes(' '+iaNorm(n)+' ');
+  let hit=pots.filter(dentro).sort((a,b)=>b.length-a.length)[0];
+  if(hit) return {nombre:hit};
+  const lotes=[...new Set((DB.pastoreos||[]).map(x=>x.lote).filter(Boolean))];
+  const lote=lotes.filter(dentro).sort((a,b)=>b.length-a.length)[0];
+  if(lote){
+    const pa=(DB.pastoreos||[]).filter(x=>x.lote===lote).sort((a,b)=>(b.entrada||'').localeCompare(a.entrada||''))[0];
+    return {nombre:pa.potrero,lote};
+  }
+  // nombre parcial: "norte" para un potrero llamado "Potrero Norte" (solo si es único)
+  const toks=pots.map(n=>({n,t:iaNorm(n).split(' ').filter(w=>w.length>=3&&!['potrero','lote','campo','el','la'].includes(w))}));
+  const cand=toks.filter(x=>x.t.some(w=>(' '+qn+' ').includes(' '+w+' ')));
+  if(cand.length===1) return {nombre:cand[0].n};
+  if(/\b(potrero|lote)\s+\w+/.test(qn)){
+    const m=qn.match(/\b(potrero|lote)\s+(\w+)/);
+    return {noEncontrado:true,mencion:m[1]+' '+m[2],potreros:pots,lotes};
+  }
+  return null;
+}
+function iaPeriodo(qn){
+  const hoy=new Date().toISOString().split('T')[0];
+  if(/este ano|en el ano|del ano|anual/.test(qn)) return {pref:hoy.slice(0,4),txt:'este año'};
+  if(/mes pasado|ultimo mes/.test(qn)){const d=new Date();d.setMonth(d.getMonth()-1);return {pref:d.toISOString().slice(0,7),txt:'el mes pasado'};}
+  return {pref:hoy.slice(0,7),txt:'este mes'};
+}
+
+// Devuelve el texto de respuesta, o null si no reconoce la pregunta (entonces consulta a la IA)
+function iaLocal(pregunta){
+  const qn=iaNorm(pregunta), hoy=new Date().toISOString().split('T')[0];
+  const has=re=>re.test(qn);
+  const activos=(DB.animales||[]).filter(a=>a.activo);
+  const info=iaPesos();
+  const pot=iaPotreroEn(qn);
+  const cats=iaCategorias(qn,DB.animales||[]);
+  const filtro=a=>(!pot||pot.noEncontrado||a.potrero===pot.nombre)&&(!cats.length||cats.includes(a.categoria));
+  const donde=pot&&!pot.noEncontrado?` en ${pot.lote?pot.lote+' (potrero '+pot.nombre+')':'el potrero '+pot.nombre}`:'';
+  if(pot&&pot.noEncontrado) return `No encontré "${pot.mencion}". Tus potreros: ${pot.potreros.join(', ')||'(ninguno cargado)'}${pot.lotes.length?'. Lotes: '+pot.lotes.join(', '):''}.`;
+  const ultTacto={}; (DB.tactos||[]).forEach(t=>{const x=ultTacto[t.rp];if(!x||new Date(t.fecha)>=new Date(x.fecha))ultTacto[t.rp]=t;});
+  const pren=t=>iaNorm(t.resultado).startsWith('prenad'), vac=t=>iaNorm(t.resultado).startsWith('vaci');
+
+  // ── Reproducción ──
+  if(has(/sin tact|no tact|falta\w* tact|nunca tact/)){
+    const l=activos.filter(a=>a.sexo==='Hembra'&&['Vaca','Vaquillona','Invernada Vientres'].includes(a.categoria)&&!ultTacto[a.rp]&&filtro(a));
+    return `Hay **${l.length}** hembras reproductoras${donde} sin ningún tacto registrado.`+(l.length?'\n'+iaListar(l,25,a=>`RP ${a.rp} (${a.categoria})`):'');
+  }
+  if(has(/porcentaje|%/)&&has(/prenez|prenad/)){
+    const ts=Object.values(ultTacto); if(!ts.length) return 'Todavía no hay tactos registrados.';
+    const f=ts.map(t=>t.fecha).sort().pop(); const grupo=(DB.tactos||[]).filter(t=>t.fecha===f);
+    const n=grupo.filter(pren).length;
+    return `En el último tacto (**${f}**) se revisaron **${grupo.length}** animales: **${n}** preñadas (**${grupo.length?(n/grupo.length*100).toFixed(1):0}%**) y ${grupo.filter(vac).length} vacías.`;
+  }
+  if(has(/prenad|vacias/)&&has(/cuant|cantidad|total/)){
+    const a=activos.filter(x=>filtro(x)&&ultTacto[x.rp]);
+    const p=a.filter(x=>pren(ultTacto[x.rp])).length, v=a.filter(x=>vac(ultTacto[x.rp])).length;
+    return `Según el último tacto de cada animal${donde}: **${p}** preñadas y **${v}** vacías (${a.length-p-v} con otro resultado).`;
+  }
+  if(has(/parto/)&&has(/proxim|dias|estimad|vienen|mes/)){
+    const m=qn.match(/(\d+) dias/); const dias=m?parseInt(m[1]):30;
+    const lim=new Date(Date.now()+dias*86400000).toISOString().split('T')[0];
+    const l=Object.values(ultTacto).filter(t=>t.parto&&t.parto>=hoy&&t.parto<=lim&&activos.some(a=>a.rp===t.rp)).sort((a,b)=>a.parto.localeCompare(b.parto));
+    return `**${l.length}** partos estimados en los próximos ${dias} días.`+(l.length?'\n'+iaListar(l,25,t=>`RP ${t.rp}: ${t.parto}`):'\n(Solo cuenta animales con fecha de parto cargada en el tacto.)');
+  }
+  if(has(/destet/)){const per=iaPeriodo(qn.includes('ano')?qn:qn+' este ano');const n=(DB.destetes||[]).filter(d=>(d.fecha||'').startsWith(per.pref)).length;return `Se registraron **${n}** destetes ${per.txt}.`;}
+  if(has(/aborto/)){const y=hoy.slice(0,4);const n=(DB.abortos||[]).length,ny=(DB.abortos||[]).filter(a=>(a.fecha||'').startsWith(y)).length;return `Registraste **${n}** abortos en total, **${ny}** este año.`;}
+
+  // ── Sanidad ──
+  if(has(/espera|retiro|carencia|apto|para vender|retenid/)){
+    const r=activos.map(a=>({a,r:chequearRetencionAnimal(a.rp)})).filter(x=>x.r&&filtro(x.a));
+    return `**${r.length}** animales${donde} no están aptos para faena todavía.`+(r.length?'\n'+iaListar(r,25,({a,r})=>`RP ${a.rp}: ${r.motivo}${r.fechaApto?' hasta '+r.fechaApto.toISOString().split('T')[0]:''}`):'');
+  }
+  if(has(/tratamiento/)&&has(/curso|actual|tienen|activo/)){
+    const l=(DB.tratamientos||[]).filter(t=>t.estado==='En Curso');
+    return `Hay **${l.length}** tratamientos en curso.`+(l.length?'\n'+iaListar(l,25,t=>`RP ${t.rp}: ${t.diag||'--'} · ${t.med||'--'} (desde ${t.fecha||'--'})`):'');
+  }
+  if(has(/vacun/)&&has(/venc|pendient|refuerzo|falta|toca|atrasad/)){
+    const ult={}; (DB.vacunas||[]).forEach(v=>{const k=v.rp+'|'+v.vacuna;if(!ult[k]||v.fecha>ult[k].fecha)ult[k]=v;});
+    const l=Object.values(ult).filter(v=>v.refuerzo&&v.refuerzo<=hoy&&activos.some(a=>a.rp===v.rp)).sort((a,b)=>a.refuerzo.localeCompare(b.refuerzo));
+    return `**${l.length}** animales tienen un refuerzo de vacuna vencido o para hoy.`+(l.length?'\n'+iaListar(l,25,v=>`RP ${v.rp}: ${v.vacuna} (refuerzo ${v.refuerzo})`):'');
+  }
+  if(has(/muert|mortandad|murieron|bajas por/)){
+    const m=DB.muertes||[]; const por={}; m.forEach(x=>{const k=x.tipo||'Sin tipo';por[k]=(por[k]||0)+1;});
+    const porCat={}; m.forEach(x=>{const a=(DB.animales||[]).find(y=>y.rp===x.rp);const k=(a&&a.categoria)||'Sin dato';porCat[k]=(porCat[k]||0)+1;});
+    return `Registraste **${m.length}** muertes.`+(m.length?`\nPor tipo: ${Object.entries(por).map(([k,v])=>`${k} ${v}`).join(' · ')}\nPor categoría: ${Object.entries(porCat).map(([k,v])=>`${k} ${v}`).join(' · ')}`:'');
+  }
+
+  // ── Peso y ganancia ──
+  if(has(/bajaron|perdieron|bajo de peso|perdida de peso|adelgaz/)){
+    const l=activos.map(a=>({a,i:info(a)})).filter(({a,i})=>filtro(a)&&i.pesoPrev!==null&&i.pesoAct!==null&&i.pesoAct<i.pesoPrev).sort((x,y)=>(x.i.pesoAct-x.i.pesoPrev)-(y.i.pesoAct-y.i.pesoPrev));
+    return `**${l.length}** animales${donde} bajaron de peso entre sus dos últimas pesadas.`+(l.length?'\n'+iaListar(l,20,({a,i})=>`RP ${a.rp} (${a.categoria}): ${i.pesoPrev} → ${i.pesoAct} kg (${(i.pesoAct-i.pesoPrev).toFixed(1)})`):'');
+  }
+  if(has(/mejor|peor|mayor|menor|top/)&&has(/ganancia|gdp|aumento|engord/)){
+    const l=activos.map(a=>({a,i:info(a)})).filter(({a,i})=>filtro(a)&&i.gdp!==null).sort((x,y)=>y.i.gdp-x.i.gdp);
+    if(!l.length) return 'No hay animales con 2 o más pesadas para calcular ganancia diaria.';
+    const f=({a,i})=>`RP ${a.rp} (${a.categoria}): ${i.gdp.toFixed(2)} kg/día`;
+    const k=Math.min(5,Math.ceil(l.length/2));
+    return `**Mejor ganancia diaria**${donde}:\n${l.slice(0,k).map(f).join('\n')}`+(l.length>k?`\n\n**Peor ganancia diaria**:\n${l.slice(-Math.min(5,l.length-k)).reverse().map(f).join('\n')}`:'');
+  }
+  if(has(/ganancia|gdp/)){
+    const l=activos.map(a=>({a,i:info(a)})).filter(({a,i})=>filtro(a)&&i.gdp!==null);
+    if(!l.length) return `No hay animales${donde} con 2 o más pesadas para calcular la ganancia diaria.`;
+    const prom=l.reduce((s,x)=>s+x.i.gdp,0)/l.length;
+    let extra='';
+    if(!pot){const por={};l.forEach(({a,i})=>{const o=por[a.potrero||'--']||(por[a.potrero||'--']={s:0,n:0});o.s+=i.gdp;o.n++;});extra='\nPor potrero: '+Object.entries(por).map(([k,o])=>`${k} ${(o.s/o.n).toFixed(2)}`).join(' · ');}
+    return `La ganancia diaria promedio${donde}${cats.length?' ('+cats.join(', ')+')':''} es de **${prom.toFixed(2)} kg/día** (${l.length} animales con 2+ pesadas, primera a última pesada).${extra}`;
+  }
+  if(has(/peso promedio|promedio de peso|cuanto pesan|pesan en promedio/)){
+    const l=activos.filter(filtro).map(a=>info(a).pesoAct).filter(x=>x);
+    if(!l.length) return 'No hay pesos cargados para ese grupo.';
+    return `El peso promedio${donde}${cats.length?' de '+cats.join(', '):''} es **${fmtN1(l.reduce((s,x)=>s+x,0)/l.length)} kg** (${l.length} animales con peso).`;
+  }
+  if(has(/nacier|nacimiento|nacidos/)){
+    const y=hoy.slice(0,4); const l=(DB.animales||[]).filter(a=>(a.fnac||'').startsWith(y)&&filtro(a));
+    return `**${l.length}** animales${donde} tienen fecha de nacimiento en ${y}.`;
+  }
+
+  // ── Economía ──
+  if(has(/margen/)&&has(/venta|vendi|ultima/)){
+    const v=[...(DB.ventas||[])].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))[0];
+    if(!v) return 'No hay ventas registradas.';
+    const ans=(v.rps||[]).map(rp=>(DB.animales||[]).find(a=>a.rp===rp)).filter(Boolean);
+    if(!ans.length) return `La última venta (${v.fecha}, ${v.comp||'--'}) fue de ${iaMoney(v.total)}, pero no tiene RP cargados, así que no puedo calcular el margen.`;
+    const r=ans.map(a=>calcularRentabilidadAnimal(a)).filter(Boolean);
+    const m=r.reduce((s,x)=>s+(x.margen||0),0), ing=r.reduce((s,x)=>s+(x.ingreso||0),0), cos=r.reduce((s,x)=>s+(x.costoTotal||0),0);
+    return `Última venta (${v.fecha}, ${v.comp||'--'}, ${ans.length} animales con RP): ingreso ${iaMoney(ing)} · costo ${iaMoney(cos)} · **margen ${iaMoney(m)}**.`;
+  }
+  if(has(/vendi|ventas|compre|compras|vendimos/)&&has(/cuant|total|mes|ano/)){
+    const per=iaPeriodo(qn); const f=x=>(x.fecha||'').startsWith(per.pref);
+    const v=(DB.ventas||[]).filter(f), c=(DB.compras||[]).filter(f);
+    return `Vendiste **${v.reduce((s,x)=>s+(x.cant||0),0)}** animales por **${iaMoney(v.reduce((s,x)=>s+(x.total||0),0))}** ${per.txt} (${v.length} operaciones) y compraste **${c.reduce((s,x)=>s+(x.cant||0),0)}** por **${iaMoney(c.reduce((s,x)=>s+(x.total||0),0))}** (${c.length} operaciones).`;
+  }
+  if(has(/gast/)&&has(/sanidad|veterin|tratamiento|remedio/)){
+    const per=iaPeriodo(qn); const t=(DB.tratamientos||[]).filter(x=>(x.fecha||'').startsWith(per.pref));
+    return `Gasto en tratamientos ${per.txt}: **${iaMoney(t.reduce((s,x)=>s+(x.costo||0),0))}** (${t.length} tratamientos). Las vacunas no tienen costo cargado, no están incluidas.`;
+  }
+  if(has(/gast|gaste|costo/)&&has(/aliment|racion|balanceado|comida/)){
+    const per=iaPeriodo(qn); const mes=per.pref;
+    const enc=(DB.encierres||[]).filter(e=>(e.fecha||'').startsWith(mes)), gE=enc.reduce((s,e)=>s+(e.costoTotal||0),0);
+    const ia={}; (DB.insumos||[]).forEach(i=>{if(['Balanceado','Sales minerales'].includes(i.categoria))ia[i.id]=i;});
+    const en=(DB.insumoLotes||[]).filter(l=>ia[l.insumoId]&&(l.fechaIngreso||'').startsWith(mes)), gI=en.reduce((s,l)=>s+(l.cantidadInicial||0)*(ia[l.insumoId].costoUnitario||0),0);
+    return `Gasto en alimentación ${per.txt}: **${iaMoney(gE+gI)}**\nEncierres/raciones: ${iaMoney(gE)} · Compras de balanceado y sales: ${iaMoney(gI)}`;
+  }
+  if(has(/romaneo|rinde|rendimiento/)){
+    const r=[...(DB.romaneos||[])].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))[0];
+    if(!r) return 'Todavía no cargaste romaneos.';
+    return `Último romaneo (${r.fecha}, ${r.frigo||'--'}): **${r.cant}** cabezas · rinde **${r.rinde?r.rinde.toFixed(2)+'%':'sin kg vivo cargado'}** · ${fmtN0(r.kgRes)} kg de res (${r.cant?fmtN1(r.kgRes/r.cant):'--'} kg/res) · neto ${iaMoney(r.total)}.`;
+  }
+
+  // ── Insumos, clima, potreros ──
+  if(has(/vencer|vencimiento|agotar|stock bajo|se acaba|faltan insumos/)){
+    const hoyD=new Date(); hoyD.setHours(0,0,0,0); const out=[];
+    (DB.insumos||[]).forEach(i=>{const st=stockActualInsumo(i.id);if(st<(i.stockMinimo||0))out.push(`🔴 ${i.nombre}: quedan ${st} ${i.unidad||''} (mínimo ${i.stockMinimo})`);});
+    (DB.insumoLotes||[]).forEach(l=>{if(l.cantidad<=0||!l.vencimiento)return;const d=Math.round((new Date(l.vencimiento)-hoyD)/86400000);if(d<=30){const i=(DB.insumos||[]).find(x=>x.id===l.insumoId);out.push(`⏰ ${(i&&i.nombre)||'Insumo'} (lote ${l.lote}): ${d<0?'vencido hace '+Math.abs(d)+' días':d===0?'vence hoy':'vence en '+d+' días'}`);}});
+    return out.length?out.join('\n'):'Sin insumos por agotarse ni por vencer en los próximos 30 días.';
+  }
+  if(has(/stock|cuanto (me )?queda|quedan|hay de/)){
+    const ins=(DB.insumos||[]).filter(i=>(' '+qn+' ').includes(' '+iaNorm(i.nombre)+' ')||qn.includes(iaNorm(i.categoria).replace(/ /g,' ').split(' ')[0])&&iaNorm(i.categoria).length>3);
+    const l=ins.length?ins:(DB.insumos||[]);
+    if(!l.length) return 'No hay insumos cargados.';
+    return l.slice(0,25).map(i=>`${i.nombre}: **${stockActualInsumo(i.id)}** ${i.unidad||''}${stockActualInsumo(i.id)<(i.stockMinimo||0)?' ⚠️ bajo el mínimo':''}`).join('\n');
+  }
+  if(has(/llovi|lluvia|precipitac|milimetros/)){
+    const per=iaPeriodo(qn); const l=(DB.precipitaciones||[]).filter(x=>(x.fecha||'').startsWith(per.pref));
+    return `${per.txt[0].toUpperCase()+per.txt.slice(1)} llovieron **${fmtN1(l.reduce((s,x)=>s+(parseFloat(x.mm)||0),0))} mm** (${l.length} registros).`;
+  }
+  if(has(/sobrecarg|exceso de carga|carga animal|pasados de carga/)){
+    const l=(DB.potreros||[]).map(p=>{const n=activos.filter(a=>a.potrero===p.nombre).length;const dens=p.ha>0?n/p.ha:0;return {p,n,dens};}).filter(x=>x.p.cargaMax>0&&x.dens>x.p.cargaMax);
+    return l.length?`**${l.length}** potreros superan su carga máxima (cabezas por hectárea):\n`+l.map(x=>`${x.p.nombre}: ${x.dens.toFixed(2)} cab/ha (máx. ${x.p.cargaMax}) · ${x.n} cab. en ${x.p.ha} ha`).join('\n'):'Ningún potrero supera la carga máxima cargada. (Se compara cabezas/ha contra la carga máx. de cada potrero.)';
+  }
+
+  // ── Conteos ──
+  if(has(/cuant|cantidad|total|hay en|tengo/)&&(has(/animal|cabeza|hacienda|rodeo|tengo/)||cats.length||pot)){
+    const l=activos.filter(filtro);
+    const por=fn=>{const o={};l.forEach(a=>{const k=fn(a)||'--';o[k]=(o[k]||0)+1;});return Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}: ${v}`).join(' · ');};
+    let t=`Tenés **${l.length}** ${cats.length?'animales ('+cats.join(' / ')+')':'animales'}${donde}.`;
+    if(!cats.length) t+=`\nPor categoría: ${por(a=>a.categoria)}`;
+    if(!pot) t+=`\nPor potrero: ${por(a=>a.potrero)}`;
+    return t;
+  }
+  return null;
+}
+
+async function iaPreguntar(texto){
+  if(_iaOcupado) return;
+  const inp=document.getElementById('ia-input');
+  const q=String(texto||inp.value||'').trim(); if(!q) return;
+  // 1) Motor local: exacto, instantáneo, sin internet y sin costo
+  let loc=null; try{ loc=iaLocal(q); }catch(e){ console.warn('iaLocal',e); }
+  if(loc){
+    inp.value=''; window._iaChat.push({rol:'u',texto:q},{rol:'a',texto:loc+'\n\n📱 respuesta calculada en tu teléfono'}); iaPintarChat(); return;
+  }
+  // 2) Pregunta libre: necesita la IA en línea
+  if(!navigator.onLine){
+    inp.value=''; window._iaChat.push({rol:'u',texto:q},{rol:'a',error:true,texto:'Esta pregunta necesita conexión a internet. Sin señal puedo responder las preguntas de la lista (cantidad de animales, tactos, pesos, ventas, stock, lluvia, etc.).'}); iaPintarChat(); return;
+  }
+  const estabId=window.ESTAB_ID_ACTIVO; if(!estabId){toast('No hay establecimiento activo','err');return;}
+  _iaOcupado=true; inp.value=''; document.getElementById('ia-enviar').disabled=true;
+  window._iaChat.push({rol:'u',texto:q}); const resp={rol:'a',cargando:true}; window._iaChat.push(resp); iaPintarChat();
+  try{
+    await firebase.auth().signInAnonymously().catch(()=>{});
+    const fn=firebase.app().functions('us-central1').httpsCallable('preguntarRodeoFlow',{timeout:65000});
+    const r=await fn({estabId,pregunta:q,contexto:iaConstruirContexto()});
+    resp.texto=(r.data&&r.data.respuesta)||'No pude armar una respuesta.'; resp.cargando=false;
+  }catch(e){
+    resp.cargando=false; resp.error=true;
+    const c=e&&e.code||'';
+    resp.texto=c.includes('not-found')?'La función de IA todavía no está desplegada en el servidor.':
+      c.includes('resource-exhausted')?(e.message||'Llegaste al límite de consultas de hoy.'):
+      c.includes('unauthenticated')?'No se pudo verificar la sesión. Reintentá en unos segundos.':
+      'No se pudo consultar a la IA ('+(e.message||'error')+').';
+  }
+  _iaOcupado=false; document.getElementById('ia-enviar').disabled=false; iaPintarChat();
 }
 
 function renderCompras(){
