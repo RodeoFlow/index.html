@@ -2613,8 +2613,14 @@
         <div id="ia-chips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
         <div id="ia-chat" style="min-height:120px;max-height:52vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
         <div style="display:flex;gap:8px">
-          <input type="text" id="ia-input" class="form-control" maxlength="400" placeholder="Escribí tu pregunta... ej: ¿Cuántos terneros tengo?" style="flex:1">
+          <input type="text" id="ia-input" class="form-control" maxlength="400" placeholder="Escribí o hablá tu pregunta... ej: ¿Cuántos terneros tengo?" style="flex:1">
+          <button class="btn-secondary" id="ia-mic" type="button" title="Preguntar con la voz" aria-label="Preguntar con la voz" onclick="iaMicToggle()" style="font-size:18px;padding:0 14px">🎤</button>
           <button class="btn-primary" id="ia-enviar" onclick="iaPreguntar()">Preguntar</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:13px;color:var(--text2)">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="ia-leer" onchange="iaGuardarLeer(this.checked)"> 🔊 Leer todas las respuestas en voz alta</label>
+          <button class="btn-secondary" id="ia-stop" type="button" onclick="iaCallar()" style="display:none;font-size:12px;padding:4px 10px">⏹ Detener voz</button>
+          <span id="ia-voz-estado" style="color:var(--text3)"></span>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:8px">Se envía a la IA un resumen de los datos de tu establecimiento solo para responder tu consulta. Requiere conexión a internet. Verificá los datos importantes antes de decidir.</div>
       </div>
@@ -11097,7 +11103,7 @@ function exportarRomaneosExcel(){
 }
 
 // ═══ IA: PREGUNTALE A RODEOFLOW ═══
-const IA_EJEMPLOS=['¿Cuántos terneros tengo?','¿Cuál fue la ganancia diaria del lote 4?','¿Cuántas vacas están sin tactar?','¿Qué animales bajaron de peso?','¿Cuál fue el rendimiento promedio del último romaneo?','¿Cuánto gasté en alimentación este mes?',
+const IA_EJEMPLOS=['¿Cuántos terneros tengo?','¿Cuál fue la ganancia diaria de cada lote?','¿Cuántas vacas están sin tactar?','¿Qué animales bajaron de peso?','¿Cuál fue el rendimiento promedio del último romaneo?','¿Cuánto gasté en alimentación este mes?',
  '¿Cuántos animales tengo por categoría y por potrero?','¿Cuál es el peso promedio de los novillos?','¿Cuáles son los animales con mejor y peor ganancia diaria?','¿Cuántos animales nacieron este año?',
  '¿Cuántas vacas están preñadas y cuántas vacías?','¿Cuál es el porcentaje de preñez del último tacto?','¿Qué vacas tienen parto estimado en los próximos 30 días?','¿Cuántos terneros se destetaron este año?','¿Cuántos abortos registré?',
  '¿Qué animales tienen tratamiento en curso?','¿Cuáles tienen la vacuna vencida o pendiente?','¿Qué animales están en período de espera para vender?','¿Cuántas muertes registré y de qué categoría?',
@@ -11115,6 +11121,8 @@ function iaRender(){
     ch.dataset.listo='1';
     document.getElementById('ia-input').addEventListener('keydown',e=>{if(e.key==='Enter')iaPreguntar();});
   }
+  const lc=document.getElementById('ia-leer'); if(lc) lc.checked=!!(DB.settings&&DB.settings.iaLeerRespuestas);
+  const mic=document.getElementById('ia-mic'); if(mic&&!(window.SpeechRecognition||window.webkitSpeechRecognition)){mic.style.display='none';}
   iaPintarChat();
 }
 function iaFmtRespuesta(t){return esc(String(t||'')).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>');}
@@ -11191,13 +11199,71 @@ function iaConstruirContexto(){
   sec('POTREROS (ha, carga máx., cabezas)',(DB.potreros||[]).map(p=>`${p.nombre}: ${p.ha||'?'} ha · cargaMax ${p.cargaMax||'?'} · ${activos.filter(a=>a.potrero===p.nombre).length} cab.`).join('\n')||'(sin potreros)');
   sec('MUERTES (por tipo)',JSON.stringify(cuenta(DB.muertes||[],m=>m.tipo))+` · total ${(DB.muertes||[]).length}`);
   const enMes=(arr)=>(arr||[]).filter(x=>(x.fecha||'').startsWith(mes));
-  sec('VENTAS Y COMPRAS DEL MES',`Ventas: ${enMes(DB.ventas).length} por $${Math.round(enMes(DB.ventas).reduce((s,x)=>s+(x.total||0),0))}. Compras: ${enMes(DB.compras).length} por $${Math.round(enMes(DB.compras).reduce((s,x)=>s+(x.total||0),0))}. Gasto en tratamientos del mes: $${Math.round(enMes(DB.tratamientos).reduce((s,x)=>s+(x.costo||0),0))}.`);
+  sec('VENTAS Y COMPRAS DEL MES',`Ventas: ${enMes(DB.ventas).length} por $${Math.round(enMes(DB.ventas).reduce((s,x)=>s+(x.total||0),0))}. Compras: ${enMes(DB.compras).length} por $${Math.round(enMes(DB.compras).reduce((s,x)=>s+(x.total||0),0))}. Gasto en sanidad del mes: tratamientos $${Math.round(enMes(DB.tratamientos).reduce((s,x)=>s+(x.costo||0),0))} + vacunas $${Math.round(enMes(DB.vacunas).reduce((s,x)=>s+(x.costo||0),0))}.`);
 
   // listado de animales (compacto, tope para no pasarse de tamaño)
   const tope=activos.length>900?600:900;
   const filas=infos.slice(0,tope).map(({a,i})=>[a.rp,a.categoria,(a.sexo||'')[0]||'',a.potrero||'',a.fnac||'',i.pesoAct??'',i.pesoPrev??'',f1(i.gdp),a.prenada||''].join('|'));
   sec(`ANIMALES ACTIVOS (rp|categoría|sexo|potrero|fnac|pesoAct|pesoPrev|GDP|preñez)${activos.length>tope?` — mostrando ${tope} de ${activos.length}`:''}`,filas.join('\n'));
   return T.join('\n\n').slice(0,110000);
+}
+
+// ═══ IA POR VOZ ═══
+let _iaRec=null, _iaEscuchando=false;
+function iaGuardarLeer(v){ DB.settings.iaLeerRespuestas=!!v; saveToStorage(); if(!v) iaCallar(); }
+function iaEstado(t){const e=document.getElementById('ia-voz-estado'); if(e) e.textContent=t||'';}
+
+// Convierte la respuesta en un texto que suene natural al leerlo
+function iaTextoParaVoz(t){
+  let x=String(t||'').split('\n\n📱')[0];
+  x=x.replace(/\*\*/g,'')
+     .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu,'')
+     .replace(/\$\s?([\d.,]+)/g,(m,n)=>n.replace(/\./g,'')+' pesos')
+     .replace(/(\d+(?:[.,]\d+)?)\s?%/g,'$1 por ciento')
+     .replace(/kg\/d[ií]a/gi,'kilos por día').replace(/cab\/ha/gi,'cabezas por hectárea')
+     .replace(/(\d)\s?kg\b/gi,'$1 kilos').replace(/(\d)\s?mm\b/gi,'$1 milímetros').replace(/(\d)\s?ha\b/gi,'$1 hectáreas')
+     .replace(/\bRP\s?/g,'caravana ').replace(/→/g,' a ').replace(/·/g,',').replace(/…/g,'.')
+     .replace(/\(([^)]*)\)/g,', $1,').replace(/ \/ /g,' y ').replace(/\n+/g,'. ')
+     .replace(/\s+,/g,',').replace(/,\s*(?=[.:])/g,'').replace(/:\./g,'.').replace(/(,\s*){2,}/g,', ').replace(/\.\s*,/g,'.').replace(/\s+\./g,'.').replace(/\.\s*\./g,'.').replace(/\s{2,}/g,' ').trim();
+  if(x.length>480){ const c=x.slice(0,480); x=c.slice(0,Math.max(c.lastIndexOf('. '),200))+'. El detalle completo está en pantalla.'; }
+  return x;
+}
+function iaHablar(texto){
+  if(!('speechSynthesis' in window)) return;
+  try{
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(iaTextoParaVoz(texto));
+    const voces=window.speechSynthesis.getVoices();
+    const v=voces.find(v=>v.lang==='es-AR')||voces.find(v=>v.lang==='es-US')||voces.find(v=>v.lang&&v.lang.startsWith('es'));
+    if(v) u.voice=v; u.lang=(v&&v.lang)||'es-AR'; u.rate=1;
+    const st=document.getElementById('ia-stop');
+    u.onstart=()=>{if(st)st.style.display='';};
+    u.onend=u.onerror=()=>{if(st)st.style.display='none';};
+    window.speechSynthesis.speak(u);
+  }catch(e){console.warn('iaHablar',e);}
+}
+function iaCallar(){ try{window.speechSynthesis.cancel();}catch(e){} const st=document.getElementById('ia-stop'); if(st) st.style.display='none'; }
+function iaLeer(texto,porVoz){ if(porVoz||(DB.settings&&DB.settings.iaLeerRespuestas)) iaHablar(texto); }
+
+function iaMicToggle(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){toast('Este navegador no soporta dictado por voz. Probá con Chrome.','err');return;}
+  if(_iaEscuchando){ try{_iaRec.stop();}catch(e){} return; }
+  iaCallar();
+  const mic=document.getElementById('ia-mic');
+  _iaRec=new SR(); _iaRec.lang='es-AR'; _iaRec.interimResults=false; _iaRec.maxAlternatives=1; _iaRec.continuous=false;
+  let texto='';
+  _iaRec.onstart=()=>{_iaEscuchando=true;mic.textContent='⏺';mic.style.background='var(--red)';iaEstado('Escuchando… hablá ahora');};
+  _iaRec.onresult=e=>{texto=(e.results[0]&&e.results[0][0]&&e.results[0][0].transcript)||'';};
+  _iaRec.onerror=e=>{
+    const m={'not-allowed':'Permití el micrófono en el navegador para usar la voz.','service-not-allowed':'Permití el micrófono en el navegador para usar la voz.','no-speech':'No te escuché. Probá de nuevo.','network':'El dictado necesita conexión a internet.','audio-capture':'No encuentro el micrófono.'}[e.error]||'No se pudo usar el micrófono ('+e.error+').';
+    toast(m,'err');
+  };
+  _iaRec.onend=()=>{
+    _iaEscuchando=false;mic.textContent='🎤';mic.style.background='';iaEstado('');
+    texto=texto.trim(); if(texto) iaPreguntar(texto,true);
+  };
+  try{_iaRec.start();}catch(e){toast('No se pudo iniciar el micrófono','err');}
 }
 
 // ═══ IA LOCAL: responde sin internet con los datos del teléfono (sin costo) ═══
@@ -11328,6 +11394,18 @@ function iaLocal(pregunta){
     const k=Math.min(5,Math.ceil(l.length/2));
     return `**Mejor ganancia diaria**${donde}:\n${l.slice(0,k).map(f).join('\n')}`+(l.length>k?`\n\n**Peor ganancia diaria**:\n${l.slice(-Math.min(5,l.length-k)).reverse().map(f).join('\n')}`:'');
   }
+  if(has(/ganancia|gdp/)&&has(/cada lote|por lote|todos los lotes|los lotes|de lotes/)&&!pot){
+    const act=(DB.pastoreos||[]).filter(x=>x.lote&&!x.salida);
+    const porLote={}; act.sort((a,b)=>(a.entrada||'').localeCompare(b.entrada||'')).forEach(x=>{porLote[x.lote]=x;});
+    const nombres=Object.keys(porLote);
+    if(!nombres.length) return 'No tenés lotes activos cargados en Pastoreos, así que no puedo separar por lote. Si querés, preguntame por potrero.';
+    const filas=nombres.map(n=>{
+      const potN=porLote[n].potrero;
+      const l=activos.filter(a=>a.potrero===potN).map(a=>info(a).gdp).filter(g=>g!==null);
+      return l.length?`**${n}** (potrero ${potN}): **${(l.reduce((s,x)=>s+x,0)/l.length).toFixed(2)} kg/día** · ${l.length} animales con 2+ pesadas`:`**${n}** (potrero ${potN}): sin animales con 2 o más pesadas`;
+    });
+    return `Ganancia diaria promedio por lote (primera a última pesada de los animales que hoy están en el potrero del lote):\n${filas.join('\n')}`;
+  }
   if(has(/ganancia|gdp/)){
     const l=activos.map(a=>({a,i:info(a)})).filter(({a,i})=>filtro(a)&&i.gdp!==null);
     if(!l.length) return `No hay animales${donde} con 2 o más pesadas para calcular la ganancia diaria.`;
@@ -11362,8 +11440,9 @@ function iaLocal(pregunta){
     return `Vendiste **${v.reduce((s,x)=>s+(x.cant||0),0)}** animales por **${iaMoney(v.reduce((s,x)=>s+(x.total||0),0))}** ${per.txt} (${v.length} operaciones) y compraste **${c.reduce((s,x)=>s+(x.cant||0),0)}** por **${iaMoney(c.reduce((s,x)=>s+(x.total||0),0))}** (${c.length} operaciones).`;
   }
   if(has(/gast/)&&has(/sanidad|veterin|tratamiento|remedio/)){
-    const per=iaPeriodo(qn); const t=(DB.tratamientos||[]).filter(x=>(x.fecha||'').startsWith(per.pref));
-    return `Gasto en tratamientos ${per.txt}: **${iaMoney(t.reduce((s,x)=>s+(x.costo||0),0))}** (${t.length} tratamientos). Las vacunas no tienen costo cargado, no están incluidas.`;
+    const per=iaPeriodo(qn); const t=(DB.tratamientos||[]).filter(x=>(x.fecha||'').startsWith(per.pref)), v=(DB.vacunas||[]).filter(x=>(x.fecha||'').startsWith(per.pref));
+    const gT=t.reduce((s,x)=>s+(x.costo||0),0), gV=v.reduce((s,x)=>s+(x.costo||0),0), sinCosto=v.filter(x=>!x.costo).length;
+    return `Gasto en sanidad ${per.txt}: **${iaMoney(gT+gV)}**\nTratamientos: ${iaMoney(gT)} (${t.length}) · Vacunas: ${iaMoney(gV)} (${v.length} aplicaciones)`+(sinCosto?`\n⚠️ ${sinCosto} vacunas no tienen costo cargado, no suman al total.`:'');
   }
   if(has(/gast|gaste|costo/)&&has(/aliment|racion|balanceado|comida/)){
     const per=iaPeriodo(qn); const mes=per.pref;
@@ -11412,18 +11491,18 @@ function iaLocal(pregunta){
   return null;
 }
 
-async function iaPreguntar(texto){
+async function iaPreguntar(texto,porVoz){
   if(_iaOcupado) return;
   const inp=document.getElementById('ia-input');
   const q=String(texto||inp.value||'').trim(); if(!q) return;
   // 1) Motor local: exacto, instantáneo, sin internet y sin costo
   let loc=null; try{ loc=iaLocal(q); }catch(e){ console.warn('iaLocal',e); }
   if(loc){
-    inp.value=''; window._iaChat.push({rol:'u',texto:q},{rol:'a',texto:loc+'\n\n📱 respuesta calculada en tu teléfono'}); iaPintarChat(); return;
+    inp.value=''; window._iaChat.push({rol:'u',texto:q},{rol:'a',texto:loc+'\n\n📱 respuesta calculada en tu teléfono'}); iaPintarChat(); iaLeer(loc,porVoz); return;
   }
   // 2) Pregunta libre: necesita la IA en línea
   if(!navigator.onLine){
-    inp.value=''; window._iaChat.push({rol:'u',texto:q},{rol:'a',error:true,texto:'Esta pregunta necesita conexión a internet. Sin señal puedo responder las preguntas de la lista (cantidad de animales, tactos, pesos, ventas, stock, lluvia, etc.).'}); iaPintarChat(); return;
+    inp.value=''; window._iaChat.push({rol:'u',texto:q},{rol:'a',error:true,texto:'Esta pregunta necesita conexión a internet. Sin señal puedo responder las preguntas de la lista (cantidad de animales, tactos, pesos, ventas, stock, lluvia, etc.).'}); iaPintarChat(); iaLeer('Esta pregunta necesita conexión a internet.',porVoz); return;
   }
   const estabId=window.ESTAB_ID_ACTIVO; if(!estabId){toast('No hay establecimiento activo','err');return;}
   _iaOcupado=true; inp.value=''; document.getElementById('ia-enviar').disabled=true;
@@ -11432,7 +11511,7 @@ async function iaPreguntar(texto){
     await firebase.auth().signInAnonymously().catch(()=>{});
     const fn=firebase.app().functions('us-central1').httpsCallable('preguntarRodeoFlow',{timeout:65000});
     const r=await fn({estabId,pregunta:q,contexto:iaConstruirContexto()});
-    resp.texto=(r.data&&r.data.respuesta)||'No pude armar una respuesta.'; resp.cargando=false;
+    resp.texto=(r.data&&r.data.respuesta)||'No pude armar una respuesta.'; resp.cargando=false; iaLeer(resp.texto,porVoz);
   }catch(e){
     resp.cargando=false; resp.error=true;
     const c=e&&e.code||'';
