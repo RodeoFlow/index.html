@@ -6042,16 +6042,16 @@ function renderLluvias(){
   const box=document.getElementById('lluvias-box'); if(!box) return;
   const regs=(DB.precipitaciones||[]).filter(p=>p && p.fecha && parseFloat(p.mm)>0);
   const hoy=lluviaHoy(), anioAct=parseInt(hoy.slice(0,4));
-  const anios=[...new Set(regs.map(p=>parseInt(p.fecha.slice(0,4))).concat([anioAct]))].sort((a,b)=>b-a);
+  const anios=[...new Set(regs.map(p=>parseInt(p.fecha.slice(0,4))).concat([anioAct,anioAct+1]))].sort((a,b)=>b-a);
   if(!_lluviaAnio || !anios.includes(_lluviaAnio)) _lluviaAnio=anioAct;
-  const A=_lluviaAnio, P=A-1;
+  const A=_lluviaAnio, P=A-1, N=A+1;
   const selA=document.getElementById('lluvia-anio');
   if(selA) selA.innerHTML=anios.map(a=>`<option value="${a}" ${a===A?'selected':''}>${a}</option>`).join('');
   const fEl=document.getElementById('lluvia-fecha'); if(fEl && !fEl.value) fEl.value=hoy;
   const selP=document.getElementById('lluvia-potrero');
   if(selP){ const cur=selP.value; selP.innerHTML='<option value="">-- Todo el campo --</option>'+(DB.potreros||[]).map(p=>`<option value="${esc(p.nombre)}" ${cur===p.nombre?'selected':''}>${esc(p.nombre)}</option>`).join(''); }
 
-  const ya=lluviaPorMes(regs,A), yp=lluviaPorMes(regs,P);
+  const ya=lluviaPorMes(regs,A), yn=lluviaPorMes(regs,N);
   const totA=ya.m.reduce((s,v)=>s+v,0), diasA=ya.d.reduce((s,v)=>s+v,0);
   const corte=(A===anioAct)?hoy.slice(5):'12-31';
   const totPprev=regs.filter(p=>p.fecha.startsWith(P+'-') && p.fecha.slice(5)<=corte).reduce((s,p)=>s+(parseFloat(p.mm)||0),0);
@@ -6069,19 +6069,19 @@ function renderLluvias(){
     ${kpi('Máx. en un día', maxReg?`${parseFloat(maxReg.mm).toFixed(0)} mm <span style="font-size:11px;color:var(--text3);font-weight:400">${lluviaFmtF(maxReg.fecha)}</span>`:'—')}
     ${kpi(`Prom. anual${otros.length?` (${otros.length} ${otros.length===1?'año':'años'})`:''}`, promOtros!==null?promOtros.toFixed(0)+' mm':'—')}
   </div>
-  <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px">${A===anioAct?'Al '+lluviaFmtF(hoy)+' vs mismo período del año anterior':'Año completo vs año anterior'}: ${difTxt}</div>`;
+  ${totPprev>0?`<div style="font-size:12.5px;color:var(--text2);margin-bottom:12px">${A===anioAct?'Al '+lluviaFmtF(hoy)+' vs mismo período del año anterior':'Año completo vs año anterior'}: ${difTxt}</div>`:''}`;
 
-  const maxV=Math.max(1,...ya.m,...yp.m);
+  const maxV=Math.max(1,...ya.m,...yn.m);
   html+=`<div style="display:flex;gap:4px;align-items:flex-end;height:120px;margin-bottom:4px">`+
-    LLUVIA_MESES.map((_,i)=>`<div style="flex:1;display:flex;gap:2px;align-items:flex-end;height:100%" title="${LLUVIA_MESES[i]}: ${ya.m[i].toFixed(0)} mm (${A}) · ${yp.m[i].toFixed(0)} mm (${P})">
+    LLUVIA_MESES.map((_,i)=>`<div style="flex:1;display:flex;gap:2px;align-items:flex-end;height:100%" title="${LLUVIA_MESES[i]}: ${ya.m[i].toFixed(0)} mm (${A}) · ${yn.m[i].toFixed(0)} mm (${N})">
       <div style="flex:1;background:var(--blue);border-radius:3px 3px 0 0;height:${(ya.m[i]/maxV*100).toFixed(1)}%;min-height:${ya.m[i]>0?2:0}px"></div>
-      <div style="flex:1;background:var(--text3);opacity:.45;border-radius:3px 3px 0 0;height:${(yp.m[i]/maxV*100).toFixed(1)}%;min-height:${yp.m[i]>0?2:0}px"></div></div>`).join('')+`</div>
+      <div style="flex:1;background:var(--text3);opacity:.45;border-radius:3px 3px 0 0;height:${(yn.m[i]/maxV*100).toFixed(1)}%;min-height:${yn.m[i]>0?2:0}px"></div></div>`).join('')+`</div>
     <div style="display:flex;gap:4px;font-size:10px;color:var(--text3);text-align:center;margin-bottom:6px">${LLUVIA_MESES.map(m=>`<div style="flex:1">${m}</div>`).join('')}</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:12px"><span style="color:var(--blue)">■</span> ${A} &nbsp; <span style="opacity:.6">■</span> ${P}</div>`;
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px"><span style="color:var(--blue)">■</span> ${A} &nbsp; <span style="opacity:.6">■</span> ${N}</div>`;
 
-  html+=`<div class="tbl-wrap"><table><thead><tr><th>Mes</th><th>mm ${A}</th><th>Días</th><th>mm ${P}</th><th>Dif.</th></tr></thead><tbody>`+
-    LLUVIA_MESES.map((n,i)=>{ const dif=ya.m[i]-yp.m[i]; return `<tr><td>${n}</td><td><b>${ya.m[i]?ya.m[i].toFixed(0):'—'}</b></td><td>${ya.d[i]||'—'}</td><td>${yp.m[i]?yp.m[i].toFixed(0):'—'}</td><td style="color:${dif>=0?'var(--blue)':'var(--amber)'}">${(ya.m[i]||yp.m[i])?(dif>=0?'+':'')+dif.toFixed(0):'—'}</td></tr>`; }).join('')+
-    `<tr style="font-weight:700"><td>Total</td><td>${totA.toFixed(0)}</td><td>${diasA}</td><td>${yp.m.reduce((s,v)=>s+v,0).toFixed(0)}</td><td></td></tr></tbody></table></div>`;
+  html+=`<div class="tbl-wrap"><table><thead><tr><th>Mes</th><th>mm ${A}</th><th>Días</th><th>mm ${N}</th></tr></thead><tbody>`+
+    LLUVIA_MESES.map((n,i)=>`<tr><td>${n}</td><td><b>${ya.m[i]?ya.m[i].toFixed(0):'—'}</b></td><td>${ya.d[i]||'—'}</td><td>${yn.m[i]?yn.m[i].toFixed(0):'—'}</td></tr>`).join('')+
+    `<tr style="font-weight:700"><td>Total</td><td>${totA.toFixed(0)}</td><td>${diasA}</td><td>${yn.m.reduce((s,v)=>s+v,0).toFixed(0)}</td></tr></tbody></table></div>`;
 
   const lista=[...delAnio].sort((a,b)=>b.fecha.localeCompare(a.fecha));
   html+=`<div style="font-weight:700;font-size:13px;margin:14px 0 6px">Registros ${A} (${lista.length})</div>`;
