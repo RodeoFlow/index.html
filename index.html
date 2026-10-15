@@ -1011,6 +1011,7 @@
           <option value="">Todos los potreros</option>
         </select>
         <div class="toolbar-right">
+          <button class="btn-secondary" onclick="impReset();openModal('modal-import-animales')">📥 Importar</button>
           <button class="btn-secondary" onclick="exportExcelCompleto()">📊 Excel</button>
           <button class="btn-primary" onclick="openModalAnimal()">＋ Alta animal</button>
         </div>
@@ -2948,6 +2949,37 @@
 ════════════════════════════════════════════════════ -->
 
 <!-- Modal: Alta Animal -->
+<!-- Modal: Importar animales desde otra app (Excel / CSV) -->
+<div id="modal-import-animales" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">📥 Importar animales</div><button class="modal-close" onclick="closeModal('modal-import-animales')">✕</button></div>
+    <div class="modal-body">
+      <div id="imp-paso1">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Traé tu rodeo desde otra aplicación: exportá la lista de animales a <b>Excel (.xlsx) o CSV</b> y cargala acá. Antes de importar vas a poder revisar todo.</p>
+        <input type="file" id="imp-file" accept=".xlsx,.xls,.csv,.txt" style="display:none" onchange="impLeerArchivo(this)">
+        <button class="btn-primary" style="width:100%;margin-bottom:8px" onclick="document.getElementById('imp-file').click()">📂 Elegir archivo Excel / CSV</button>
+        <button class="btn-secondary" style="width:100%" onclick="impPlanillaModelo()">📄 Bajar planilla modelo</button>
+        <p style="font-size:12px;color:var(--text3);margin-top:10px">Solo el RP es obligatorio. Las fechas se leen como día/mes/año. Si la otra app solo exporta PDF, pedí la lista en Excel o CSV.</p>
+      </div>
+      <div id="imp-paso2" style="display:none">
+        <div style="font-size:13px;margin-bottom:10px"><b id="imp-nombre-arch"></b> · <span id="imp-filas-total"></span> filas</div>
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px">1. Revisá las columnas</div>
+        <div id="imp-mapeo"></div>
+        <div class="form-row" style="margin-top:10px">
+          <div class="form-group"><label class="form-label">Si no se reconoce la categoría (machos)</label>
+            <select id="imp-cat-m" class="form-control" onchange="impPreview()"><option>Novillo</option><option>Novillito</option><option>Toro</option><option>Torito</option><option>Ternero M</option><option>Invernada Machos</option></select></div>
+          <div class="form-group"><label class="form-label">Si no se reconoce la categoría (hembras)</label>
+            <select id="imp-cat-h" class="form-control" onchange="impPreview()"><option>Vaca</option><option>Vaquillona</option><option>Ternera H</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select></div>
+        </div>
+        <div style="font-weight:700;font-size:13px;margin:10px 0 6px">2. Resultado</div>
+        <div id="imp-resumen"></div>
+        <div class="tbl-wrap" style="max-height:220px;overflow:auto;margin-top:8px"><table id="imp-tabla"></table></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-import-animales')">Cancelar</button><button class="btn-primary" id="imp-btn-confirmar" style="display:none" onclick="impConfirmar()">Importar</button></div>
+  </div>
+</div>
+
 <div id="modal-animal" class="modal-overlay">
   <div class="modal">
     <div class="modal-header"><div class="modal-title">🐄 Alta de Animal</div><button class="modal-close" onclick="closeModal('modal-animal')">✕</button></div>
@@ -6946,6 +6978,217 @@ function quitarFotoAnimal(prefix){
   if(quitar) quitar.style.display = 'none';
   const input = document.getElementById(prefix+'-foto-input');
   if(input) input.value = '';
+}
+
+// ── IMPORTAR ANIMALES DESDE EXCEL / CSV (migración desde otra app) ──
+const IMP_CATEGORIAS=['Novillo','Novillito','Vaca','Vaquillona','Toro','Torito','Ternero M','Ternera H','Invernada Machos','Invernada Hembras','Invernada Vientres'];
+const IMP_CAT_HEMBRA=['Vaca','Vaquillona','Ternera H','Invernada Hembras','Invernada Vientres'];
+const IMP_RAZAS=['Aberdeen Angus','Hereford','Brangus','Braford','Shorthorn','Criolla','Cruza'];
+const IMP_CAMPOS=[
+  {k:'rp',l:'RP (caravana visual) *',a:['rp','caravana','caravanavisual','idv','numero','nro','n','id','caratula','tag','visual']},
+  {k:'rfid',l:'RFID / EID',a:['rfid','eid','caravanaelectronica','caravanarfid','electronica','idelectronico','chip']},
+  {k:'categoria',l:'Categoría',a:['categoria','cat','clase','tipo']},
+  {k:'sexo',l:'Sexo',a:['sexo','sex']},
+  {k:'raza',l:'Raza',a:['raza','breed']},
+  {k:'color',l:'Color',a:['color','pelaje','capa']},
+  {k:'fnac',l:'Fecha de nacimiento',a:['fechanacimiento','fechadenacimiento','fechanac','fnac','fnacimiento','nacimiento']},
+  {k:'peso',l:'Peso (kg)',a:['peso','kg','pesokg','pesoactual','ultimopeso']},
+  {k:'potrero',l:'Potrero',a:['potrero','lote','parcela','ubicacion']},
+  {k:'proc',l:'Procedencia',a:['procedencia','origen','proveedor']},
+  {k:'nombre',l:'Nombre',a:['nombre','name','apodo']},
+  {k:'obs',l:'Observaciones',a:['observaciones','observacion','obs','notas','comentarios']}
+];
+const IMP_MAX_FILAS=3000;
+let _imp=null;
+function impNorm(s){ return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+function impTxt(v){ return String(v==null?'':v).trim(); }
+function impReset(){
+  _imp=null;
+  const p1=document.getElementById('imp-paso1'), p2=document.getElementById('imp-paso2'), b=document.getElementById('imp-btn-confirmar');
+  if(p1) p1.style.display=''; if(p2) p2.style.display='none'; if(b) b.style.display='none';
+}
+function impParseCSV(txt){
+  txt=txt.replace(/^\uFEFF/,'');
+  const first=txt.split(/\r?\n/).find(l=>l.trim())||'';
+  const d=[';',',','\t'].map(c=>[c,first.split(c).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows=[]; let row=[], cur='', q=false;
+  const cerrar=()=>{ row.push(cur); cur=''; if(row.some(c=>String(c).trim()!=='')) rows.push(row); row=[]; };
+  for(let i=0;i<txt.length;i++){
+    const ch=txt[i];
+    if(q){ if(ch==='"'){ if(txt[i+1]==='"'){ cur+='"'; i++; } else q=false; } else cur+=ch; }
+    else if(ch==='"') q=true;
+    else if(ch===d){ row.push(cur); cur=''; }
+    else if(ch==='\n'||ch==='\r'){ if(ch==='\r'&&txt[i+1]==='\n') i++; cerrar(); }
+    else cur+=ch;
+  }
+  if(cur!==''||row.length) cerrar();
+  return rows;
+}
+async function impLeerArchivo(input){
+  const f=input.files&&input.files[0]; if(!f) return;
+  if(/\.pdf$/i.test(f.name)){ toast('Un PDF no se puede importar. Exportá la lista a Excel o CSV desde la otra app.','err'); input.value=''; return; }
+  if(f.size>8*1024*1024){ toast('El archivo es muy grande (máx. 8 MB)','err'); input.value=''; return; }
+  try{
+    let filas;
+    const buf=await f.arrayBuffer();
+    if(/\.(csv|txt)$/i.test(f.name)){
+      let txt=new TextDecoder('utf-8').decode(buf);
+      if(txt.includes('\uFFFD')) txt=new TextDecoder('windows-1252').decode(buf);
+      filas=impParseCSV(txt);
+    } else {
+      if(typeof XLSX==='undefined'){ toast('No se pudo cargar el lector de Excel','err'); input.value=''; return; }
+      const wb=XLSX.read(buf,{type:'array'});
+      filas=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true,blankrows:false});
+    }
+    impCargarFilas(filas, f.name);
+  }catch(e){ console.error(e); toast('No se pudo leer el archivo','err'); }
+  input.value='';
+}
+function impAutoMapear(headers){
+  const map={}, usado=new Set(), nh=headers.map(impNorm);
+  IMP_CAMPOS.forEach(c=>{ const i=nh.findIndex((h,ix)=>!usado.has(ix)&&c.a.includes(h)); if(i>=0){ map[c.k]=i; usado.add(i); } });
+  IMP_CAMPOS.forEach(c=>{
+    if(map[c.k]!==undefined) return;
+    const i=nh.findIndex((h,ix)=>!usado.has(ix)&&h.length>=3&&c.a.some(a=>a.length>=3&&(h.includes(a)||a.includes(h))));
+    if(i>=0){ map[c.k]=i; usado.add(i); }
+  });
+  return map;
+}
+function impCargarFilas(filas, nombre){
+  const hi=filas.slice(0,10).findIndex(r=>r.filter(c=>impTxt(c)!=='').length>=2);
+  if(hi<0){ toast('No se encontraron columnas en el archivo','err'); return; }
+  const headers=filas[hi].map((h,i)=>impTxt(h)||('Columna '+(i+1)));
+  const data=filas.slice(hi+1).filter(r=>r.some(c=>impTxt(c)!==''));
+  if(!data.length){ toast('El archivo no tiene filas con datos','err'); return; }
+  if(data.length>IMP_MAX_FILAS){ toast(`El archivo tiene ${data.length} filas. Importá hasta ${IMP_MAX_FILAS} por vez (dividí la planilla).`,'err'); return; }
+  _imp={headers,data,nombre,map:impAutoMapear(headers)};
+  document.getElementById('imp-nombre-arch').textContent=nombre;
+  document.getElementById('imp-filas-total').textContent=data.length;
+  document.getElementById('imp-paso1').style.display='none';
+  document.getElementById('imp-paso2').style.display='';
+  impRenderMapeo(); impPreview();
+}
+function impRenderMapeo(){
+  const box=document.getElementById('imp-mapeo'); if(!box||!_imp) return;
+  box.innerHTML=IMP_CAMPOS.map(c=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px"><span style="font-size:13px;flex:1">${c.l}</span><select class="form-control" style="flex:1;padding:5px 8px;font-size:13px" onchange="impCambiarMapa('${c.k}',this.value)"><option value="">— No importar —</option>${_imp.headers.map((h,i)=>`<option value="${i}" ${_imp.map[c.k]===i?'selected':''}>${esc(h)}</option>`).join('')}</select></div>`).join('');
+}
+function impCambiarMapa(k,v){ if(!_imp) return; if(v==='') delete _imp.map[k]; else _imp.map[k]=parseInt(v); impPreview(); }
+function impFechaISO(y,m,d){ y=+y; m=+m; d=+d; if(m<1||m>12||d<1||y<1900||y>2100||d>new Date(Date.UTC(y,m,0)).getUTCDate()) return null; return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
+function impFecha(v){
+  if(v===''||v==null) return '';
+  if(typeof v==='number'){
+    if(v>20000&&v<80000){ const dt=new Date(Math.round((v-25569)*86400000)); return impFechaISO(dt.getUTCFullYear(),dt.getUTCMonth()+1,dt.getUTCDate()); }
+    return null;
+  }
+  const t=impTxt(v); if(!t) return '';
+  if(/^\d{5}$/.test(t)) return impFecha(parseInt(t,10));
+  let m=t.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m) return impFechaISO(m[1],m[2],m[3]);
+  m=t.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/);
+  if(m){ let y=+m[3]; if(y<100) y+=(y>50?1900:2000); return impFechaISO(y,m[2],m[1]); }
+  return null;
+}
+function impPeso(v){
+  if(typeof v==='number') return v>0&&v<=2000?v:0;
+  let t=impTxt(v).replace(/[^0-9.,]/g,'');
+  if(t.includes('.')&&t.includes(',')) t=t.replace(/\./g,'');
+  const n=parseFloat(t.replace(',','.'));
+  return (n>0&&n<=2000)?n:0;
+}
+function impCategoria(t){
+  const n=impNorm(t); if(!n) return null;
+  const ex=IMP_CATEGORIAS.find(c=>impNorm(c)===n); if(ex) return ex;
+  const sin={novillos:'Novillo',vacas:'Vaca',toros:'Toro',vaquillonas:'Vaquillona',novillitos:'Novillito',toritos:'Torito',ternero:'Ternero M',terneros:'Ternero M',ternera:'Ternera H',terneras:'Ternera H'};
+  return sin[n]||null;
+}
+function impRaza(t){
+  const n=impNorm(t); if(!n) return '';
+  const ex=IMP_RAZAS.find(r=>impNorm(r)===n); if(ex) return ex;
+  if(n.includes('angus')||n==='aa') return 'Aberdeen Angus';
+  return t;
+}
+function impProcesar(){
+  const m=_imp.map, g=(r,k)=>m[k]===undefined?'':r[m[k]];
+  const catM=(document.getElementById('imp-cat-m')||{}).value||'Novillo', catH=(document.getElementById('imp-cat-h')||{}).value||'Vaca';
+  const rpEx=new Set((DB.animales||[]).map(a=>String(a.rp).trim()));
+  const rfEx=new Set((DB.animales||[]).map(a=>String(a.rfid||'').trim()).filter(Boolean));
+  const rpVis=new Set(), rfVis=new Set();
+  const res={ok:[],sinRp:0,dupDB:0,dupArch:0,catDef:0,sexoSup:0,potNo:new Set(),potNoN:0,rfidDup:0,fechaMala:0};
+  _imp.data.forEach(r=>{
+    const rp=impTxt(g(r,'rp'));
+    if(!rp){ res.sinRp++; return; }
+    if(rpEx.has(rp)){ res.dupDB++; return; }
+    if(rpVis.has(rp)){ res.dupArch++; return; }
+    rpVis.add(rp);
+    const notas=[];
+    const catOrig=impTxt(g(r,'categoria')), sexoTxt=impNorm(g(r,'sexo'));
+    let cat=impCategoria(catOrig), sexo='';
+    if(sexoTxt){ if(sexoTxt[0]==='m') sexo='Macho'; else if(sexoTxt[0]==='h'||sexoTxt[0]==='f') sexo='Hembra'; }
+    if(!sexo){ if(cat) sexo=IMP_CAT_HEMBRA.includes(cat)?'Hembra':'Macho'; else { sexo='Macho'; res.sexoSup++; } }
+    if(!cat){ cat=sexo==='Hembra'?catH:catM; res.catDef++; if(catOrig) notas.push('Categoría original: '+catOrig); }
+    let rfid=impTxt(g(r,'rfid'));
+    if(rfid&&(rfEx.has(rfid)||rfVis.has(rfid))){ notas.push('RFID repetido en origen: '+rfid); rfid=''; res.rfidDup++; }
+    if(rfid) rfVis.add(rfid);
+    let fnac=impFecha(g(r,'fnac'));
+    if(fnac===null){ notas.push('F. nacimiento original: '+impTxt(g(r,'fnac'))); fnac=''; res.fechaMala++; }
+    let potrero=impTxt(g(r,'potrero'));
+    if(potrero){
+      const p=(DB.potreros||[]).find(x=>impNorm(x.nombre)===impNorm(potrero));
+      if(p) potrero=p.nombre; else { res.potNo.add(potrero); res.potNoN++; notas.push('Potrero original: '+potrero); potrero=''; }
+    }
+    const obs=[impTxt(g(r,'obs')),...notas].filter(Boolean).join(' · ');
+    res.ok.push({id:0,rp,nombre:impTxt(g(r,'nombre')),rfid,categoria:cat,sexo,raza:impRaza(impTxt(g(r,'raza'))),color:impTxt(g(r,'color')),fnac,peso:impPeso(g(r,'peso')),potrero,procedencia:impTxt(g(r,'proc'))||'Importado',prenada:'No',obs,activo:true,pesoHistorico:[],foto:''});
+  });
+  return res;
+}
+function impPreview(){
+  if(!_imp) return;
+  const res=_imp.res=impProcesar();
+  const li=(ic,t)=>`<div style="font-size:13px;margin-bottom:4px">${ic} ${t}</div>`;
+  let h=li(res.ok.length?'✅':'⚠️',`<b>${res.ok.length}</b> ${res.ok.length===1?'animal listo':'animales listos'} para importar`);
+  if(res.sinRp) h+=li('⚠️',`${res.sinRp} filas sin RP (se omiten)`);
+  if(res.dupDB) h+=li('⚠️',`${res.dupDB} ya existen en tu rodeo (se omiten)`);
+  if(res.dupArch) h+=li('⚠️',`${res.dupArch} RP repetidos dentro del archivo (se omiten)`);
+  if(res.catDef) h+=li('ℹ️',`${res.catDef} sin categoría reconocida: se cargan con la categoría por defecto y se anota la original en Observaciones`);
+  if(res.sexoSup) h+=li('ℹ️',`${res.sexoSup} sin sexo ni categoría: se cargan como machos`);
+  if(res.potNoN) h+=li('ℹ️',`${res.potNoN} con potrero que no existe en tu campo (${[...res.potNo].slice(0,4).map(esc).join(', ')}${res.potNo.size>4?'…':''}): se cargan sin potrero`);
+  if(res.rfidDup) h+=li('ℹ️',`${res.rfidDup} con RFID repetido: se cargan sin RFID`);
+  if(res.fechaMala) h+=li('ℹ️',`${res.fechaMala} con fecha de nacimiento no reconocida: se cargan sin fecha`);
+  document.getElementById('imp-resumen').innerHTML=h;
+  const filas=res.ok.slice(0,8).map(a=>`<tr><td>${esc(a.rp)}</td><td>${esc(a.rfid)}</td><td>${esc(a.categoria)}</td><td>${esc(a.sexo)}</td><td>${esc(a.raza)}</td><td>${esc(a.fnac)}</td><td>${a.peso||''}</td><td>${esc(a.potrero)}</td></tr>`).join('');
+  document.getElementById('imp-tabla').innerHTML=res.ok.length?`<thead><tr><th>RP</th><th>RFID</th><th>Categoría</th><th>Sexo</th><th>Raza</th><th>F.Nac</th><th>Peso</th><th>Potrero</th></tr></thead><tbody>${filas}</tbody>`:'';
+  const b=document.getElementById('imp-btn-confirmar');
+  if(b){ b.style.display=res.ok.length?'':'none'; b.textContent=`Importar ${res.ok.length} ${res.ok.length===1?'animal':'animales'}`; }
+}
+function impConfirmar(){
+  if(!_imp||!_imp.res||!_imp.res.ok.length) return;
+  const ok=_imp.res.ok, n=ok.length;
+  if(!confirm(`¿Importar ${n} ${n===1?'animal':'animales'}?`)) return;
+  const base=Date.now();
+  ok.forEach((a,i)=>{ a.id=base+i; DB.animales.push(a); });
+  actualizarSaldosPotreros(...new Set(ok.map(a=>a.potrero)));
+  addHistorial('Animal',`Importación: ${n} animales desde ${_imp.nombre}`,'','');
+  saveToStorage();
+  closeModal('modal-import-animales'); impReset();
+  renderAnimales(); updateKPIs();
+  toast(`Importados ${n} ${n===1?'animal':'animales'}`,'ok');
+}
+function impPlanillaModelo(){
+  if(typeof XLSX==='undefined'){ toast('No se pudo cargar el generador de Excel','err'); return; }
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['RP','RFID','Categoría','Sexo','Raza','Color','Fecha Nacimiento','Peso (kg)','Potrero','Procedencia','Nombre','Observaciones']]), 'Animales');
+  const pots=(DB.potreros||[]).map(p=>p.nombre).filter(Boolean);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['Campo','Valores aceptados'],
+    ['RP','Obligatorio. No puede repetirse.'],
+    ['Categoría',IMP_CATEGORIAS.join(', ')],
+    ['Sexo','Macho / Hembra'],
+    ['Raza',IMP_RAZAS.join(', ')+' (otras se cargan igual)'],
+    ['Fecha Nacimiento','día/mes/año, ej: 15/03/2024'],
+    ['Potrero',pots.length?pots.join(', '):'Creá primero los potreros en la app'],
+    ['Resto','Color, Peso, Procedencia, Nombre y Observaciones son texto libre']
+  ]), 'Instrucciones');
+  XLSX.writeFile(wb, nombreArchivoExport('Planilla_importar_animales','xlsx'));
 }
 
 function guardarAnimal(){
