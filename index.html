@@ -1463,9 +1463,11 @@
           <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="lluvia-fecha" class="form-control"></div>
           <div class="form-group"><label class="form-label">Milímetros (mm)</label><input type="number" id="lluvia-mm" class="form-control" placeholder="Ej: 25" min="0" step="0.5" inputmode="decimal"></div>
         </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Potrero (opcional)</label><select id="lluvia-potrero" class="form-control"><option value="">-- Todo el campo --</option></select></div>
-          <div class="form-group"><label class="form-label">Observación (opcional)</label><input type="text" id="lluvia-obs" class="form-control" placeholder="Ej: con granizo, viento fuerte"></div>
+        <div class="form-group"><label class="form-label">Potrero (opcional)</label><select id="lluvia-potrero" class="form-control"><option value="">-- Todo el campo --</option></select></div>
+        <div class="form-group">
+          <label class="form-label">Observación (opcional)</label>
+          <input type="text" id="lluvia-obs" class="form-control" placeholder="Ej: con granizo, viento fuerte">
+          <button type="button" id="lluvia-obs-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('lluvia-obs','lluvia-obs-dictar-btn')">🎙️ Dictar</button>
         </div>
         <button class="btn-primary" style="width:100%" onclick="guardarLluvia()">🌧️ Guardar lluvia</button>
         <div id="lluvias-box" style="margin-top:14px"></div>
@@ -2638,6 +2640,7 @@
           <input type="text" id="ia-input" class="form-control" maxlength="400" placeholder="Escribí tu pregunta... ej: ¿Cuántos terneros tengo?" style="flex:1">
           <button class="btn-primary" id="ia-enviar" onclick="iaPreguntar()">Preguntar</button>
         </div>
+        <button type="button" id="ia-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('ia-input','ia-dictar-btn')">🎙️ Dictar</button>
         <div style="font-size:11px;color:var(--text3);margin-top:8px">Se envía a la IA un resumen de los datos de tu establecimiento solo para responder tu consulta. Requiere conexión a internet. Verificá los datos importantes antes de decidir.</div>
       </div>
     </div>
