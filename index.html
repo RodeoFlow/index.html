@@ -1459,6 +1459,9 @@
             <button class="btn-secondary" style="padding:5px 12px;font-size:13px" onclick="exportarLluviasExcel()">📥 Excel</button>
           </span>
         </div>
+        <button type="button" id="lluvia-voz-btn" class="btn-primary" style="width:100%;padding:12px;font-size:15px" onclick="lluviaVozIniciar()">🎙️ Dictar lluvia</button>
+        <input type="text" id="lluvia-voz" class="form-control" readonly oninput="lluviaVozAplicar()" placeholder="Decí: «ayer llovieron 25 milímetros»" style="margin-top:8px">
+        <div id="lluvia-voz-estado" style="font-size:12px;color:var(--text3);margin:4px 0 12px"></div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="lluvia-fecha" class="form-control"></div>
           <div class="form-group"><label class="form-label">Milímetros (mm)</label><input type="number" id="lluvia-mm" class="form-control" placeholder="Ej: 25" min="0" step="0.5" inputmode="decimal"></div>
@@ -6126,6 +6129,57 @@ function renderLluvias(){
     : `<div style="text-align:center;color:var(--text3);padding:14px;font-size:13px">Sin lluvias registradas en ${A}.</div>`;
   box.innerHTML=html;
 }
+// ── DICTADO DE LLUVIA POR VOZ: "ayer llovieron 25 milímetros" completa fecha y mm ──
+const LLUVIA_NUM={cero:0,un:1,uno:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,veinte:20,veintiun:21,veintiuno:21,veintidos:22,veintitres:23,veinticuatro:24,veinticinco:25,veintiseis:26,veintisiete:27,veintiocho:28,veintinueve:29,treinta:30,cuarenta:40,cincuenta:50,sesenta:60,setenta:70,ochenta:80,noventa:90,cien:100,ciento:100,doscientos:200,trescientos:300,cuatrocientos:400,quinientos:500};
+function lluviaNumVal(w){ return Object.prototype.hasOwnProperty.call(LLUVIA_NUM,w)?LLUVIA_NUM[w]:undefined; }
+function lluviaNumPalabras(t){
+  const tk=t.split(/\s+/); let i=0;
+  while(i<tk.length && lluviaNumVal(tk[i])===undefined) i++;
+  if(i>=tk.length) return null;
+  let tot=0, ult=0;
+  for(; i<tk.length; i++){
+    const w=tk[i], val=lluviaNumVal(w);
+    if(val!==undefined){ tot+=val; ult=val; }
+    else if(w==='y' && ult>=30 && ult<100 && ult%10===0 && lluviaNumVal(tk[i+1])!==undefined && lluviaNumVal(tk[i+1])<10) continue;
+    else break;
+  }
+  if(tk[i]==='y' && (tk[i+1]==='medio'||tk[i+1]==='media')) tot+=0.5;
+  return tot;
+}
+function lluviaParsearVoz(txt){
+  let t=String(txt||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const hoy=lluviaHoy(); let fecha='', mt;
+  const desplazar=n=>{ const [y,m,d]=hoy.split('-').map(Number); const dt=new Date(y,m-1,d+n); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); };
+  const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  if(/\b(antes de ayer|anteayer)\b/.test(t)){ fecha=desplazar(-2); t=t.replace(/\b(antes de ayer|anteayer)\b/,' '); }
+  else if(/\bayer\b/.test(t)){ fecha=desplazar(-1); t=t.replace(/\bayer\b/,' '); }
+  else if(/\bhoy\b/.test(t)){ fecha=hoy; t=t.replace(/\bhoy\b/,' '); }
+  else if((mt=t.match(/\b(?:el )?(\d{1,2}) de (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?: de (\d{4}))?/))){
+    const mes=mt[2]==='setiembre'?9:MESES.indexOf(mt[2])+1;
+    fecha=impFechaISO(mt[3]||hoy.slice(0,4),mes,mt[1])||''; t=t.replace(mt[0],' ');
+  } else if((mt=t.match(/\b(?:el )?dia (\d{1,2})\b/))){
+    fecha=impFechaISO(hoy.slice(0,4),hoy.slice(5,7),mt[1])||''; t=t.replace(mt[0],' ');
+  }
+  let mm=null;
+  const dm=t.match(/(\d+(?:[.,]\d+)?)(\s*y\s*medi[oa])?/);
+  if(dm) mm=parseFloat(dm[1].replace(',','.'))+(dm[2]?0.5:0);
+  else mm=lluviaNumPalabras(t);
+  if(mm===null || isNaN(mm) || mm<=0 || mm>500) mm=null;
+  return {mm,fecha};
+}
+function lluviaVozIniciar(){
+  const v=document.getElementById('lluvia-voz'); if(v && !_reconocimientoActivo) v.value='';
+  iniciarDictado('lluvia-voz','lluvia-voz-btn');
+}
+function lluviaVozAplicar(){
+  const v=document.getElementById('lluvia-voz'), est=document.getElementById('lluvia-voz-estado'); if(!v) return;
+  const r=lluviaParsearVoz(v.value);
+  if(r.mm===null){ if(est) est.textContent=v.value.trim()?'No entendí los milímetros. Probá decir: «hoy llovieron 25 milímetros».':''; return; }
+  document.getElementById('lluvia-mm').value=String(r.mm);
+  if(r.fecha) document.getElementById('lluvia-fecha').value=r.fecha;
+  const f=document.getElementById('lluvia-fecha').value||lluviaHoy();
+  if(est) est.textContent=`✅ Entendí ${r.mm} mm el ${lluviaFmtF(f)}. Revisá y tocá «Guardar lluvia».`;
+}
 function guardarLluvia(){
   const fecha=$v('lluvia-fecha'), mm=parseFloat($v('lluvia-mm'));
   if(!fecha){ toast('Elegí la fecha','err'); return; }
@@ -6144,6 +6198,8 @@ function guardarLluvia(){
   saveToStorage();
   const mmEl=document.getElementById('lluvia-mm'); if(mmEl) mmEl.value='';
   const obsEl=document.getElementById('lluvia-obs'); if(obsEl) obsEl.value='';
+  const vzEl=document.getElementById('lluvia-voz'); if(vzEl) vzEl.value='';
+  const veEl=document.getElementById('lluvia-voz-estado'); if(veEl) veEl.textContent='';
   _lluviaAnio=parseInt(fecha.slice(0,4));
   toast(`Registrado: ${mm} mm el ${lluviaFmtF(fecha)}`,'ok');
   renderLluvias(); actualizarClima();
