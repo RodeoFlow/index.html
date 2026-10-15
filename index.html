@@ -1300,6 +1300,47 @@
         </div>
       </div>
 
+      <!-- ── MODO TROPA ── -->
+      <div class="card" style="margin-bottom:16px;border-left:3px solid var(--blue)">
+        <div class="card-title">🐄 Modo Tropa — Manejo grupal por potrero</div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+          <div style="flex:1;min-width:200px">
+            <label class="form-label">Potrero / Lote</label>
+            <select id="tropa-potrero" class="form-control" onchange="cargarTropa()"><option value="">-- Seleccionar --</option></select>
+          </div>
+          <div style="font-size:13px;color:var(--text3)" id="tropa-count-info"></div>
+        </div>
+        <div id="tropa-lista-box" style="display:none">
+          <div class="tbl-wrap" style="max-height:260px;overflow-y:auto">
+            <table>
+              <thead><tr><th style="width:36px"><input type="checkbox" id="tropa-check-all" checked onchange="toggleTropaAll(this)"></th><th>RP</th><th>Categoría</th><th>Peso actual</th></tr></thead>
+              <tbody id="tropa-tbody"></tbody>
+            </table>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
+            <div style="background:var(--bg3);border-radius:8px;padding:12px">
+              <div style="font-weight:700;font-size:14px;margin-bottom:8px">📍 Trasladar tropa a otro potrero</div>
+              <div class="form-group"><label class="form-label">Potrero destino</label><select id="tropa-destino" class="form-control"><option value="">-- Seleccionar --</option></select></div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="tropa-traslado-fecha" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Motivo</label><input type="text" id="tropa-traslado-motivo" class="form-control" placeholder="Rotación, pastura, etc."></div>
+              </div>
+              <button class="btn-primary" style="width:100%" onclick="ejecutarTrasladoTropa()">📍 Trasladar seleccionados</button>
+            </div>
+            <div style="background:var(--bg3);border-radius:8px;padding:12px">
+              <div style="font-weight:700;font-size:14px;margin-bottom:8px">⚖️ Registrar pesada grupal</div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="tropa-pesada-fecha" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Operador</label><input type="text" id="tropa-pesada-operador" class="form-control" placeholder="Nombre"></div>
+              </div>
+              <div class="form-group"><label class="form-label">Peso promedio de la tropa (kg) — ajustable por animal en la tabla</label><input type="number" id="tropa-pesada-promedio" class="form-control" placeholder="380" oninput="aplicarPesoPromedioTropa(this.value)"></div>
+              <button class="btn-primary" style="width:100%" onclick="ejecutarPesadaTropa()">⚖️ Registrar pesada de la tropa</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ══ CONSUMO EN ENCIERRE ══ -->
       <div class="card" style="margin-top:16px;border-left:3px solid var(--amber)">
         <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -1408,45 +1449,25 @@
         </div>
       </div>
 
-      <!-- ── MODO TROPA ── -->
+      <!-- ── REGISTRO DE LLUVIAS ── -->
       <div class="card" style="margin-bottom:16px;border-left:3px solid var(--blue)">
-        <div class="card-title">🐄 Modo Tropa — Manejo grupal por potrero</div>
-        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
-          <div style="flex:1;min-width:200px">
-            <label class="form-label">Potrero / Lote</label>
-            <select id="tropa-potrero" class="form-control" onchange="cargarTropa()"><option value="">-- Seleccionar --</option></select>
-          </div>
-          <div style="font-size:13px;color:var(--text3)" id="tropa-count-info"></div>
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span>🌧️ Registro de Lluvias</span>
+          <span style="display:flex;gap:8px;align-items:center">
+            <select id="lluvia-anio" class="form-control" style="width:auto;padding:5px 10px;font-size:13px" onchange="_lluviaAnio=parseInt(this.value);renderLluvias()"></select>
+            <button class="btn-secondary" style="padding:5px 12px;font-size:13px" onclick="exportarLluviasExcel()">📥 Excel</button>
+          </span>
         </div>
-        <div id="tropa-lista-box" style="display:none">
-          <div class="tbl-wrap" style="max-height:260px;overflow-y:auto">
-            <table>
-              <thead><tr><th style="width:36px"><input type="checkbox" id="tropa-check-all" checked onchange="toggleTropaAll(this)"></th><th>RP</th><th>Categoría</th><th>Peso actual</th></tr></thead>
-              <tbody id="tropa-tbody"></tbody>
-            </table>
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
-            <div style="background:var(--bg3);border-radius:8px;padding:12px">
-              <div style="font-weight:700;font-size:14px;margin-bottom:8px">📍 Trasladar tropa a otro potrero</div>
-              <div class="form-group"><label class="form-label">Potrero destino</label><select id="tropa-destino" class="form-control"><option value="">-- Seleccionar --</option></select></div>
-              <div class="form-row">
-                <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="tropa-traslado-fecha" class="form-control"></div>
-                <div class="form-group"><label class="form-label">Motivo</label><input type="text" id="tropa-traslado-motivo" class="form-control" placeholder="Rotación, pastura, etc."></div>
-              </div>
-              <button class="btn-primary" style="width:100%" onclick="ejecutarTrasladoTropa()">📍 Trasladar seleccionados</button>
-            </div>
-            <div style="background:var(--bg3);border-radius:8px;padding:12px">
-              <div style="font-weight:700;font-size:14px;margin-bottom:8px">⚖️ Registrar pesada grupal</div>
-              <div class="form-row">
-                <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="tropa-pesada-fecha" class="form-control"></div>
-                <div class="form-group"><label class="form-label">Operador</label><input type="text" id="tropa-pesada-operador" class="form-control" placeholder="Nombre"></div>
-              </div>
-              <div class="form-group"><label class="form-label">Peso promedio de la tropa (kg) — ajustable por animal en la tabla</label><input type="number" id="tropa-pesada-promedio" class="form-control" placeholder="380" oninput="aplicarPesoPromedioTropa(this.value)"></div>
-              <button class="btn-primary" style="width:100%" onclick="ejecutarPesadaTropa()">⚖️ Registrar pesada de la tropa</button>
-            </div>
-          </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="lluvia-fecha" class="form-control"></div>
+          <div class="form-group"><label class="form-label">Milímetros (mm)</label><input type="number" id="lluvia-mm" class="form-control" placeholder="Ej: 25" min="0" step="0.5" inputmode="decimal"></div>
         </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Potrero (opcional)</label><select id="lluvia-potrero" class="form-control"><option value="">-- Todo el campo --</option></select></div>
+          <div class="form-group"><label class="form-label">Observación (opcional)</label><input type="text" id="lluvia-obs" class="form-control" placeholder="Ej: con granizo, viento fuerte"></div>
+        </div>
+        <button class="btn-primary" style="width:100%" onclick="guardarLluvia()">🌧️ Guardar lluvia</button>
+        <div id="lluvias-box" style="margin-top:14px"></div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
@@ -4654,7 +4675,8 @@ function showPage(id) {
   if(id === 'insumos') { renderInsumosCatalogo(); renderInsumosMovForm(); renderAlertasInsumos(); }
   if(id === 'transporte') { renderTransportistas(); renderViajes(); }
   if(id === 'clientes') renderClientes();
-  if(id === 'campo') { renderTropaPotreroSelect(); renderDiario(); renderGDPResumen(); actualizarClima(); }
+  if(id === 'scanner') renderTropaPotreroSelect();
+  if(id === 'campo') { renderTropaPotreroSelect(); renderDiario(); renderGDPResumen(); renderLluvias(); actualizarClima(); }
   if(id === 'administracion') { renderVencimientos(); prepararResumenWA(); renderSenasaResumen(); }
   if(id === 'rentabilidad') { renderRentabilidadPotreroSelect(); renderRentabilidad(); }
   if(id === 'ia') iaRender();
@@ -6006,6 +6028,107 @@ function renderClima(data, cfg){
   box.innerHTML=html;
 }
 
+// ── REGISTRO ANUAL DE LLUVIAS (pluviómetro) ──
+let _lluviaAnio = null;
+function lluviaHoy(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function lluviaFmtF(f){ return f.slice(8,10)+'/'+f.slice(5,7)+'/'+f.slice(0,4); }
+const LLUVIA_MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function lluviaPorMes(regs, anio){
+  const m=Array(12).fill(0), d=Array(12).fill(0);
+  regs.filter(p=>p.fecha.startsWith(anio+'-')).forEach(p=>{ const i=parseInt(p.fecha.slice(5,7))-1; const mm=parseFloat(p.mm)||0; m[i]+=mm; if(mm>0) d[i]++; });
+  return {m,d};
+}
+function renderLluvias(){
+  const box=document.getElementById('lluvias-box'); if(!box) return;
+  const regs=(DB.precipitaciones||[]).filter(p=>p && p.fecha && parseFloat(p.mm)>0);
+  const hoy=lluviaHoy(), anioAct=parseInt(hoy.slice(0,4));
+  const anios=[...new Set(regs.map(p=>parseInt(p.fecha.slice(0,4))).concat([anioAct]))].sort((a,b)=>b-a);
+  if(!_lluviaAnio || !anios.includes(_lluviaAnio)) _lluviaAnio=anioAct;
+  const A=_lluviaAnio, P=A-1;
+  const selA=document.getElementById('lluvia-anio');
+  if(selA) selA.innerHTML=anios.map(a=>`<option value="${a}" ${a===A?'selected':''}>${a}</option>`).join('');
+  const fEl=document.getElementById('lluvia-fecha'); if(fEl && !fEl.value) fEl.value=hoy;
+  const selP=document.getElementById('lluvia-potrero');
+  if(selP){ const cur=selP.value; selP.innerHTML='<option value="">-- Todo el campo --</option>'+(DB.potreros||[]).map(p=>`<option value="${esc(p.nombre)}" ${cur===p.nombre?'selected':''}>${esc(p.nombre)}</option>`).join(''); }
+
+  const ya=lluviaPorMes(regs,A), yp=lluviaPorMes(regs,P);
+  const totA=ya.m.reduce((s,v)=>s+v,0), diasA=ya.d.reduce((s,v)=>s+v,0);
+  const corte=(A===anioAct)?hoy.slice(5):'12-31';
+  const totPprev=regs.filter(p=>p.fecha.startsWith(P+'-') && p.fecha.slice(5)<=corte).reduce((s,p)=>s+(parseFloat(p.mm)||0),0);
+  const delAnio=regs.filter(p=>p.fecha.startsWith(A+'-'));
+  const maxReg=delAnio.reduce((mx,p)=>(!mx||parseFloat(p.mm)>parseFloat(mx.mm))?p:mx,null);
+  const otros=anios.filter(a=>a!==A && regs.some(p=>p.fecha.startsWith(a+'-')));
+  const promOtros=otros.length? otros.reduce((s,a)=>s+lluviaPorMes(regs,a).m.reduce((x,v)=>x+v,0),0)/otros.length : null;
+
+  let difTxt='—';
+  if(totPprev>0){ const dif=totA-totPprev, pct=dif/totPprev*100; difTxt=`<b style="color:${dif>=0?'var(--blue)':'var(--amber)'}">${dif>=0?'+':''}${dif.toFixed(0)} mm (${pct>=0?'+':''}${pct.toFixed(0)}%)</b> vs ${P}`; }
+  const kpi=(t,v)=>`<div style="background:var(--bg3);border-radius:8px;padding:10px 12px;flex:1;min-width:130px"><div style="font-size:11px;color:var(--text3)">${t}</div><div style="font-size:18px;font-weight:700;margin-top:2px">${v}</div></div>`;
+  let html=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    ${kpi('Total '+A, `<span style="color:var(--blue)">${totA.toFixed(0)} mm</span>`)}
+    ${kpi('Días con lluvia', diasA)}
+    ${kpi('Máx. en un día', maxReg?`${parseFloat(maxReg.mm).toFixed(0)} mm <span style="font-size:11px;color:var(--text3);font-weight:400">${lluviaFmtF(maxReg.fecha)}</span>`:'—')}
+    ${kpi(`Prom. anual${otros.length?` (${otros.length} ${otros.length===1?'año':'años'})`:''}`, promOtros!==null?promOtros.toFixed(0)+' mm':'—')}
+  </div>
+  <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px">${A===anioAct?'Al '+lluviaFmtF(hoy)+' vs mismo período del año anterior':'Año completo vs año anterior'}: ${difTxt}</div>`;
+
+  const maxV=Math.max(1,...ya.m,...yp.m);
+  html+=`<div style="display:flex;gap:4px;align-items:flex-end;height:120px;margin-bottom:4px">`+
+    LLUVIA_MESES.map((_,i)=>`<div style="flex:1;display:flex;gap:2px;align-items:flex-end;height:100%" title="${LLUVIA_MESES[i]}: ${ya.m[i].toFixed(0)} mm (${A}) · ${yp.m[i].toFixed(0)} mm (${P})">
+      <div style="flex:1;background:var(--blue);border-radius:3px 3px 0 0;height:${(ya.m[i]/maxV*100).toFixed(1)}%;min-height:${ya.m[i]>0?2:0}px"></div>
+      <div style="flex:1;background:var(--text3);opacity:.45;border-radius:3px 3px 0 0;height:${(yp.m[i]/maxV*100).toFixed(1)}%;min-height:${yp.m[i]>0?2:0}px"></div></div>`).join('')+`</div>
+    <div style="display:flex;gap:4px;font-size:10px;color:var(--text3);text-align:center;margin-bottom:6px">${LLUVIA_MESES.map(m=>`<div style="flex:1">${m}</div>`).join('')}</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px"><span style="color:var(--blue)">■</span> ${A} &nbsp; <span style="opacity:.6">■</span> ${P}</div>`;
+
+  html+=`<div class="tbl-wrap"><table><thead><tr><th>Mes</th><th>mm ${A}</th><th>Días</th><th>mm ${P}</th><th>Dif.</th></tr></thead><tbody>`+
+    LLUVIA_MESES.map((n,i)=>{ const dif=ya.m[i]-yp.m[i]; return `<tr><td>${n}</td><td><b>${ya.m[i]?ya.m[i].toFixed(0):'—'}</b></td><td>${ya.d[i]||'—'}</td><td>${yp.m[i]?yp.m[i].toFixed(0):'—'}</td><td style="color:${dif>=0?'var(--blue)':'var(--amber)'}">${(ya.m[i]||yp.m[i])?(dif>=0?'+':'')+dif.toFixed(0):'—'}</td></tr>`; }).join('')+
+    `<tr style="font-weight:700"><td>Total</td><td>${totA.toFixed(0)}</td><td>${diasA}</td><td>${yp.m.reduce((s,v)=>s+v,0).toFixed(0)}</td><td></td></tr></tbody></table></div>`;
+
+  const lista=[...delAnio].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  html+=`<div style="font-weight:700;font-size:13px;margin:14px 0 6px">Registros ${A} (${lista.length})</div>`;
+  html+= lista.length? `<div style="max-height:260px;overflow-y:auto">`+lista.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border);padding:7px 4px;font-size:13px">
+      <span><b>${lluviaFmtF(p.fecha)}</b> · <span style="color:var(--blue);font-weight:700">${parseFloat(p.mm)} mm</span>${p.potrero?` · ${esc(p.potrero)}`:''}${p.obs?` <span style="color:var(--text3)">· ${esc(p.obs)}</span>`:''}</span>
+      <span style="cursor:pointer;color:var(--red)" onclick="eliminarLluvia(${p.id})">🗑</span></div>`).join('')+`</div>`
+    : `<div style="text-align:center;color:var(--text3);padding:14px;font-size:13px">Sin lluvias registradas en ${A}.</div>`;
+  box.innerHTML=html;
+}
+function guardarLluvia(){
+  const fecha=$v('lluvia-fecha'), mm=parseFloat($v('lluvia-mm'));
+  if(!fecha){ toast('Elegí la fecha','err'); return; }
+  if(fecha>lluviaHoy()){ toast('La fecha no puede ser futura','err'); return; }
+  if(isNaN(mm) || mm<=0){ toast('Ingresá los mm de lluvia (mayor a 0)','err'); return; }
+  if(!DB.precipitaciones) DB.precipitaciones=[];
+  const potrero=$v('lluvia-potrero'), obs=$v('lluvia-obs');
+  const ex=DB.precipitaciones.find(p=>p.fecha===fecha);
+  if(ex){
+    if(!confirm(`Ya hay ${ex.mm} mm cargados el ${lluviaFmtF(fecha)}. ¿Reemplazar por ${mm} mm?`)) return;
+    ex.mm=mm; ex.potrero=potrero; ex.obs=obs; ex.fuente='manual';
+  } else {
+    DB.precipitaciones.push({ id:Date.now(), fecha, mm, potrero, obs, fuente:'manual' });
+  }
+  addHistorial('Clima', `Lluvia ${lluviaFmtF(fecha)}: ${mm} mm`, '', '');
+  saveToStorage();
+  const mmEl=document.getElementById('lluvia-mm'); if(mmEl) mmEl.value='';
+  const obsEl=document.getElementById('lluvia-obs'); if(obsEl) obsEl.value='';
+  _lluviaAnio=parseInt(fecha.slice(0,4));
+  toast(`Registrado: ${mm} mm el ${lluviaFmtF(fecha)}`,'ok');
+  renderLluvias(); actualizarClima();
+}
+function eliminarLluvia(id){
+  if(!confirm('¿Eliminar este registro de lluvia?')) return;
+  DB.precipitaciones=(DB.precipitaciones||[]).filter(p=>p.id!==id);
+  saveToStorage(); renderLluvias(); actualizarClima();
+}
+function exportarLluviasExcel(){
+  if(typeof XLSX==='undefined'){ toast('No se pudo cargar el exportador de Excel','err'); return; }
+  const regs=(DB.precipitaciones||[]).filter(p=>p && p.fecha && parseFloat(p.mm)>0).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  if(!regs.length){ toast('No hay lluvias registradas para exportar','err'); return; }
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Fecha','mm','Potrero','Observación'], ...regs.map(p=>[lluviaFmtF(p.fecha), parseFloat(p.mm), p.potrero||'', p.obs||''])]), 'Registros');
+  const anios=[...new Set(regs.map(p=>p.fecha.slice(0,4)))].sort();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Mes', ...anios], ...LLUVIA_MESES.map((n,i)=>[n, ...anios.map(a=>{ const v=lluviaPorMes(regs,a).m[i]; return v||''; })]), ['Total', ...anios.map(a=>lluviaPorMes(regs,a).m.reduce((s,v)=>s+v,0))]]), 'Resumen mensual');
+  XLSX.writeFile(wb, nombreArchivoExport('Lluvias','xlsx'));
+}
+
 function registrarPrecipitacionManual(){
   const mm = parseFloat($v('precip-manual-mm'));
   if(!mm || mm<=0){ toast('Ingresá un valor de mm válido','err'); return; }
@@ -6014,6 +6137,7 @@ function registrarPrecipitacionManual(){
   addHistorial('Clima', `Registro de lluvia manual: ${mm} mm`, '', '');
   saveToStorage();
   toast(`Registrado: ${mm} mm de lluvia hoy`,'ok');
+  renderLluvias();
   actualizarClima();
 }
 
