@@ -31,6 +31,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════
 // FIREBASE REALTIME DATABASE – SYNC EN TIEMPO REAL
@@ -96,7 +97,7 @@
   }
 
   // ── Colecciones económicas: no deben llegar a dispositivos logueados como no-Dueño ─
-  const COLECCIONES_SOLO_DUENO = ['ventas','compras','clientes','romaneos'];
+  const COLECCIONES_SOLO_DUENO = ['ventas','compras','clientes','romaneos','valuaciones','gastos','compromisos'];
 
   // ── Aplicar el cambio de UNA colección (no toda la base) ─
   function aplicarCambioColeccion(key, payload, esCargaInicial) {
@@ -2283,6 +2284,7 @@
         <div class="tab" onclick="switchTab('movimientos','ventas')">Ventas</div>
         <div class="tab" onclick="switchTab('movimientos','traslados')">Traslados</div>
         <div class="tab" onclick="switchTab('movimientos','resultado')">📊 Resultado</div>
+        <div class="tab" onclick="switchTab('movimientos','cobros')">💰 Cobros y pagos</div>
         <div class="tab" onclick="switchTab('movimientos','romaneo')">🥩 Romaneo</div>
       </div>
       <!-- Compras -->
@@ -2321,6 +2323,10 @@
 
       <!-- Resultado -->
       <div class="tab-content">
+        <div class="card" id="val-card" style="margin-bottom:16px;border-left:3px solid var(--green)">
+          <div class="card-title">🐄 Valor de la hacienda hoy</div>
+          <div id="val-hacienda"></div>
+        </div>
         <div class="form-row" style="margin-bottom:12px">
           <div class="form-group" style="max-width:200px"><label class="form-label">Desde</label><input type="date" id="res-desde" class="form-control" onchange="renderResultadoEconomico()"></div>
           <div class="form-group" style="max-width:200px"><label class="form-label">Hasta</label><input type="date" id="res-hasta" class="form-control" onchange="renderResultadoEconomico()"></div>
@@ -2337,6 +2343,60 @@
           <div class="card-title">🌾 Resultado por hectárea</div>
           <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Tu resultado real (no de mercado), sobre las hectáreas activas de tus potreros. Comparalo contra el Índice Novillo Arrendamiento de la página Precios.</div>
           <div id="res-porhectarea"></div>
+        </div>
+        <div class="card" id="gastos-card" style="margin-top:16px;border-left:3px solid var(--red)">
+          <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>💸 Gastos del campo</span><button class="btn-secondary" style="padding:5px 12px;font-size:13px" onclick="exportarGastosExcel()">📥 Excel</button></div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Mano de obra, combustible, arrendamiento, impuestos y todo gasto que no sea compra o venta de hacienda. Los totales respetan el período Desde / Hasta de arriba.</div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="gasto-fecha" class="form-control"></div>
+            <div class="form-group"><label class="form-label">Rubro</label><select id="gasto-cat" class="form-control"></select></div>
+          </div>
+          <div class="form-group"><label class="form-label">Monto ($)</label><input type="number" id="gasto-monto" class="form-control" placeholder="Ej: 150000" min="0" step="any" inputmode="decimal"></div>
+          <div class="form-group">
+            <label class="form-label">Descripción (opcional)</label>
+            <input type="text" id="gasto-desc" class="form-control" placeholder="Ej: sueldo peón octubre, gasoil tractor">
+            <button type="button" id="gasto-desc-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('gasto-desc','gasto-desc-dictar-btn')">🎙️ Dictar</button>
+          </div>
+          <button class="btn-primary" style="width:100%" onclick="guardarGasto()">💸 Guardar gasto</button>
+          <div id="gastos-box" style="margin-top:14px"></div>
+        </div>
+      </div>
+
+      <!-- Cobros y pagos -->
+      <div class="tab-content">
+        <div class="card" id="cp-card" style="border-left:3px solid var(--green)">
+          <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>💰 Cobros y pagos</span><button class="btn-secondary" style="padding:5px 12px;font-size:13px" onclick="exportarCobrosPagosExcel()">📥 Excel</button></div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Cheques y pagos a plazo de tus ventas y compras. Al registrar una venta o compra elegí "Cheques / a plazo" y los vencimientos se cargan solos.</div>
+          <div id="cp-kpis" class="grid-4" style="margin-bottom:4px"></div>
+          <div id="cp-flujo"></div>
+          <details style="margin-top:14px">
+            <summary class="btn-secondary" style="display:inline-block;cursor:pointer;padding:8px 14px;border-radius:8px">＋ Registrar cobro o pago a mano</summary>
+            <div style="margin-top:10px">
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Tipo</label><select id="cp-tipo" class="form-control"><option value="cobro">💵 Cobro (me deben)</option><option value="pago">💸 Pago (yo debo)</option></select></div>
+                <div class="form-group"><label class="form-label">Vencimiento</label><input type="date" id="cp-venc" class="form-control"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Monto ($)</label><input type="number" id="cp-monto" class="form-control" min="0" step="any" inputmode="decimal" placeholder="Ej: 500000"></div>
+                <div class="form-group"><label class="form-label">Medio</label><select id="cp-medio" class="form-control"><option>Cheque</option><option>Transferencia</option><option>Efectivo</option><option>Otro</option></select></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Cliente / proveedor</label><input type="text" id="cp-contra" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Nº de cheque (opcional)</label><input type="text" id="cp-nro" class="form-control"></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Concepto (opcional)</label>
+                <input type="text" id="cp-concepto" class="form-control" placeholder="Ej: venta de novillos, alquiler del campo">
+                <button type="button" id="cp-concepto-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('cp-concepto','cp-concepto-dictar-btn')">🎙️ Dictar</button>
+              </div>
+              <button class="btn-primary" style="width:100%" onclick="cpGuardarManual()">💾 Guardar vencimiento</button>
+            </div>
+          </details>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 4px;gap:8px;flex-wrap:wrap">
+            <div style="font-weight:700;font-size:14px">Vencimientos</div>
+            <select id="cp-filtro" class="form-control" style="width:auto;padding:5px 10px;font-size:13px" onchange="cpCambiarFiltro(this.value)"><option value="pendiente">Pendientes</option><option value="cumplido">Cumplidos</option><option value="todos">Todos</option></select>
+          </div>
+          <div id="cp-lista"></div>
         </div>
       </div>
 
@@ -2375,7 +2435,8 @@
             <button class="btn-primary" onclick="openModal('modal-viaje')">＋ Viaje</button>
           </div>
         </div>
-        <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Transportista</th><th>Patente</th><th>Origen</th><th>Destino</th><th>Animales</th><th>Guía</th></tr></thead>
+        <div id="desbaste-resumen"></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Transportista</th><th>Patente</th><th>Origen</th><th>Destino</th><th>Animales</th><th>Guía</th><th>Desbaste</th></tr></thead>
         <tbody id="viajes-tbody"></tbody></table></div>
       </div>
     </div>
@@ -3818,6 +3879,20 @@
       </div>
       <div class="form-group"><label class="form-label">Transportista</label><select id="co-trans" class="form-control"><option value="">-- Sin transporte --</option></select></div>
       <div class="form-group"><label class="form-label">RPs (opcional, separados por coma)</label><input type="text" id="co-rps" class="form-control" placeholder="Ej: 1001, 1002, 1003"></div>
+      <div id="co-pago-wrap" class="form-group" style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+        <label class="form-label">Forma de pago</label>
+        <select id="co-pago" class="form-control" onchange="cpPlazoToggle('co')"><option value="contado">Contado</option><option value="plazo">Cheques / a plazo (genera vencimientos)</option></select>
+        <div id="co-plazo-box" style="display:none;margin-top:8px">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Cuotas</label><input type="number" id="co-cuotas" class="form-control" value="1" min="1" max="12"></div>
+            <div class="form-group"><label class="form-label">Cada (días)</label><input type="number" id="co-cada" class="form-control" value="30" min="1"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">1er vencimiento</label><input type="date" id="co-venc" class="form-control"></div>
+            <div class="form-group"><label class="form-label">Medio</label><select id="co-medio" class="form-control"><option>Cheque</option><option>Transferencia</option><option>Efectivo</option><option>Otro</option></select></div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-compra')">Cancelar</button><button class="btn-primary" onclick="guardarCompra()">💾 Guardar</button></div>
   </div>
@@ -3839,15 +3914,34 @@
         <div class="form-group"><label class="form-label">Cantidad *</label><input type="number" id="ve-cant" class="form-control" placeholder="10"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Peso total (kg)</label><input type="number" id="ve-peso" class="form-control"></div>
-        <div class="form-group"><label class="form-label">Precio $/kg</label><input type="number" id="ve-precio" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Peso total (kg)</label><input type="number" id="ve-peso" class="form-control" oninput="veDesbRecalcular()"></div>
+        <div class="form-group"><label class="form-label">Precio $/kg</label><input type="number" id="ve-precio" class="form-control" oninput="veDesbRecalcular()"></div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Desbaste (%) <span style="color:var(--text3);font-weight:400">opcional</span></label><input type="number" id="ve-desb" class="form-control" min="0" max="50" step="0.1" placeholder="Ej: 4" oninput="veDesbRecalcular()"></div>
+        <div class="form-group"><label class="form-label">Peso a liquidar (kg)</label><input type="text" id="ve-pesoliq" class="form-control" readonly></div>
+      </div>
+      <div style="margin:-4px 0 10px"><button type="button" id="ve-desb-prom" class="btn-secondary" style="display:none;font-size:12.5px;padding:6px 12px" onclick="veDesbUsarPromedio()"></button> <span id="ve-total-prev" style="font-size:13px;color:var(--text2);margin-left:6px"></span></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Destino</label><input type="text" id="ve-dest" class="form-control" placeholder="Frigorifico..."></div>
         <div class="form-group"><label class="form-label">Guía DT-e</label><input type="text" id="ve-guia" class="form-control"></div>
       </div>
       <div class="form-group"><label class="form-label">Transportista</label><select id="ve-trans" class="form-control"><option value="">-- Sin transporte --</option></select></div>
       <div class="form-group"><label class="form-label">RPs (opcional, separados por coma)</label><input type="text" id="ve-rps" class="form-control" placeholder="Ej: 1001, 1002, 1003"></div>
+      <div id="ve-pago-wrap" class="form-group" style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+        <label class="form-label">Forma de pago</label>
+        <select id="ve-pago" class="form-control" onchange="cpPlazoToggle('ve')"><option value="contado">Contado</option><option value="plazo">Cheques / a plazo (genera vencimientos)</option></select>
+        <div id="ve-plazo-box" style="display:none;margin-top:8px">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Cuotas</label><input type="number" id="ve-cuotas" class="form-control" value="1" min="1" max="12"></div>
+            <div class="form-group"><label class="form-label">Cada (días)</label><input type="number" id="ve-cada" class="form-control" value="30" min="1"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">1er vencimiento</label><input type="date" id="ve-venc" class="form-control"></div>
+            <div class="form-group"><label class="form-label">Medio</label><select id="ve-medio" class="form-control"><option>Cheque</option><option>Transferencia</option><option>Efectivo</option><option>Otro</option></select></div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-venta')">Cancelar</button><button class="btn-primary" onclick="guardarVenta()">💾 Guardar</button></div>
   </div>
@@ -3956,8 +4050,12 @@
         <div class="form-group"><label class="form-label">Guía DT-e</label><input type="text" id="vj-guia" class="form-control"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Peso total (kg)</label><input type="number" id="vj-peso" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Peso en origen (kg)</label><input type="number" id="vj-peso" class="form-control"></div>
         <div class="form-group"><label class="form-label">Flete ($)</label><input type="number" id="vj-flete" class="form-control"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Peso en destino (kg)</label><input type="number" id="vj-peso-dest" class="form-control" placeholder="Al llegar"></div>
+        <div class="form-group"><label class="form-label">Horas de viaje</label><input type="number" id="vj-horas" class="form-control" min="0" step="0.5" placeholder="Ej: 6"></div>
       </div>
     </div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-viaje')">Cancelar</button><button class="btn-primary" onclick="guardarViaje()">💾 Guardar</button></div>
@@ -4707,7 +4805,7 @@ function showPage(id) {
   if(id === 'sanidad') { renderVacunas(); renderTratamientos(); renderEnfermedades(); renderRaspaje(); renderSangrado(); renderCalendarioSanitario(); }
   if(id === 'tratamientos') { renderTratamientos(); renderEnfermedades(); }
   if(id === 'nutricion') { renderNutricion(); renderIngredientesTabla(); actualizarRequerimientosUI(); poblarCategoriasRodeo(); renderHistorialRaciones(); poblarPotrerosSuplementacion(); renderVentanasCriticas(); }
-  if(id === 'movimientos') { renderCompras(); renderVentas(); renderTraslados(); renderResultadoEconomico(); renderRomaneos(); }
+  if(id === 'movimientos') { renderCompras(); renderVentas(); renderTraslados(); renderResultadoEconomico(); renderValuacionHacienda(); renderCobrosPagos(); renderRomaneos(); }
   if(id === 'reportes') renderResumen();
   if(id === 'mortalidad') renderMuertes();
   if(id === 'insumos') { renderInsumosCatalogo(); renderInsumosMovForm(); renderAlertasInsumos(); }
@@ -4734,7 +4832,7 @@ function switchTab(section, tab) {
 }
 
 // ─── MODAL ───
-function openModal(id) { document.getElementById(id)?.classList.add('open'); }
+function openModal(id) { document.getElementById(id)?.classList.add('open'); if(id==='modal-venta') veDesbInit(); }
 function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
 document.addEventListener('click', e => { if(e.target.classList.contains('modal-overlay')) closeModal(e.target.id); });
 
@@ -7019,6 +7117,7 @@ function procesarFotoAnimal(inputEl, prefix){
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
       const base64 = canvas.toDataURL('image/jpeg', 0.7);
       _fotoTemp[prefix] = base64;
+      subirFotoAStorage(base64).then(url=>{ if(_fotoTemp[prefix]===base64) _fotoTemp[prefix]=url; }).catch(e=>console.warn('Foto queda local hasta poder subirla:',e));
       const preview = document.getElementById(prefix+'-foto-preview');
       if(preview) preview.innerHTML = `<img src="${base64}" style="width:100%;height:100%;object-fit:cover">`;
       const quitar = document.getElementById(prefix+'-foto-quitar');
@@ -7028,6 +7127,35 @@ function procesarFotoAnimal(inputEl, prefix){
   };
   lector.readAsDataURL(file);
 }
+
+// ── FOTOS EN FIREBASE STORAGE (en vez de base64 dentro de la base de datos) ──
+async function subirFotoAStorage(dataUrl, animalId){
+  if(typeof firebase==='undefined' || !firebase.storage) throw new Error('Storage no disponible');
+  const estabId=window.ESTAB_ID_ACTIVO; if(!estabId) throw new Error('Sin establecimiento activo');
+  const ref=firebase.storage().ref(`fotos/${estabId}/${animalId||'nuevo'}_${Date.now().toString(36)}.jpg`);
+  await ref.putString(dataUrl,'data_url',{contentType:'image/jpeg'});
+  return await ref.getDownloadURL();
+}
+let _migrandoFotos=false;
+// Pasa a Storage las fotos que quedaron guardadas como base64 (fotos viejas o cargadas sin conexión).
+async function migrarFotosAStorage(){
+  if(_migrandoFotos || !navigator.onLine || !window.ESTAB_ID_ACTIVO) return;
+  if(typeof firebase==='undefined' || !firebase.storage || !firebase.auth().currentUser) return;
+  const pend=(DB.animales||[]).filter(a=>typeof a.foto==='string' && a.foto.startsWith('data:image') && Date.now()-a.id>60000);
+  if(!pend.length) return;
+  _migrandoFotos=true; let n=0;
+  try{
+    for(const a of pend.slice(0,25)){
+      const dataUrl=a.foto;
+      let url; try{ url=await subirFotoAStorage(dataUrl,a.id); }catch(e){ console.warn('Foto no migrada (RP '+a.rp+'):',e); break; }
+      const actual=(DB.animales||[]).find(x=>x.id===a.id);   // el DB pudo reemplazarse por un sync mientras subía
+      if(actual && actual.foto===dataUrl){ actual.foto=url; n++; }
+    }
+  } finally { _migrandoFotos=false; }
+  if(n){ saveToStorage(); console.log(`📷 ${n} fotos movidas a Storage`); }
+}
+setTimeout(migrarFotosAStorage,20000);
+setInterval(migrarFotosAStorage,5*60*1000);
 
 function quitarFotoAnimal(prefix){
   delete _fotoTemp[prefix];
@@ -7686,6 +7814,7 @@ function guardarCompra(){
   const c={id:Date.now(),fecha:$v('co-fecha'),prov:$v('co-prov'),cat:$v('co-cat'),cant,peso,precio,total:cant*peso*precio,potrero:$v('co-potrero'),guia:$v('co-guia'),trans:$v('co-trans'),rps};
   if(!c.cant){toast('Ingresá cantidad','err');return;}
   DB.compras.push(c);
+  const nPag=crearCompromisosDePago('compra',c,'co');
   // Dar de alta (reactivar o crear) animales con RP indicados
   let altas=0;
   rps.forEach(function(rp){
@@ -7711,7 +7840,7 @@ function guardarCompra(){
   actualizarSaldosPotreros(c.potrero);
   closeModal('modal-compra');renderCompras();updateKPIs();if(altas)renderAnimales();
   const msg=altas?' · '+altas+' RP dados de alta':'';
-  toast('Compra registrada: '+c.cant+' animales'+msg,'ok');
+  toast('Compra registrada: '+c.cant+' animales'+msg+(nPag?' · '+nPag+(nPag===1?' pago pendiente':' pagos pendientes'):''),'ok');
   saveToStorage();
 }
 
@@ -7719,9 +7848,12 @@ function guardarVenta(){
   const cant=parseInt($v('ve-cant')),peso=parseFloat($v('ve-peso'))||0,precio=parseFloat($v('ve-precio'))||0;
   const rpsRaw=$v('ve-rps')||'';
   const rps=rpsRaw.split(',').map(r=>r.trim()).filter(r=>r);
-  const v={id:Date.now(),fecha:$v('ve-fecha'),comp:$v('ve-comp'),cat:$v('ve-cat'),cant,peso,precio,total:peso*precio,dest:$v('ve-dest'),guia:$v('ve-guia'),trans:$v('ve-trans'),rps};
+  const desb=Math.min(50,Math.max(0,parseFloat($v('ve-desb'))||0));
+  const v={id:Date.now(),fecha:$v('ve-fecha'),comp:$v('ve-comp'),cat:$v('ve-cat'),cant,peso,precio,desbaste:desb,total:peso*(1-desb/100)*precio,dest:$v('ve-dest'),guia:$v('ve-guia'),trans:$v('ve-trans'),rps};
   if(!v.cant){toast('Ingresá cantidad','err');return;}
   DB.ventas.push(v);
+  const nCob=crearCompromisosDePago('venta',v,'ve');
+  const dEl=document.getElementById('ve-desb'); if(dEl){ dEl.value=''; veDesbRecalcular(); }
   // Dar de baja los animales con RP indicados
   let bajas=0;
   const potrerosAfectados=[];
@@ -7740,7 +7872,7 @@ function guardarVenta(){
   addHistorial('Venta',`Venta: ${v.cant} ${v.cat} – ${esc(v.comp)} · $${v.total.toLocaleString('es-AR')}`,rps.join(', '),v.comp);
   closeModal('modal-venta');renderVentas();updateKPIs();if(bajas)renderAnimales();
   const msg=bajas?' · '+bajas+' RP dados de baja':'';
-  toast('Venta registrada: '+v.cant+' animales'+msg,'ok');
+  toast('Venta registrada: '+v.cant+' animales'+msg+(nCob?' · '+nCob+(nCob===1?' cobro pendiente':' cobros pendientes'):''),'ok');
   saveToStorage();
 }
 
@@ -7781,11 +7913,64 @@ function guardarTransportista(){
   toast(`Transportista registrado: ${nom}`,'ok');
 }
 
+// ═══ DESBASTE EN TRANSPORTE: kg que pierde la hacienda en el viaje ═══
+function viajeDesbaste(v){
+  const o=parseFloat(v.peso)||0, d=parseFloat(v.pesoDestino)||0;
+  if(o<=0||d<=0) return null;
+  return {kg:o-d,pct:(o-d)/o*100};
+}
+function desbastePromedio(){
+  const med=(DB.viajes||[]).map(viajeDesbaste).filter(Boolean);
+  if(!med.length) return null;
+  let kgO=0, kgP=0;
+  (DB.viajes||[]).forEach(v=>{ const d=viajeDesbaste(v); if(d){ kgO+=parseFloat(v.peso)||0; kgP+=d.kg; } });
+  return kgO>0?kgP/kgO*100:null;
+}
+function viajeDesbasteTxt(v){
+  const d=viajeDesbaste(v); if(!d) return '<span style="color:var(--text3)">—</span>';
+  return `<b>${d.pct.toFixed(1)}%</b> <span style="color:var(--text3);font-size:11px">(${Math.round(d.kg).toLocaleString('es-AR')} kg)</span>`;
+}
+function renderDesbasteResumen(){
+  const box=document.getElementById('desbaste-resumen'); if(!box) return;
+  const med=(DB.viajes||[]).map(v=>({v,d:viajeDesbaste(v)})).filter(x=>x.d);
+  if(!med.length){ box.innerHTML='<div style="font-size:13px;color:var(--text3);margin-bottom:12px">Cargá el peso en origen y el peso en destino de tus viajes para ver cuánto desbasta realmente tu hacienda.</div>'; return; }
+  const kgO=med.reduce((s,x)=>s+(parseFloat(x.v.peso)||0),0), kgP=med.reduce((s,x)=>s+x.d.kg,0), prom=kgP/kgO*100;
+  const peor=med.reduce((a,b)=>b.d.pct>a.d.pct?b:a), mejor=med.reduce((a,b)=>b.d.pct<a.d.pct?b:a);
+  const conH=med.filter(x=>parseFloat(x.v.horas)>0);
+  const porHora=conH.length?conH.reduce((s,x)=>s+x.d.pct/parseFloat(x.v.horas),0)/conH.length:null;
+  const precios=(DB.ventas||[]).map(v=>parseFloat(v.precio)||0).filter(p=>p>0), pv=precios.length?precios.reduce((s,p)=>s+p,0)/precios.length:0;
+  const kpi=(t,v,s,c)=>`<div class="kpi ${c}"><div class="kpi-label">${t}</div><div class="kpi-val" style="font-size:20px">${v}</div><div class="kpi-sub">${s}</div></div>`;
+  const nom=x=>`${lluviaFmtF(x.v.fecha)} · ${esc(x.v.destino||'--')}`;
+  box.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:8px">
+    ${kpi('Desbaste promedio',prom.toFixed(1)+'%',med.length+(med.length===1?' viaje medido':' viajes medidos'),'blue')}
+    ${kpi('Kg perdidos en viaje',Math.round(kgP).toLocaleString('es-AR'),pv?'≈ $'+Math.round(kgP*pv).toLocaleString('es-AR')+' a tu precio prom. de venta':'sobre '+Math.round(kgO).toLocaleString('es-AR')+' kg cargados','red')}
+    ${kpi('Menor / mayor',mejor.d.pct.toFixed(1)+'% / '+peor.d.pct.toFixed(1)+'%',med.length>1?nom(mejor)+' · '+nom(peor):nom(mejor),'amber')}
+    ${porHora!==null?kpi('Por hora de viaje','≈ '+porHora.toFixed(2)+'%','promedio de '+conH.length+(conH.length===1?' viaje':' viajes')+' con horas','purple'):''}
+  </div><div style="font-size:11.5px;color:var(--text3);margin-bottom:12px">Desbaste = (peso en origen − peso en destino) ÷ peso en origen. Si en una venta te descuentan más que tu promedio real, podrías estar cediendo plata.</div>`;
+}
+// Venta: el comprador descuenta un % de desbaste sobre el peso en origen
+function veDesbRecalcular(){
+  const peso=parseFloat($v('ve-peso'))||0, d=Math.min(50,Math.max(0,parseFloat($v('ve-desb'))||0)), precio=parseFloat($v('ve-precio'))||0;
+  const liq=peso*(1-d/100), pl=document.getElementById('ve-pesoliq'), tt=document.getElementById('ve-total-prev');
+  if(pl) pl.value=peso?Math.round(liq):'';
+  if(tt) tt.textContent=(peso&&precio)?`Total a cobrar: $${Math.round(liq*precio).toLocaleString('es-AR')}${d?` (con ${d}% de desbaste)`:''}`:'';
+}
+function veDesbUsarPromedio(){
+  const p=desbastePromedio(); if(p===null) return;
+  const e=document.getElementById('ve-desb'); if(e) e.value=(Math.round(p*10)/10).toString();
+  veDesbRecalcular();
+}
+function veDesbInit(){
+  const p=desbastePromedio(), b=document.getElementById('ve-desb-prom');
+  if(b){ b.style.display=p===null?'none':''; b.textContent=p===null?'':`Usar mi promedio real (${p.toFixed(1)}%)`; }
+  veDesbRecalcular();
+}
+
 function guardarViaje(){
   const transId=$v('vj-trans');
   if(!transId){toast('Seleccioná transportista','err');return;}
   const trans=DB.transportistas.find(t=>String(t.id)===transId);
-  const v={id:Date.now(),fecha:$v('vj-fecha'),transId,transNombre:trans?.nombre||'',patente:trans?.patente||$v('vj-patente'),origen:$v('vj-origen'),destino:$v('vj-destino'),animales:parseInt($v('vj-animales'))||0,cat:$v('vj-cat'),guia:$v('vj-guia'),peso:parseFloat($v('vj-peso'))||0,flete:parseFloat($v('vj-flete'))||0};
+  const v={id:Date.now(),fecha:$v('vj-fecha'),transId,transNombre:trans?.nombre||'',patente:trans?.patente||$v('vj-patente'),origen:$v('vj-origen'),destino:$v('vj-destino'),animales:parseInt($v('vj-animales'))||0,cat:$v('vj-cat'),guia:$v('vj-guia'),peso:parseFloat($v('vj-peso'))||0,pesoDestino:parseFloat($v('vj-peso-dest'))||0,horas:parseFloat($v('vj-horas'))||0,flete:parseFloat($v('vj-flete'))||0};
   DB.viajes.push(v);
   addHistorial('Traslado',`Viaje: ${v.transNombre} (${v.patente}) – ${esc(v.origen)}→${esc(v.destino)} – ${v.animales} animales`,''  ,'');
   closeModal('modal-viaje');renderViajes();
@@ -7816,13 +8001,15 @@ function renderTransportistas(){
 
 function renderViajes(){
   const tbody=document.getElementById('viajes-tbody'); if(!tbody) return;
-  if(!DB.viajes||!DB.viajes.length){tbody.innerHTML=emptyRow(7);return;}
+  renderDesbasteResumen();
+  if(!DB.viajes||!DB.viajes.length){tbody.innerHTML=emptyRow(8);return;}
   tbody.innerHTML=[...DB.viajes].reverse().map(v=>`<tr>
     <td>${v.fecha}</td><td>${v.transNombre}</td>
     <td class="td-mono" style="color:var(--accent)">${v.patente}</td>
     <td>${esc(v.origen||'--')}</td><td>${esc(v.destino||'--')}</td>
     <td class="td-mono">${v.animales}</td>
     <td class="td-mono">${esc(v.guia||'--')}</td>
+    <td>${viajeDesbasteTxt(v)}</td>
   </tr>`).join('');
 }
 
@@ -11212,7 +11399,356 @@ function exportarRacionPDF(id){
 
 // ═══ RESULTADO ECONÓMICO: relación compra-venta (flaco/gordo) y $/ha real ═══
 
+// ═══ VALUACIÓN DE HACIENDA: cuánto vale el stock a precio de mercado (MAG) ═══
+let _valBase='';
+function valCfg(){
+  if(!DB.settings) DB.settings={};
+  if(!DB.settings.valuacion) DB.settings.valuacion={vaca:'',toro:'',manual:{}};
+  const c=DB.settings.valuacion; if(!c.manual) c.manual={}; return c;
+}
+function valDias(a,b){ const d=(Date.parse(b)-Date.parse(a))/86400000; return isNaN(d)?9999:d; }
+function valEsReferencia(){ return /ref\.?\s*local/i.test((DB.precios&&DB.precios.fuente)||''); }
+function valTabla(){ return (DB.precios&&(DB.precios.categorias_full||DB.precios.categorias))||{}; }
+function valPrecioMAG(key){
+  const v=valTabla()[key]; if(v===undefined||v===null) return null;
+  if(typeof v==='object'){ const p=parseFloat(v.prom); if(!(p>0)) return null; return {min:parseFloat(v.min)||p,prom:p,max:parseFloat(v.max)||p}; }
+  const n=parseFloat(v); return n>0?{min:n,prom:n,max:n}:null;
+}
+function valPorPeso(familias,peso){
+  const tabla=valTabla(), p=Math.round(peso);
+  for(const fam of familias){
+    for(const k of Object.keys(tabla)){
+      let m=k.match(/^(\S+) (\d+)\/(\d+)$/);
+      if(m && m[1]===fam && p>=+m[2] && p<=+m[3]) return valPrecioMAG(k);
+      m=k.match(/^(\S+) \+(\d+)$/);
+      if(m && m[1]===fam && p>+m[2]) return valPrecioMAG(k);
+    }
+  }
+  return null;
+}
+function valClaves(prefijo){ return Object.keys(valTabla()).filter(k=>k===prefijo||k.startsWith(prefijo+' ')).filter(k=>!/\d+\/\d+$|\+\d+$/.test(k)); }
+function valVacaClave(){ const c=valCfg().vaca; if(c&&valPrecioMAG(c)) return c; return ['Vaca Invernada','Vaca Manufactura','Vaca Buena/Esp.'].find(k=>valPrecioMAG(k))||valClaves('Vaca')[0]||''; }
+function valToroClave(){ const c=valCfg().toro; if(c&&valPrecioMAG(c)) return c; return valPrecioMAG('Toro')?'Toro':(valClaves('Toro')[0]||''); }
+function valPrecioAnimal(a){
+  const cfg=valCfg(), cat=a.categoria, peso=parseFloat(a.peso)||0;
+  const man=parseFloat(cfg.manual[cat]);
+  if(man>0) return {min:man,prom:man,max:man,orig:'manual'};
+  let p=null, aprox=false;
+  if(cat==='Novillo'||cat==='Novillito'){
+    p=valPorPeso(peso<=430?['Novillito','Novillo']:['Novillo','Novillito'],peso);
+    if(!p){ p=valPrecioMAG(cat); aprox=!!p; }
+  } else if(cat==='Vaquillona'){
+    p=valPorPeso(['Vaquillona'],peso);
+    if(!p){ p=valPrecioMAG('Vaquillona'); aprox=!!p; }
+  } else if(cat==='Vaca'){ p=valPrecioMAG(valVacaClave()); }
+  else if(cat==='Toro'){ p=valPrecioMAG(valToroClave()); }
+  return p?{...p,orig:'MAG',aprox}:null;
+}
+function valuarHacienda(){
+  const hoy=lluviaHoy(), filas={}, t={cab:0,cabV:0,kg:0,min:0,prom:0,max:0};
+  let sinPeso=0, aprox=0, viejos=0, sinPrecio=0;
+  (DB.animales||[]).filter(a=>a.activo).forEach(a=>{
+    const cat=a.categoria||'Sin categoría';
+    const f=filas[cat]||(filas[cat]={cat,cab:0,cabV:0,kg:0,min:0,prom:0,max:0,sinPrecio:0});
+    f.cab++; t.cab++;
+    const peso=parseFloat(a.peso)||0;
+    if(peso<=0){ sinPeso++; return; }
+    const ph=a.pesoHistorico, ult=(ph&&ph.length)?ph[ph.length-1].fecha:'';
+    if(!ult||valDias(ult,hoy)>60) viejos++;
+    const p=valPrecioAnimal(a);
+    if(!p){ f.sinPrecio++; sinPrecio++; return; }
+    if(p.aprox) aprox++;
+    f.cabV++; t.cabV++; f.kg+=peso; t.kg+=peso;
+    ['min','prom','max'].forEach(k=>{ f[k]+=peso*p[k]; t[k]+=peso*p[k]; });
+  });
+  return {filas:Object.values(filas).sort((x,y)=>y.prom-x.prom||y.cab-x.cab),total:t,sinPeso,aprox,viejos,sinPrecio};
+}
+function valAutoSnapshot(){
+  try{
+    if(!DB||!Array.isArray(DB.animales)||!Object.keys(valTabla()).length||valEsReferencia()) return;
+    const r=valuarHacienda(); if(!r.total.cabV) return;
+    const usd=parseFloat(DB.precios&&DB.precios.dolar_oficial)||0, hoy=lluviaHoy();
+    const reg={f:hoy,v:Math.round(r.total.prom),cab:r.total.cab,cabV:r.total.cabV,kg:Math.round(r.total.kg),usd:usd?Math.round(r.total.prom/usd):0};
+    if(!DB.valuaciones) DB.valuaciones=[];
+    const ult=DB.valuaciones[DB.valuaciones.length-1];
+    if(ult&&ult.f===hoy){
+      if(Math.abs(ult.v-reg.v)/Math.max(1,ult.v)<0.005&&ult.cab===reg.cab) return;
+      DB.valuaciones[DB.valuaciones.length-1]=reg;
+    } else DB.valuaciones.push(reg);
+    if(DB.valuaciones.length>400) DB.valuaciones=DB.valuaciones.slice(-400);
+    saveToStorage();
+  }catch(e){ console.warn('valAutoSnapshot',e); }
+}
+function valSetRef(tipo,v){ valCfg()[tipo]=v; saveToStorage(); renderValuacionHacienda(); }
+function valSetManual(cat,v){
+  const n=parseFloat(String(v).replace(',','.')), c=valCfg();
+  if(n>0) c.manual[cat]=n; else delete c.manual[cat];
+  saveToStorage(); renderValuacionHacienda();
+}
+function renderValuacionHacienda(){
+  const box=document.getElementById('val-hacienda'); if(!box) return;
+  const card=document.getElementById('val-card');
+  if(rolActual()!=='Dueño'){ if(card) card.style.display='none'; return; }
+  if(card) card.style.display='';
+  const r=valuarHacienda(), hoy=lluviaHoy(), t=r.total;
+  const usd=parseFloat(DB.precios&&DB.precios.dolar_oficial)||0, ref=valEsReferencia();
+  const fmt=n=>'$'+Math.round(n).toLocaleString('es-AR');
+  const aviso=tx=>`<div style="background:rgba(212,164,76,.12);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;font-size:12.5px;margin-bottom:8px">${tx}</div>`;
+  if(!t.cab){ box.innerHTML='<div style="color:var(--text3);font-size:13px">No hay animales activos para valuar.</div>'; return; }
+  if(!Object.keys(valTabla()).length){ box.innerHTML=aviso('Todavía no hay precios del MAG cargados. Abrí la sección Precios para actualizarlos.'); return; }
+  valAutoSnapshot();
+  let h='';
+  if(ref) h+=aviso('⚠️ Los precios son de referencia local, no del MAG real: el valor es aproximado y no se guarda en la evolución.');
+  else if(DB.precios.fecha&&valDias(DB.precios.fecha,hoy)>7) h+=aviso(`⚠️ Los últimos precios MAG son del ${lluviaFmtF(DB.precios.fecha)}.`);
+  const kpi=(tt,v,sub,color)=>`<div class="kpi ${color||''}"><div class="kpi-label">${tt}</div><div class="kpi-val" style="font-size:22px">${v}</div>${sub?`<div class="kpi-sub">${sub}</div>`:''}</div>`;
+  h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px">
+    ${kpi('Valor de la hacienda',fmt(t.prom),usd?'≈ USD '+Math.round(t.prom/usd).toLocaleString('es-AR'):'','green')}
+    ${kpi('Cabezas valuadas',`${t.cabV} de ${t.cab}`,Math.round(t.kg).toLocaleString('es-AR')+' kg','blue')}
+    ${kpi('Precio promedio',t.kg?fmt(t.prom/t.kg)+'/kg':'—','por kg vivo','amber')}
+    ${kpi('Valor por cabeza',t.cabV?fmt(t.prom/t.cabV):'—','por animal valuado','purple')}
+  </div>`;
+  if(t.cabV) h+=`<div style="font-size:12.5px;color:var(--text2);margin-bottom:10px">Rango según precios mínimo y máximo del MAG: <b>${fmt(t.min)}</b> a <b>${fmt(t.max)}</b></div>`;
+  const notas=[];
+  if(r.sinPeso) notas.push(`${r.sinPeso} animales sin peso registrado no se valúan`);
+  if(r.viejos) notas.push(`${r.viejos} animales con el último peso de hace más de 60 días (o sin pesada): el valor puede estar subestimado`);
+  if(r.aprox) notas.push(`${r.aprox} animales valuados con el precio general de su categoría porque su peso está fuera de los rangos del MAG`);
+  if(notas.length) h+=`<div style="font-size:12px;color:var(--text3);margin-bottom:10px">${notas.map(n=>'• '+n).join('<br>')}</div>`;
+  // Tabla por categoría
+  h+=`<div class="tbl-wrap"><table><thead><tr><th>Categoría</th><th>Cab.</th><th>Kg</th><th>$/kg prom.</th><th>Valor</th></tr></thead><tbody>`+
+    r.filas.map(f=>{
+      const celda=f.sinPrecio?`<input type="number" min="0" step="1" inputmode="decimal" class="form-control" style="width:110px;padding:4px 6px;font-size:12px" placeholder="$/kg" data-cat="${esc(f.cat)}" onchange="valSetManual(this.dataset.cat,this.value)">`:'';
+      return `<tr><td>${esc(f.cat)}</td><td>${f.cab}</td><td>${f.kg?Math.round(f.kg).toLocaleString('es-AR'):'—'}</td><td>${f.kg?fmt(f.prom/f.kg):'—'}</td><td>${f.cabV?'<b>'+fmt(f.prom)+'</b>':'—'}${f.sinPrecio?`<div style="font-size:11px;color:var(--amber)">${f.sinPrecio} sin precio MAG. Cargá $/kg:</div>${celda}`:''}</td></tr>`;
+    }).join('')+
+    `<tr style="font-weight:700"><td>Total</td><td>${t.cab}</td><td>${Math.round(t.kg).toLocaleString('es-AR')}</td><td>${t.kg?fmt(t.prom/t.kg):'—'}</td><td>${fmt(t.prom)}</td></tr></tbody></table></div>`;
+  const manuales=Object.keys(valCfg().manual);
+  if(manuales.length) h+=`<div style="font-size:12px;color:var(--text3);margin-top:6px">Precios cargados a mano: ${manuales.map(c=>esc(c)+' $'+valCfg().manual[c]+'/kg').join(' · ')}. Para cambiarlos, escribí otro valor (o 0 para quitarlo).</div>`;
+  // Selector de referencia para vacas y toros
+  const hayVaca=r.filas.some(f=>f.cat==='Vaca'), hayToro=r.filas.some(f=>f.cat==='Toro');
+  const sel=(tipo,claves,actual)=>`<select class="form-control" style="width:auto;padding:4px 8px;font-size:12px" onchange="valSetRef('${tipo}',this.value)">${claves.map(k=>`<option value="${esc(k)}" ${k===actual?'selected':''}>${esc(k)}</option>`).join('')}</select>`;
+  if((hayVaca&&valClaves('Vaca').length>1)||(hayToro&&valClaves('Toro').length>1)){
+    h+=`<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;margin-top:10px">`+
+      (hayVaca&&valClaves('Vaca').length>1?`<span>Vacas valuadas como: ${sel('vaca',valClaves('Vaca'),valVacaClave())}</span>`:'')+
+      (hayToro&&valClaves('Toro').length>1?`<span>Toros valuados como: ${sel('toro',valClaves('Toro'),valToroClave())}</span>`:'')+`</div>`;
+  }
+  // Resultado del período contra una valuación anterior
+  const snaps=(DB.valuaciones||[]).filter(s=>s.f<hoy);
+  h+=`<div style="font-weight:700;font-size:14px;margin:16px 0 6px">📈 Resultado del período</div>`;
+  if(!snaps.length){
+    h+=`<div style="font-size:12.5px;color:var(--text3)">Esta es tu primera valuación guardada. Desde hoy la app va registrando la evolución del valor de la hacienda y, cuando haya una valuación anterior, acá vas a ver el resultado del período.</div>`;
+  } else {
+    const anio=hoy.slice(0,4), delAnio=snaps.filter(s=>s.f.startsWith(anio));
+    let base=snaps.find(s=>s.f===_valBase)||(delAnio.length?delAnio[0]:snaps[0]);
+    const primerosMes=[]; const vistos=new Set();
+    snaps.forEach(s=>{ const m=s.f.slice(0,7); if(!vistos.has(m)){ vistos.add(m); primerosMes.push(s); } });
+    const opciones=primerosMes.slice(-14); if(!opciones.includes(base)) opciones.push(base);
+    opciones.sort((a,b)=>a.f.localeCompare(b.f));
+    const en=(arr)=>(arr||[]).filter(x=>x.fecha>base.f&&x.fecha<=hoy).reduce((s,x)=>s+(parseFloat(x.total)||0),0);
+    const ventas=en(DB.ventas), compras=en(DB.compras), dif=t.prom-base.v, res=ventas-compras+dif;
+    const gts=(DB.gastos||[]).filter(x=>x.fecha>base.f&&x.fecha<=hoy).reduce((a,x)=>a+(parseFloat(x.monto)||0),0), neto=res-gts;
+    h+=`<div style="font-size:12.5px;margin-bottom:8px">Comparar contra la valuación del: <select class="form-control" style="width:auto;padding:4px 8px;font-size:12px;display:inline-block" onchange="_valBase=this.value;renderValuacionHacienda()">${opciones.map(s=>`<option value="${s.f}" ${s.f===base.f?'selected':''}>${lluviaFmtF(s.f)} (${fmt(s.v)})</option>`).join('')}</select></div>`;
+    const fila=(l,v,c)=>`<tr><td>${l}</td><td style="text-align:right;${c?'color:'+c+';':''}font-weight:600">${v}</td></tr>`;
+    h+=`<div class="tbl-wrap"><table><tbody>
+      ${fila('Ventas del período','+ '+fmt(ventas))}
+      ${fila('Compras del período','− '+fmt(compras))}
+      ${fila('Variación del valor de la hacienda en pie',(dif>=0?'+ ':'− ')+fmt(Math.abs(dif)),dif>=0?'var(--green)':'var(--red)')}
+      <tr style="font-weight:700"><td>Resultado bruto del período</td><td style="text-align:right;color:${res>=0?'var(--green)':'var(--red)'}">${res>=0?'':'− '}${fmt(Math.abs(res))}</td></tr>
+      ${gts?fila('Gastos del campo cargados','− '+fmt(gts)):''}
+      ${gts?`<tr style="font-weight:700"><td>Resultado neto del período</td><td style="text-align:right;color:${neto>=0?'var(--green)':'var(--red)'}">${neto>=0?'':'− '}${fmt(Math.abs(neto))}</td></tr>`:''}
+    </tbody></table></div>
+    <div style="font-size:11.5px;color:var(--text3);margin-top:6px">Es ventas − compras + variación del stock valuado. ${gts?'El neto descuenta los gastos que cargaste en Gastos del campo; si faltan rubros (alimentación, sanidad, mano de obra) queda sobreestimado.':'Todavía no descuenta alimentación, sanidad, mano de obra ni gastos del campo: cargalos en Gastos del campo, más abajo.'} La variación mezcla engorde, cambios de precio y entradas o salidas de animales.</div>`;
+  }
+  h+=`<div style="margin-top:12px"><button class="btn-secondary" style="font-size:12.5px;padding:6px 12px" onclick="exportarValuacionExcel()">📥 Excel</button></div>`;
+  box.innerHTML=h;
+}
+function exportarValuacionExcel(){
+  if(typeof XLSX==='undefined'){ toast('No se pudo cargar el exportador de Excel','err'); return; }
+  const r=valuarHacienda(), hoy=lluviaHoy();
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Categoría','Cabezas','Cabezas valuadas','Kg','$/kg promedio','Valor mínimo','Valor promedio','Valor máximo'],
+    ...r.filas.map(f=>[f.cat,f.cab,f.cabV,Math.round(f.kg),f.kg?Math.round(f.prom/f.kg):'',Math.round(f.min),Math.round(f.prom),Math.round(f.max)]),
+    ['TOTAL',r.total.cab,r.total.cabV,Math.round(r.total.kg),r.total.kg?Math.round(r.total.prom/r.total.kg):'',Math.round(r.total.min),Math.round(r.total.prom),Math.round(r.total.max)]]),'Valuación '+lluviaFmtF(hoy).replace(/\//g,'-'));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Fecha','Valor $','USD','Cabezas','Kg'],...(DB.valuaciones||[]).map(s=>[lluviaFmtF(s.f),s.v,s.usd||'',s.cab,s.kg])]),'Evolución');
+  XLSX.writeFile(wb,nombreArchivoExport('Valuacion_hacienda','xlsx'));
+}
+setTimeout(valAutoSnapshot,25000);
+setInterval(valAutoSnapshot,6*60*60*1000);
+
+// ═══ COBROS Y PAGOS: vencimientos de cheques y plazos, y flujo de caja ═══
+let _cpFiltro='pendiente';
+function cpFmt(n){ return '$'+Math.round(n).toLocaleString('es-AR'); }
+function cpSumarDias(iso,n){ const [y,m,d]=iso.split('-').map(Number); const dt=new Date(y,m-1,d+n); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+function cpDias(iso,hoy){ return Math.round((Date.parse(iso)-Date.parse(hoy))/86400000); }
+function cpSuma(arr,tipo){ return arr.filter(c=>c.tipo===tipo).reduce((s,c)=>s+(parseFloat(c.monto)||0),0); }
+function cpPlazoToggle(p){ const sel=document.getElementById(p+'-pago'), box=document.getElementById(p+'-plazo-box'); if(box) box.style.display=(sel&&sel.value==='plazo')?'':'none'; }
+// Genera los vencimientos (cobros si es venta, pagos si es compra) cuando la operación no es de contado
+function crearCompromisosDePago(origen,op,p){
+  const sel=document.getElementById(p+'-pago'); if(!sel||sel.value!=='plazo') return 0;
+  const reset=()=>{ sel.value='contado'; cpPlazoToggle(p); };
+  if(rolActual()!=='Dueño'){ reset(); return 0; }
+  if(!(op.total>0)){ toast('Falta el monto de la operación: no se generaron vencimientos','err'); reset(); return 0; }
+  const n=Math.max(1,Math.min(12,parseInt($v(p+'-cuotas'))||1)), cada=Math.max(1,parseInt($v(p+'-cada'))||30);
+  const medio=$v(p+'-medio')||'Cheque', primero=$v(p+'-venc')||cpSumarDias(op.fecha||lluviaHoy(),cada);
+  const tipo=origen==='venta'?'cobro':'pago', contra=(origen==='venta'?op.comp:op.prov)||'';
+  if(!DB.compromisos) DB.compromisos=[];
+  let acum=0;
+  for(let i=0;i<n;i++){
+    const monto=i<n-1?Math.round(op.total/n*100)/100:Math.round((op.total-acum)*100)/100;
+    acum+=monto;
+    DB.compromisos.push({id:Date.now()+i,tipo,venc:cpSumarDias(primero,cada*i),monto,contraparte:contra,concepto:`${origen==='venta'?'Venta':'Compra'} ${op.cant} ${op.cat||''}${n>1?` · cuota ${i+1}/${n}`:''}`.trim(),medio,nro:'',estado:'pendiente',fechaCumplido:'',origen,origenId:op.id});
+  }
+  reset(); return n;
+}
+function cpFlujo(pend,hoy){
+  const mk=(label,items)=>({label,cobros:cpSuma(items,'cobro'),pagos:cpSuma(items,'pago')});
+  const filas=[], atras=pend.filter(c=>c.venc<hoy);
+  if(atras.length) filas.push(mk('Atrasados',atras));
+  for(let i=0;i<8;i++){
+    const d0=cpSumarDias(hoy,7*i), d1=cpSumarDias(hoy,7*i+6), it=pend.filter(c=>c.venc>=d0&&c.venc<=d1);
+    if(it.length) filas.push(mk(lluviaFmtF(d0).slice(0,5)+' – '+lluviaFmtF(d1).slice(0,5),it));
+  }
+  const desp=pend.filter(c=>c.venc>=cpSumarDias(hoy,56)); if(desp.length) filas.push(mk('Más adelante',desp));
+  let acum=0; filas.forEach(f=>{ f.neto=f.cobros-f.pagos; acum+=f.neto; f.acum=acum; });
+  return filas;
+}
+function renderCobrosPagos(){
+  const dueno=rolActual()==='Dueño';
+  ['ve','co'].forEach(p=>{ const w=document.getElementById(p+'-pago-wrap'); if(w) w.style.display=dueno?'':'none'; });
+  const card=document.getElementById('cp-card'); if(!card) return;
+  if(!dueno){ card.style.display='none'; return; }
+  card.style.display='';
+  const hoy=lluviaHoy();
+  const fv=document.getElementById('cp-venc'); if(fv&&!fv.value) fv.value=cpSumarDias(hoy,30);
+  const todos=(DB.compromisos||[]).filter(c=>c&&c.venc), pend=todos.filter(c=>c.estado!=='cumplido');
+  const cobrar=cpSuma(pend,'cobro'), pagar=cpSuma(pend,'pago'), atras=pend.filter(c=>c.venc<hoy);
+  const kpi=(t,v,s,col)=>`<div class="kpi ${col}"><div class="kpi-label">${t}</div><div class="kpi-val" style="font-size:22px">${v}</div><div class="kpi-sub">${s}</div></div>`;
+  document.getElementById('cp-kpis').innerHTML=
+    kpi('A cobrar',cpFmt(cobrar),pend.filter(c=>c.tipo==='cobro').length+' pendientes','green')+
+    kpi('A pagar',cpFmt(pagar),pend.filter(c=>c.tipo==='pago').length+' pendientes','red')+
+    kpi('Saldo neto',(cobrar-pagar<0?'− ':'')+cpFmt(Math.abs(cobrar-pagar)),'cobros − pagos','blue')+
+    kpi('Vencidos',atras.length,atras.length?cpFmt(atras.reduce((s,c)=>s+(parseFloat(c.monto)||0),0))+' sin cumplir':'todo al día',atras.length?'amber':'green');
+  const flujo=cpFlujo(pend,hoy), fl=document.getElementById('cp-flujo');
+  fl.innerHTML=flujo.length?`<div style="font-weight:700;font-size:14px;margin:14px 0 6px">📆 Flujo de caja (próximas 8 semanas)</div><div class="tbl-wrap"><table><thead><tr><th>Semana</th><th>Cobros</th><th>Pagos</th><th>Neto</th><th>Acumulado</th></tr></thead><tbody>`+
+    flujo.map(f=>`<tr${f.label==='Atrasados'?' style="color:var(--amber)"':''}><td>${esc(f.label)}</td><td style="color:var(--green)">${f.cobros?cpFmt(f.cobros):'—'}</td><td style="color:var(--red)">${f.pagos?cpFmt(f.pagos):'—'}</td><td><b>${f.neto<0?'− ':''}${cpFmt(Math.abs(f.neto))}</b></td><td>${f.acum<0?'− ':''}${cpFmt(Math.abs(f.acum))}</td></tr>`).join('')+`</tbody></table></div><div style="font-size:11.5px;color:var(--text3);margin-top:4px">Solo se muestran las semanas con movimientos. Incluye únicamente lo que cargaste como pendiente.</div>`:'';
+  const fs=document.getElementById('cp-filtro'); if(fs) fs.value=_cpFiltro;
+  let lista=todos.filter(c=>_cpFiltro==='todos'||(_cpFiltro==='cumplido'?c.estado==='cumplido':c.estado!=='cumplido'));
+  const row=c=>{
+    const d=cpDias(c.venc,hoy), cum=c.estado==='cumplido';
+    const cuando=cum?'cumplido el '+lluviaFmtF(c.fechaCumplido||c.venc):(d===0?'hoy':d===1?'mañana':d>1?`en ${d} días`:`hace ${-d} días`);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border);padding:8px 4px;font-size:13px${cum?';opacity:.6':''}">
+      <span><b>${lluviaFmtF(c.venc)}</b> <span style="color:${!cum&&d<0?'var(--amber)':'var(--text3)'}">(${cuando})</span><br>${c.tipo==='cobro'?'💵':'💸'} ${esc(c.contraparte||'—')} <span style="color:var(--text3)">· ${esc(c.concepto||'')}${c.medio?' · '+esc(c.medio):''}${c.nro?' Nº '+esc(c.nro):''}</span></span>
+      <span style="white-space:nowrap;text-align:right"><b style="color:${c.tipo==='cobro'?'var(--green)':'var(--red)'}">${cpFmt(parseFloat(c.monto)||0)}</b><br>
+        <span style="cursor:pointer" title="${cum?'Volver a pendiente':'Marcar como cumplido'}" onclick="cpMarcar(${c.id})">${cum?'↩️':'✅'}</span> <span style="cursor:pointer;color:var(--red);margin-left:6px" onclick="cpEliminar(${c.id})">🗑</span></span></div>`;
+  };
+  let h='';
+  if(!lista.length) h=`<div style="color:var(--text3);font-size:13px;padding:8px 0">${_cpFiltro==='cumplido'?'Todavía no marcaste nada como cumplido.':'No hay cobros ni pagos pendientes. Cargalos desde una venta o compra con "Cheques / a plazo", o a mano con el botón de arriba.'}</div>`;
+  else if(_cpFiltro==='pendiente'){
+    const g=[['⚠️ Atrasados',lista.filter(c=>c.venc<hoy)],['Esta semana',lista.filter(c=>c.venc>=hoy&&c.venc<=cpSumarDias(hoy,7))],['Próximos 30 días',lista.filter(c=>c.venc>cpSumarDias(hoy,7)&&c.venc<=cpSumarDias(hoy,30))],['Más adelante',lista.filter(c=>c.venc>cpSumarDias(hoy,30))]];
+    h=g.filter(x=>x[1].length).map(([t,a])=>`<div style="font-weight:700;font-size:13px;margin:12px 0 2px">${t}</div>`+a.sort((x,y)=>x.venc.localeCompare(y.venc)).map(row).join('')).join('');
+  } else h=lista.sort((x,y)=>(y.fechaCumplido||y.venc).localeCompare(x.fechaCumplido||x.venc)).map(row).join('');
+  document.getElementById('cp-lista').innerHTML=h;
+}
+function cpCambiarFiltro(v){ _cpFiltro=v; renderCobrosPagos(); }
+function cpMarcar(id){
+  const c=(DB.compromisos||[]).find(x=>x.id===id); if(!c) return;
+  if(c.estado==='cumplido'){ c.estado='pendiente'; c.fechaCumplido=''; } else { c.estado='cumplido'; c.fechaCumplido=lluviaHoy(); }
+  saveToStorage(); renderCobrosPagos();
+}
+function cpEliminar(id){
+  if(!confirm('¿Eliminar este vencimiento?')) return;
+  DB.compromisos=(DB.compromisos||[]).filter(x=>x.id!==id); saveToStorage(); renderCobrosPagos();
+}
+function cpGuardarManual(){
+  const venc=$v('cp-venc'), monto=parseFloat($v('cp-monto')), tipo=$v('cp-tipo')||'cobro';
+  if(!venc){ toast('Elegí la fecha de vencimiento','err'); return; }
+  if(!(monto>0)){ toast('Ingresá el monto','err'); return; }
+  if(!DB.compromisos) DB.compromisos=[];
+  DB.compromisos.push({id:Date.now(),tipo,venc,monto,contraparte:$v('cp-contra'),concepto:$v('cp-concepto'),medio:$v('cp-medio'),nro:$v('cp-nro'),estado:'pendiente',fechaCumplido:'',origen:'manual',origenId:''});
+  ['cp-monto','cp-contra','cp-concepto','cp-nro'].forEach(i=>{ const e=document.getElementById(i); if(e) e.value=''; });
+  saveToStorage(); toast(`${tipo==='cobro'?'Cobro':'Pago'} registrado: ${cpFmt(monto)} para el ${lluviaFmtF(venc)}`,'ok'); renderCobrosPagos();
+}
+function exportarCobrosPagosExcel(){
+  if(typeof XLSX==='undefined'){ toast('No se pudo cargar el exportador de Excel','err'); return; }
+  const todos=[...(DB.compromisos||[])].sort((a,b)=>a.venc.localeCompare(b.venc));
+  if(!todos.length){ toast('No hay vencimientos para exportar','err'); return; }
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Tipo','Vencimiento','Monto $','Contraparte','Concepto','Medio','Nº','Estado','Fecha cumplido'],...todos.map(c=>[c.tipo==='cobro'?'Cobro':'Pago',lluviaFmtF(c.venc),parseFloat(c.monto)||0,c.contraparte||'',c.concepto||'',c.medio||'',c.nro||'',c.estado==='cumplido'?'Cumplido':'Pendiente',c.fechaCumplido?lluviaFmtF(c.fechaCumplido):''])]),'Vencimientos');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Semana','Cobros','Pagos','Neto','Acumulado'],...cpFlujo(todos.filter(c=>c.estado!=='cumplido'),lluviaHoy()).map(f=>[f.label,f.cobros,f.pagos,f.neto,f.acum])]),'Flujo semanal');
+  XLSX.writeFile(wb,nombreArchivoExport('Cobros_y_pagos','xlsx'));
+}
+
+// ═══ GASTOS DEL CAMPO: costos generales (mano de obra, combustible, arrendamiento, impuestos...) ═══
+const GASTO_CATS=['Mano de obra','Combustible','Mantenimiento','Impuestos y tasas','Arrendamiento','Honorarios','Alimentación','Sanidad','Fletes','Otros'];
+function gastosEnRango(desde,hasta){
+  return (DB.gastos||[]).filter(g=>g&&g.fecha&&(!desde||g.fecha>=desde)&&(!hasta||g.fecha<=hasta));
+}
+function gastosNotaMargen(margen,desde,hasta){
+  const base='font-size:12px;color:var(--text3);margin-top:8px';
+  const g=rolActual()==='Dueño'?gastosEnRango(desde,hasta).reduce((s,x)=>s+(parseFloat(x.monto)||0),0):0;
+  if(!g) return `<div style="${base}">El margen bruto no descuenta alimentación, sanidad ni gastos de estructura — es la diferencia entre lo pagado y lo cobrado en el período.</div>`;
+  const fmt=n=>'$'+Math.round(n).toLocaleString('es-AR'), neto=margen-g;
+  return `<div style="font-size:14px;margin-top:10px">Gastos del campo cargados: <b>${fmt(g)}</b> → margen neto: <b style="color:${neto>=0?'var(--green)':'var(--red)'}">${neto<0?'− ':''}${fmt(Math.abs(neto))}</b></div><div style="${base}">El margen neto descuenta solo los gastos que cargaste en "Gastos del campo". No incluye el cambio de valor de la hacienda en pie (mirá "Valor de la hacienda hoy").</div>`;
+}
+function renderGastosCampo(){
+  const card=document.getElementById('gastos-card'); if(!card) return;
+  if(rolActual()!=='Dueño'){ card.style.display='none'; return; }
+  card.style.display='';
+  const sel=document.getElementById('gasto-cat');
+  if(sel&&!sel.options.length) sel.innerHTML=GASTO_CATS.map(c=>`<option>${c}</option>`).join('');
+  const fe=document.getElementById('gasto-fecha'); if(fe&&!fe.value) fe.value=lluviaHoy();
+  const desde=(document.getElementById('res-desde')||{}).value||'', hasta=(document.getElementById('res-hasta')||{}).value||'';
+  const lista=gastosEnRango(desde,hasta).sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.id-a.id);
+  const total=lista.reduce((s,g)=>s+(parseFloat(g.monto)||0),0);
+  const fmt=n=>'$'+Math.round(n).toLocaleString('es-AR');
+  const box=document.getElementById('gastos-box'); if(!box) return;
+  if(!lista.length){ box.innerHTML=`<div style="color:var(--text3);font-size:13px;padding:6px 0">Sin gastos cargados${(desde||hasta)?' en ese período':''}.</div>`; return; }
+  const ha=(DB.potreros||[]).filter(p=>p.estado==='Activo').reduce((s,p)=>s+(parseFloat(p.ha)||0),0);
+  const porCat={}; lista.forEach(g=>{ const c=g.cat||'Otros'; porCat[c]=(porCat[c]||0)+(parseFloat(g.monto)||0); });
+  const cats=Object.entries(porCat).sort((a,b)=>b[1]-a[1]);
+  let h=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
+    <div class="kpi red"><div class="kpi-label">Total gastos</div><div class="kpi-val" style="font-size:22px">${fmt(total)}</div><div class="kpi-sub">${lista.length} ${lista.length===1?'registro':'registros'}</div></div>
+    ${ha>0?`<div class="kpi amber"><div class="kpi-label">Gasto por hectárea</div><div class="kpi-val" style="font-size:22px">${fmt(total/ha)}</div><div class="kpi-sub">sobre ${ha.toLocaleString('es-AR')} ha activas</div></div>`:''}
+    <div class="kpi blue"><div class="kpi-label">Mayor rubro</div><div class="kpi-val" style="font-size:18px">${esc(cats[0][0])}</div><div class="kpi-sub">${Math.round(cats[0][1]/total*100)}% del total</div></div>
+  </div>`;
+  h+=cats.map(([c,m])=>`<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${esc(c)}</span><span><b>${fmt(m)}</b> <span style="color:var(--text3)">· ${Math.round(m/total*100)}%</span></span></div><div style="height:6px;background:var(--bg3);border-radius:3px"><div style="height:6px;width:${(m/total*100).toFixed(1)}%;background:var(--red);border-radius:3px"></div></div></div>`).join('');
+  h+=`<div style="font-weight:700;font-size:13px;margin:14px 0 6px">Detalle</div><div style="max-height:280px;overflow-y:auto">`+
+    lista.map(g=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border);padding:7px 4px;font-size:13px">
+      <span><b>${lluviaFmtF(g.fecha)}</b> · ${esc(g.cat||'Otros')}${g.desc?` <span style="color:var(--text3)">· ${esc(g.desc)}</span>`:''}</span>
+      <span style="white-space:nowrap"><b>${fmt(parseFloat(g.monto)||0)}</b> <span style="cursor:pointer;color:var(--red);margin-left:6px" onclick="eliminarGasto(${g.id})">🗑</span></span></div>`).join('')+`</div>`;
+  box.innerHTML=h;
+}
+function guardarGasto(){
+  const fecha=$v('gasto-fecha'), cat=$v('gasto-cat')||'Otros', desc=$v('gasto-desc');
+  const raw=String($v('gasto-monto')), monto=parseFloat(raw.includes(',')?raw.replace(/\./g,'').replace(',','.'):raw);
+  if(!fecha){ toast('Elegí la fecha','err'); return; }
+  if(fecha>lluviaHoy()){ toast('La fecha no puede ser futura','err'); return; }
+  if(!(monto>0)){ toast('Ingresá el monto del gasto','err'); return; }
+  if(!DB.gastos) DB.gastos=[];
+  DB.gastos.push({id:Date.now(),fecha,cat,monto,desc});
+  addHistorial('Gasto',`${cat}: $${Math.round(monto).toLocaleString('es-AR')}${desc?' · '+desc:''}`,'','');
+  saveToStorage();
+  const m=document.getElementById('gasto-monto'); if(m) m.value='';
+  const d=document.getElementById('gasto-desc'); if(d) d.value='';
+  toast(`Gasto registrado: $${Math.round(monto).toLocaleString('es-AR')} (${cat})`,'ok');
+  renderResultadoEconomico(); renderValuacionHacienda();
+}
+function eliminarGasto(id){
+  if(!confirm('¿Eliminar este gasto?')) return;
+  DB.gastos=(DB.gastos||[]).filter(g=>g.id!==id);
+  saveToStorage(); renderResultadoEconomico(); renderValuacionHacienda();
+}
+function exportarGastosExcel(){
+  if(typeof XLSX==='undefined'){ toast('No se pudo cargar el exportador de Excel','err'); return; }
+  const lista=[...(DB.gastos||[])].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  if(!lista.length){ toast('No hay gastos para exportar','err'); return; }
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Fecha','Rubro','Monto $','Descripción'],...lista.map(g=>[lluviaFmtF(g.fecha),g.cat||'Otros',parseFloat(g.monto)||0,g.desc||''])]),'Gastos');
+  const porCat={}; lista.forEach(g=>{ const c=g.cat||'Otros'; porCat[c]=(porCat[c]||0)+(parseFloat(g.monto)||0); });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Rubro','Total $'],...Object.entries(porCat).sort((a,b)=>b[1]-a[1]),['TOTAL',Object.values(porCat).reduce((s,v)=>s+v,0)]]),'Por rubro');
+  XLSX.writeFile(wb,nombreArchivoExport('Gastos_del_campo','xlsx'));
+}
+
 function renderResultadoEconomico(){
+  renderGastosCampo();
   const divCV = document.getElementById('res-compraventa');
   const divHa = document.getElementById('res-porhectarea');
   if(!divCV || !divHa) return;
@@ -11250,7 +11786,7 @@ function renderResultadoEconomico(){
         <b>Relación compra-venta: ${relacion.toFixed(2)}</b> — cada kilo de flaco comprado, se vende (en promedio) a ${relacion.toFixed(2)}x su precio de compra.
         ${relacion>=1.15?`<span style="color:var(--green)"> ✅ Relación favorable para la invernada.</span>`:relacion>=1.0?`<span style="color:var(--amber)"> ⚠️ Relación ajustada — el margen depende de la eficiencia de conversión.</span>`:`<span style="color:var(--red)"> 🔴 Relación desfavorable — vendés más barato por kilo de lo que pagaste, hace falta que la ganancia de peso compense.</span>`}
       </div>`:'<span style="color:var(--text3)">Falta compra o venta en el período para calcular la relación.</span>'}
-      <div style="font-size:12px;color:var(--text3);margin-top:8px">El margen bruto no descuenta alimentación, sanidad ni gastos de estructura — es la diferencia entre lo pagado y lo cobrado en el período.</div>
+      ${gastosNotaMargen(margenBruto,desde,hasta)}
     `;
   }
 
@@ -13540,6 +14076,17 @@ function verificarYNotificar(){
       const clave = 'venc_'+it.icono+'_'+it.texto;
       if(it.dias<=3 && !yaSeAviso(clave)){
         mostrarNotificacionPush('🔔 Vencimiento RodeoFlow', it.texto, 'vencimiento');
+        marcarAvisado(clave);
+      }
+    });
+  }
+
+  if(prefs.vencimientos!==false && rolActual()==='Dueño' && Array.isArray(DB.compromisos)){
+    const hoyN = lluviaHoy(), limite = cpSumarDias(hoyN,2);
+    DB.compromisos.filter(c=>c.estado!=='cumplido' && c.venc<=limite).forEach(c=>{
+      const clave = 'cp_'+c.id+(c.venc<hoyN?'_v':'_p');
+      if(!yaSeAviso(clave)){
+        mostrarNotificacionPush(c.tipo==='cobro'?'💵 Cobro por vencer':'💸 Pago por vencer', `${c.contraparte||'—'}: ${cpFmt(parseFloat(c.monto)||0)} · ${c.venc<hoyN?'venció el ':'vence el '}${lluviaFmtF(c.venc)}`, 'vencimiento');
         marcarAvisado(clave);
       }
     });
