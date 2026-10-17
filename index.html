@@ -1446,6 +1446,7 @@
           <span>🌦️ Clima y Alertas</span>
           <button class="btn-secondary" style="padding:5px 12px;font-size:13px" onclick="actualizarClima()">🔄 Actualizar</button>
         </div>
+        <div id="clima-campos" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
         <div id="clima-box">
           <div style="text-align:center;color:var(--text3);padding:14px;font-size:13px">Cargando clima…</div>
         </div>
@@ -1460,6 +1461,7 @@
             <button class="btn-secondary" style="padding:5px 12px;font-size:13px" onclick="exportarLluviasExcel()">📥 Excel</button>
           </span>
         </div>
+        <div class="form-group" id="lluvia-campo-wrap" style="display:none"><label class="form-label">Campo</label><select id="lluvia-campo" class="form-control" onchange="lluviaCambiarCampo(this.value)"></select></div>
         <button type="button" id="lluvia-voz-btn" class="btn-primary" style="width:100%;padding:12px;font-size:15px" onclick="lluviaVozIniciar()">🎙️ Dictar lluvia</button>
         <input type="text" id="lluvia-voz" class="form-control" readonly oninput="lluviaVozAplicar()" placeholder="Decí: «ayer llovieron 25 milímetros»" style="margin-top:8px">
         <div id="lluvia-voz-estado" style="font-size:12px;color:var(--text3);margin:4px 0 12px"></div>
@@ -2744,6 +2746,16 @@
           </div>
         </div>
         <div id="config-loc-resultado" style="font-size:13px;color:var(--text2);margin-top:4px"></div>
+        <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">Otros campos (otras localidades)</div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Si tenés campos en otro lugar, agregalos para llevar el clima y las lluvias de cada uno por separado.</div>
+          <div id="config-campos-lista"></div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Nombre del campo</label><input type="text" id="campo-nuevo-nombre" class="form-control" placeholder="Ej: La Esperanza"></div>
+            <div class="form-group"><label class="form-label">Localidad</label><input type="text" id="campo-nuevo-loc" class="form-control" placeholder="Ej: Trenque Lauquen, Buenos Aires"></div>
+          </div>
+          <button class="btn-secondary" onclick="agregarCampo()">＋ Agregar campo</button>
+        </div>
       </div>
       <div class="card">
         <div class="card-title">🔔 Notificaciones</div>
@@ -6049,7 +6061,8 @@ function weatherIcono(code){
 
 async function actualizarClima(){
   const box=document.getElementById('clima-box'); if(!box)return;
-  const cfg=DB.settings.clima;
+  renderSelectorCampos();
+  const _c=campoPorId(_climaCampo), cfg=(_c&&_c.lat)?{lat:_c.lat,lon:_c.lon,nombre:_c.nombre}:null;
   if(!cfg||!cfg.lat){
     box.innerHTML=`<div style="text-align:center;color:var(--text3);padding:14px;font-size:13px">
       Configurá la ubicación del establecimiento en <span style="color:var(--accent);cursor:pointer" onclick="showPage('configuracion')">Configuración</span> para ver el clima acá.
@@ -6119,7 +6132,7 @@ function renderClima(data, cfg){
   const acum7 = precipPasada.slice(-7).reduce((s,v)=>s+(v||0),0);
   const acum30 = precipPasada.reduce((s,v)=>s+(v||0),0);
   const hoy30 = new Date(); hoy30.setDate(hoy30.getDate()-30);
-  const manuales = (DB.precipitaciones||[]).filter(p=>new Date(p.fecha)>=hoy30);
+  const manuales = precipDeCampo(_climaCampo).filter(p=>new Date(p.fecha)>=hoy30);
   const acumManual30 = manuales.reduce((s,p)=>s+(p.mm||0),0);
   html += `<div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:14px">
     <div style="font-weight:700;font-size:13px;margin-bottom:6px">🌧️ Precipitación acumulada (estimado satelital)</div>
@@ -6144,7 +6157,7 @@ function renderClima(data, cfg){
     const info=weatherIcono(data.daily.weather_code[i]);
     const fechaCorta=new Date(f+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short'});
     const fechaNum=new Date(f+'T12:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'});
-    const registro = (DB.precipitaciones||[]).find(p=>p.fecha===f);
+    const registro = precipDeCampo(_climaCampo).find(p=>p.fecha===f);
     const mmSatelital = data.daily.precipitation_sum[i]||0;
     const mmMostrar = registro ? registro.mm : mmSatelital;
     const etiquetaMm = registro ? `✓ ${mmMostrar.toFixed(1)}mm` : (esPasado ? `~${mmMostrar.toFixed(1)}mm` : `💧 ${mmMostrar.toFixed(1)}mm`);
@@ -6164,6 +6177,76 @@ function renderClima(data, cfg){
   box.innerHTML=html;
 }
 
+// ═══ VARIOS CAMPOS: cada uno con su ubicación para clima y lluvias ═══
+let _lluviaCampo='principal', _climaCampo='principal';
+function camposLista(){
+  const c=DB.settings&&DB.settings.clima, extra=(DB.settings&&DB.settings.campos)||[];
+  const nom=(c&&c.nombre)?String(c.nombre).split(',')[0].trim():'';
+  return [{id:'principal',nombre:nom||'Campo principal',lat:c&&c.lat,lon:c&&c.lon,loc:(c&&c.nombre)||''},...extra];
+}
+function campoPorId(id){ const l=camposLista(); return l.find(x=>x.id===id)||l[0]; }
+function campoDeRegistro(p){ return (p&&p.campo)||'principal'; }
+function precipDeCampo(id){ return (DB.precipitaciones||[]).filter(p=>p&&p.fecha&&campoDeRegistro(p)===id); }
+function renderSelectorCampos(){
+  const l=camposLista(), multi=l.length>1;
+  if(!l.some(x=>x.id===_lluviaCampo)) _lluviaCampo='principal';
+  if(!l.some(x=>x.id===_climaCampo)) _climaCampo='principal';
+  const w=document.getElementById('lluvia-campo-wrap'); if(w) w.style.display=multi?'':'none';
+  const s=document.getElementById('lluvia-campo'); if(s) s.innerHTML=l.map(x=>`<option value="${esc(x.id)}" ${x.id===_lluviaCampo?'selected':''}>${esc(x.nombre)}</option>`).join('');
+  const cb=document.getElementById('clima-campos');
+  if(cb){
+    cb.style.display=multi?'flex':'none';
+    cb.innerHTML=multi?l.map(x=>`<button type="button" class="btn-secondary" style="padding:5px 12px;font-size:13px;${x.id===_climaCampo?'background:var(--accent);color:#fff;border-color:var(--accent)':''}" data-id="${esc(x.id)}" onclick="climaCambiarCampo(this.dataset.id)">📍 ${esc(x.nombre)}</button>`).join(''):'';
+  }
+}
+function lluviaCambiarCampo(v){ _lluviaCampo=v; renderLluvias(); }
+function climaCambiarCampo(v){ _climaCampo=v; renderSelectorCampos(); actualizarClima(); }
+function lluviaResumenCampos(anio){
+  const l=camposLista(); if(l.length<2) return '';
+  const fila=l.map(c=>{
+    const regs=precipDeCampo(c.id).filter(p=>parseFloat(p.mm)>0&&p.fecha.startsWith(anio+'-'));
+    const mm=regs.reduce((s,p)=>s+(parseFloat(p.mm)||0),0);
+    return `<tr${c.id===_lluviaCampo?' style="font-weight:700"':''}><td>${esc(c.nombre)}</td><td>${mm?Math.round(mm)+' mm':'—'}</td><td>${regs.length||'—'}</td></tr>`;
+  }).join('');
+  return `<div style="font-weight:700;font-size:13px;margin-bottom:6px">Por campo en ${anio}</div><div class="tbl-wrap" style="margin-bottom:14px"><table><thead><tr><th>Campo</th><th>Lluvia</th><th>Registros</th></tr></thead><tbody>${fila}</tbody></table></div>`;
+}
+function lluviaMesTxt(pref){
+  const l=camposLista();
+  const por=l.map(c=>({c,mm:precipDeCampo(c.id).filter(x=>x.fecha.startsWith(pref)).reduce((s,x)=>s+(parseFloat(x.mm)||0),0)}));
+  return l.length<2?`${por[0].mm} mm`:por.map(x=>`${x.c.nombre} ${x.mm} mm`).join(' · ');
+}
+function renderConfigCampos(){
+  const box=document.getElementById('config-campos-lista'); if(!box) return;
+  const extra=(DB.settings&&DB.settings.campos)||[];
+  box.innerHTML=extra.length?extra.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>📍 <b>${esc(c.nombre)}</b> <span style="color:var(--text3)">· ${esc(c.loc||'')} (${(+c.lat).toFixed(2)}, ${(+c.lon).toFixed(2)})</span></span><span style="cursor:pointer;color:var(--red)" data-id="${esc(c.id)}" onclick="eliminarCampo(this.dataset.id)">🗑</span></div>`).join(''):'<div style="font-size:13px;color:var(--text3);margin-bottom:6px">Todavía no agregaste otros campos.</div>';
+}
+async function agregarCampo(){
+  const nombre=$v('campo-nuevo-nombre'), loc=$v('campo-nuevo-loc');
+  if(!nombre){ toast('Escribí un nombre para el campo','err'); return; }
+  if(!loc){ toast('Escribí la localidad del campo','err'); return; }
+  if(camposLista().some(c=>impNorm(c.nombre)===impNorm(nombre))){ toast('Ya hay un campo con ese nombre','err'); return; }
+  try{
+    const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(loc)}&count=1&language=es&format=json`);
+    const data=await r.json();
+    if(!data.results||!data.results.length){ toast('No se encontró esa localidad. Probá con «Ciudad, Provincia»','err'); return; }
+    const p=data.results[0];
+    if(!DB.settings.campos) DB.settings.campos=[];
+    DB.settings.campos.push({id:'c'+Date.now().toString(36),nombre,lat:p.latitude,lon:p.longitude,loc:[p.name,p.admin1,p.country].filter(Boolean).join(', ')});
+    saveToStorage();
+    ['campo-nuevo-nombre','campo-nuevo-loc'].forEach(i=>{ const e=document.getElementById(i); if(e) e.value=''; });
+    renderConfigCampos(); renderSelectorCampos();
+    toast(`Campo agregado: ${nombre}`,'ok');
+  }catch(e){ toast('No se pudo buscar la localidad (revisá tu conexión)','err'); }
+}
+function eliminarCampo(id){
+  if((DB.precipitaciones||[]).some(p=>campoDeRegistro(p)===id)){ toast('Ese campo tiene lluvias cargadas, por eso no se puede eliminar','err'); return; }
+  if(!confirm('¿Eliminar este campo?')) return;
+  DB.settings.campos=(DB.settings.campos||[]).filter(c=>c.id!==id);
+  if(_lluviaCampo===id) _lluviaCampo='principal';
+  if(_climaCampo===id) _climaCampo='principal';
+  saveToStorage(); renderConfigCampos(); renderSelectorCampos(); renderLluvias();
+}
+
 // ── REGISTRO ANUAL DE LLUVIAS (pluviómetro) ──
 let _lluviaAnio = null;
 function lluviaHoy(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -6176,7 +6259,8 @@ function lluviaPorMes(regs, anio){
 }
 function renderLluvias(){
   const box=document.getElementById('lluvias-box'); if(!box) return;
-  const regs=(DB.precipitaciones||[]).filter(p=>p && p.fecha && parseFloat(p.mm)>0);
+  renderSelectorCampos();
+  const regs=precipDeCampo(_lluviaCampo).filter(p=>parseFloat(p.mm)>0);
   const hoy=lluviaHoy(), anioAct=parseInt(hoy.slice(0,4));
   const anios=[...new Set(regs.map(p=>parseInt(p.fecha.slice(0,4))).concat([anioAct,anioAct+1]))].sort((a,b)=>b-a);
   if(!_lluviaAnio || !anios.includes(_lluviaAnio)) _lluviaAnio=anioAct;
@@ -6225,7 +6309,7 @@ function renderLluvias(){
       <span><b>${lluviaFmtF(p.fecha)}</b> · <span style="color:var(--blue);font-weight:700">${parseFloat(p.mm)} mm</span>${p.potrero?` · ${esc(p.potrero)}`:''}${p.obs?` <span style="color:var(--text3)">· ${esc(p.obs)}</span>`:''}</span>
       <span style="cursor:pointer;color:var(--red)" onclick="eliminarLluvia(${p.id})">🗑</span></div>`).join('')+`</div>`
     : `<div style="text-align:center;color:var(--text3);padding:14px;font-size:13px">Sin lluvias registradas en ${A}.</div>`;
-  box.innerHTML=html;
+  box.innerHTML=lluviaResumenCampos(A)+html;
 }
 // ── DICTADO DE LLUVIA POR VOZ: "ayer llovieron 25 milímetros" completa fecha y mm ──
 const LLUVIA_NUM={cero:0,un:1,uno:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,veinte:20,veintiun:21,veintiuno:21,veintidos:22,veintitres:23,veinticuatro:24,veinticinco:25,veintiseis:26,veintisiete:27,veintiocho:28,veintinueve:29,treinta:30,cuarenta:40,cincuenta:50,sesenta:60,setenta:70,ochenta:80,noventa:90,cien:100,ciento:100,doscientos:200,trescientos:300,cuatrocientos:400,quinientos:500};
@@ -6276,7 +6360,13 @@ function lluviaVozAplicar(){
   document.getElementById('lluvia-mm').value=String(r.mm);
   if(r.fecha) document.getElementById('lluvia-fecha').value=r.fecha;
   const f=document.getElementById('lluvia-fecha').value||lluviaHoy();
-  if(est) est.textContent=`✅ Entendí ${r.mm} mm el ${lluviaFmtF(f)}. Revisá y tocá «Guardar lluvia».`;
+  const lc=camposLista(); let cmp='';
+  if(lc.length>1){
+    const tn=impNorm(v.value), hit=lc.find(c=>impNorm(c.nombre).length>=3&&tn.includes(impNorm(c.nombre)));
+    if(hit&&hit.id!==_lluviaCampo){ _lluviaCampo=hit.id; renderLluvias(); }
+    cmp=' en '+campoPorId(_lluviaCampo).nombre;
+  }
+  if(est) est.textContent=`✅ Entendí ${r.mm} mm el ${lluviaFmtF(f)}${cmp}. Revisá y tocá «Guardar lluvia».`;
 }
 function guardarLluvia(){
   const fecha=$v('lluvia-fecha'), mm=parseFloat($v('lluvia-mm'));
@@ -6285,21 +6375,21 @@ function guardarLluvia(){
   if(isNaN(mm) || mm<=0){ toast('Ingresá los mm de lluvia (mayor a 0)','err'); return; }
   if(!DB.precipitaciones) DB.precipitaciones=[];
   const potrero=$v('lluvia-potrero'), obs=$v('lluvia-obs');
-  const ex=DB.precipitaciones.find(p=>p.fecha===fecha);
+  const ex=DB.precipitaciones.find(p=>p.fecha===fecha&&campoDeRegistro(p)===_lluviaCampo);
   if(ex){
     if(!confirm(`Ya hay ${ex.mm} mm cargados el ${lluviaFmtF(fecha)}. ¿Reemplazar por ${mm} mm?`)) return;
     ex.mm=mm; ex.potrero=potrero; ex.obs=obs; ex.fuente='manual';
   } else {
-    DB.precipitaciones.push({ id:Date.now(), fecha, mm, potrero, obs, fuente:'manual' });
+    DB.precipitaciones.push({ id:Date.now(), fecha, mm, potrero, obs, fuente:'manual', ...(_lluviaCampo!=='principal'?{campo:_lluviaCampo}:{}) });
   }
-  addHistorial('Clima', `Lluvia ${lluviaFmtF(fecha)}: ${mm} mm`, '', '');
+  addHistorial('Clima', `Lluvia ${lluviaFmtF(fecha)}: ${mm} mm${camposLista().length>1?' · '+campoPorId(_lluviaCampo).nombre:''}`, '', '');
   saveToStorage();
   const mmEl=document.getElementById('lluvia-mm'); if(mmEl) mmEl.value='';
   const obsEl=document.getElementById('lluvia-obs'); if(obsEl) obsEl.value='';
   const vzEl=document.getElementById('lluvia-voz'); if(vzEl) vzEl.value='';
   const veEl=document.getElementById('lluvia-voz-estado'); if(veEl) veEl.textContent='';
   _lluviaAnio=parseInt(fecha.slice(0,4));
-  toast(`Registrado: ${mm} mm el ${lluviaFmtF(fecha)}`,'ok');
+  toast(`Registrado: ${mm} mm el ${lluviaFmtF(fecha)}${camposLista().length>1?' en '+campoPorId(_lluviaCampo).nombre:''}`,'ok');
   renderLluvias(); actualizarClima();
 }
 function eliminarLluvia(id){
@@ -6312,9 +6402,12 @@ function exportarLluviasExcel(){
   const regs=(DB.precipitaciones||[]).filter(p=>p && p.fecha && parseFloat(p.mm)>0).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   if(!regs.length){ toast('No hay lluvias registradas para exportar','err'); return; }
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Fecha','mm','Potrero','Observación'], ...regs.map(p=>[lluviaFmtF(p.fecha), parseFloat(p.mm), p.potrero||'', p.obs||''])]), 'Registros');
-  const anios=[...new Set(regs.map(p=>p.fecha.slice(0,4)))].sort();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Mes', ...anios], ...LLUVIA_MESES.map((n,i)=>[n, ...anios.map(a=>{ const v=lluviaPorMes(regs,a).m[i]; return v||''; })]), ['Total', ...anios.map(a=>lluviaPorMes(regs,a).m.reduce((s,v)=>s+v,0))]]), 'Resumen mensual');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Campo','Fecha','mm','Potrero','Observación'], ...regs.map(p=>[campoPorId(campoDeRegistro(p)).nombre, lluviaFmtF(p.fecha), parseFloat(p.mm), p.potrero||'', p.obs||''])]), 'Registros');
+  camposLista().forEach(c=>{
+    const rc=regs.filter(p=>campoDeRegistro(p)===c.id); if(!rc.length) return;
+    const anios=[...new Set(rc.map(p=>p.fecha.slice(0,4)))].sort();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Mes', ...anios], ...LLUVIA_MESES.map((n,i)=>[n, ...anios.map(a=>{ const v=lluviaPorMes(rc,a).m[i]; return v||''; })]), ['Total', ...anios.map(a=>lluviaPorMes(rc,a).m.reduce((s,v)=>s+v,0))]]), camposLista().length>1?('Resumen '+c.nombre).replace(/[\\\/?*\[\]:]/g,'').slice(0,31):'Resumen mensual');
+  });
   XLSX.writeFile(wb, nombreArchivoExport('Lluvias','xlsx'));
 }
 
@@ -6322,10 +6415,10 @@ function registrarPrecipitacionManual(){
   const mm = parseFloat($v('precip-manual-mm'));
   if(!mm || mm<=0){ toast('Ingresá un valor de mm válido','err'); return; }
   if(!DB.precipitaciones) DB.precipitaciones=[];
-  DB.precipitaciones.push({ id:Date.now(), fecha:new Date().toISOString().split('T')[0], mm, fuente:'manual' });
+  DB.precipitaciones.push({ id:Date.now(), fecha:lluviaHoy(), mm, fuente:'manual', ...(_climaCampo!=='principal'?{campo:_climaCampo}:{}) });
   addHistorial('Clima', `Registro de lluvia manual: ${mm} mm`, '', '');
   saveToStorage();
-  toast(`Registrado: ${mm} mm de lluvia hoy`,'ok');
+  toast(`Registrado: ${mm} mm de lluvia hoy${camposLista().length>1?' en '+campoPorId(_climaCampo).nombre:''}`,'ok');
   renderLluvias();
   actualizarClima();
 }
@@ -8256,6 +8349,7 @@ function renderConfigUbicacion(){
   if(renspa) renspa.value=DB.settings.senasa?.renspa||'';
   if(marca) marca.value=DB.settings.senasa?.marca||'';
   if(titular) titular.value=DB.settings.senasa?.titular||'';
+  renderConfigCampos();
 }
 
 function guardarDatosSenasa(){
@@ -12149,7 +12243,7 @@ function iaConstruirContexto(){
   const reten=activos.map(a=>({a,r:chequearRetencionAnimal(a.rp)})).filter(x=>x.r);
   sec('ANIMALES EN RETENCIÓN (período de espera o tratamiento en curso)',reten.slice(0,40).map(({a,r})=>`RP ${a.rp}: ${r.motivo}${r.fechaApto?' hasta '+r.fechaApto.toISOString().split('T')[0]:''}`).join('\n')||'(ninguno)');
   sec('INSUMOS (stock)',(DB.insumos||[]).map(i=>`${i.nombre} (${i.categoria}): ${stockActualInsumo(i.id)} ${i.unidad||''} · mínimo ${i.stockMinimo||0}`).join('\n')||'(sin insumos)');
-  sec('CLIMA',`Lluvia del mes ${mes}: ${(DB.precipitaciones||[]).filter(x=>(x.fecha||'').startsWith(mes)).reduce((s,x)=>s+(parseFloat(x.mm)||0),0)} mm`);
+  sec('CLIMA',`Lluvia del mes ${mes}: ${lluviaMesTxt(mes)}`);
   sec('POTREROS (ha, carga máx., cabezas)',(DB.potreros||[]).map(p=>`${p.nombre}: ${p.ha||'?'} ha · cargaMax ${p.cargaMax||'?'} · ${activos.filter(a=>a.potrero===p.nombre).length} cab.`).join('\n')||'(sin potreros)');
   sec('MUERTES (por tipo)',JSON.stringify(cuenta(DB.muertes||[],m=>m.tipo))+` · total ${(DB.muertes||[]).length}`);
   const enMes=(arr)=>(arr||[]).filter(x=>(x.fecha||'').startsWith(mes));
@@ -12355,6 +12449,7 @@ function iaLocal(pregunta){
   }
   if(has(/llovi|lluvia|precipitac|milimetros/)){
     const per=iaPeriodo(qn); const l=(DB.precipitaciones||[]).filter(x=>(x.fecha||'').startsWith(per.pref));
+    if(camposLista().length>1){ return per.txt[0].toUpperCase()+per.txt.slice(1)+' llovió:\n'+camposLista().map(c=>{ const r=precipDeCampo(c.id).filter(x=>(x.fecha||'').startsWith(per.pref)); return `${c.nombre}: **${fmtN1(r.reduce((a,x)=>a+(parseFloat(x.mm)||0),0))} mm** (${r.length} registros)`; }).join('\n'); }
     return `${per.txt[0].toUpperCase()+per.txt.slice(1)} llovieron **${fmtN1(l.reduce((s,x)=>s+(parseFloat(x.mm)||0),0))} mm** (${l.length} registros).`;
   }
   if(has(/sobrecarg|exceso de carga|carga animal|pasados de carga/)){
