@@ -1008,6 +1008,7 @@
           <option>Toro</option><option>Torito</option><option>Ternero M</option><option>Ternera H</option>
           <option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option>
         </select>
+        <select id="filtro-campo" onchange="filtrarAnimales()" style="width:160px;display:none"><option value="">Todos los campos</option></select>
         <select id="filtro-potrero" onchange="filtrarAnimales()" style="width:160px">
           <option value="">Todos los potreros</option>
         </select>
@@ -2353,6 +2354,7 @@
             <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="gasto-fecha" class="form-control"></div>
             <div class="form-group"><label class="form-label">Rubro</label><select id="gasto-cat" class="form-control"></select></div>
           </div>
+          <div class="form-group" id="gasto-campo-wrap" style="display:none"><label class="form-label">Campo</label><select id="gasto-campo" class="form-control"></select></div>
           <div class="form-group"><label class="form-label">Monto ($)</label><input type="number" id="gasto-monto" class="form-control" placeholder="Ej: 150000" min="0" step="any" inputmode="decimal"></div>
           <div class="form-group">
             <label class="form-label">Descripción (opcional)</label>
@@ -3635,6 +3637,7 @@
           <select id="pot-estado" class="form-control"><option>Activo</option><option>Clausurado</option><option>En descanso</option></select>
         </div>
       </div>
+      <div class="form-group" id="pot-campo-wrap" style="display:none"><label class="form-label">Campo</label><select id="pot-campo" class="form-control"></select></div>
       <div class="form-group">
         <label class="form-label">Producción de forraje (kg MS/ha/día) — <span style="cursor:pointer;color:var(--accent)" onclick="sugerirProdMS()">sugerir según tipo de pasto</span></label>
         <input type="number" id="pot-prodms" class="form-control" placeholder="Ej: 25">
@@ -4812,7 +4815,7 @@ function showPage(id) {
   const nav = [...document.querySelectorAll('.nav-item')].find(el => el.getAttribute('onclick')?.includes("'"+id+"'"));
   if(nav) nav.classList.add('active');
   if(id === 'dashboard') renderDashboard();
-  if(id === 'animales') renderAnimales();
+  if(id === 'animales') { renderSelectorCampos(); renderAnimales(); }
   if(id === 'reproduccion') { renderNacimientos(); renderCelos(); renderServicios(); actualizarKpisServicio(); poblarPotrerosIATF(); iatfCambiarModo(); renderTareasIATF(); renderProtocolosIATF(); renderPrenadas(); renderDestetes(); renderAbortos(); renderRecats(); renderRecria(); renderListosDestetar(); renderProyeccionEntore(); renderRecatSugerida(); poblarPotrerosCurva(); renderCurvaCrecimiento(); renderCalendarioReproductivoPotreroSelect(); renderCalendarioReproductivo(); }
   if(id === 'sanidad') { renderVacunas(); renderTratamientos(); renderEnfermedades(); renderRaspaje(); renderSangrado(); renderCalendarioSanitario(); }
   if(id === 'tratamientos') { renderTratamientos(); renderEnfermedades(); }
@@ -4844,7 +4847,7 @@ function switchTab(section, tab) {
 }
 
 // ─── MODAL ───
-function openModal(id) { document.getElementById(id)?.classList.add('open'); if(id==='modal-venta') veDesbInit(); }
+function openModal(id) { document.getElementById(id)?.classList.add('open'); if(id==='modal-venta') veDesbInit(); if(id==='modal-potrero') potCampoInit(); }
 function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
 document.addEventListener('click', e => { if(e.target.classList.contains('modal-overlay')) closeModal(e.target.id); });
 
@@ -6193,6 +6196,11 @@ function renderSelectorCampos(){
   if(!l.some(x=>x.id===_climaCampo)) _climaCampo='principal';
   const w=document.getElementById('lluvia-campo-wrap'); if(w) w.style.display=multi?'':'none';
   const s=document.getElementById('lluvia-campo'); if(s) s.innerHTML=l.map(x=>`<option value="${esc(x.id)}" ${x.id===_lluviaCampo?'selected':''}>${esc(x.nombre)}</option>`).join('');
+  const fc=document.getElementById('filtro-campo');
+  if(fc){ const cur=fc.value; fc.style.display=multi?'':'none'; fc.innerHTML='<option value="">Todos los campos</option>'+l.map(x=>`<option value="${esc(x.id)}">${esc(x.nombre)}</option>`).join(''); fc.value=l.some(x=>x.id===cur)?cur:''; }
+  const gs=document.getElementById('gasto-campo'), gw=document.getElementById('gasto-campo-wrap');
+  if(gw) gw.style.display=multi?'':'none';
+  if(gs){ const cur=gs.value||'general'; gs.innerHTML='<option value="general">General (todos los campos)</option>'+l.map(x=>`<option value="${esc(x.id)}">${esc(x.nombre)}</option>`).join(''); gs.value=(cur==='general'||l.some(x=>x.id===cur))?cur:'general'; }
   const cb=document.getElementById('clima-campos');
   if(cb){
     cb.style.display=multi?'flex':'none';
@@ -6201,6 +6209,39 @@ function renderSelectorCampos(){
 }
 function lluviaCambiarCampo(v){ _lluviaCampo=v; renderLluvias(); }
 function climaCambiarCampo(v){ _climaCampo=v; renderSelectorCampos(); actualizarClima(); }
+function potCampoId(p){ return (p&&p.campo)||'principal'; }
+function campoDeAnimal(a){ const p=(DB.potreros||[]).find(x=>x.nombre===a.potrero); return p?potCampoId(p):'principal'; }
+function haDeCampo(id){ return (DB.potreros||[]).filter(p=>potCampoId(p)===id&&p.estado==='Activo').reduce((s,p)=>s+(parseFloat(p.ha)||0),0); }
+function potCampoInit(){
+  const l=camposLista(), w=document.getElementById('pot-campo-wrap'), s=document.getElementById('pot-campo');
+  if(w) w.style.display=l.length>1?'':'none';
+  if(s){ s.innerHTML=l.map(x=>`<option value="${esc(x.id)}">${esc(x.nombre)}</option>`).join(''); s.value=l.some(x=>x.id===_lluviaCampo)?_lluviaCampo:'principal'; }
+}
+function potCampoSelect(p){
+  const l=camposLista(); if(l.length<2) return '';
+  return `<br><select class="form-control" style="width:auto;padding:2px 6px;font-size:12px;margin-top:4px" onchange="setCampoPotrero(${p.id},this.value)">${l.map(x=>`<option value="${esc(x.id)}" ${x.id===potCampoId(p)?'selected':''}>📍 ${esc(x.nombre)}</option>`).join('')}</select>`;
+}
+function setCampoPotrero(pid,cid){
+  const p=(DB.potreros||[]).find(x=>x.id===pid); if(!p) return;
+  if(cid==='principal') delete p.campo; else p.campo=cid;
+  saveToStorage(); renderPotreros(); toast(`Potrero asignado a ${campoPorId(cid).nombre}`,'ok');
+}
+function valTablaCampos(r){
+  const l=camposLista(); if(l.length<2) return '';
+  const fmt=n=>'$'+Math.round(n).toLocaleString('es-AR'), tot=r.total.prom||1;
+  const filas=l.map(c=>{ const x=(r.porCampo||{})[c.id]||{cab:0,cabV:0,kg:0,prom:0}; return `<tr><td>${esc(c.nombre)}</td><td>${x.cab}</td><td>${x.kg?Math.round(x.kg).toLocaleString('es-AR'):'—'}</td><td><b>${x.cabV?fmt(x.prom):'—'}</b></td><td>${x.prom?Math.round(x.prom/tot*100)+'%':'—'}</td></tr>`; }).join('');
+  return `<div style="font-weight:700;font-size:14px;margin:16px 0 6px">📍 Por campo</div><div class="tbl-wrap"><table><thead><tr><th>Campo</th><th>Cab.</th><th>Kg</th><th>Valor</th><th>%</th></tr></thead><tbody>${filas}</tbody></table></div>`;
+}
+function gastosPorCampoHtml(lista,fmt){
+  const l=camposLista(); if(l.length<2) return '';
+  const suma=a=>a.reduce((s,g)=>s+(parseFloat(g.monto)||0),0);
+  const fila=(n,m,ha)=>`<tr><td>${esc(n)}</td><td>${m?fmt(m):'—'}</td><td>${ha?ha.toLocaleString('es-AR')+' ha':'—'}</td><td>${ha&&m?fmt(m/ha):'—'}</td></tr>`;
+  const gen=lista.filter(g=>!g.campo);
+  return `<div style="font-weight:700;font-size:13px;margin:14px 0 6px">Por campo</div><div class="tbl-wrap"><table><thead><tr><th>Campo</th><th>Gastos</th><th>Hectáreas</th><th>$/ha</th></tr></thead><tbody>`+
+    l.map(c=>fila(c.nombre,suma(lista.filter(g=>g.campo===c.id)),haDeCampo(c.id))).join('')+
+    (gen.length?fila('General (sin asignar)',suma(gen),0):'')+`</tbody></table></div>`;
+}
+
 function lluviaResumenCampos(anio){
   const l=camposLista(); if(l.length<2) return '';
   const fila=l.map(c=>{
@@ -6239,7 +6280,7 @@ async function agregarCampo(){
   }catch(e){ toast('No se pudo buscar la localidad (revisá tu conexión)','err'); }
 }
 function eliminarCampo(id){
-  if((DB.precipitaciones||[]).some(p=>campoDeRegistro(p)===id)){ toast('Ese campo tiene lluvias cargadas, por eso no se puede eliminar','err'); return; }
+  if((DB.precipitaciones||[]).some(p=>campoDeRegistro(p)===id)||(DB.potreros||[]).some(p=>p.campo===id)||(DB.gastos||[]).some(g=>g.campo===id)){ toast('Ese campo tiene lluvias, potreros o gastos asignados, por eso no se puede eliminar','err'); return; }
   if(!confirm('¿Eliminar este campo?')) return;
   DB.settings.campos=(DB.settings.campos||[]).filter(c=>c.id!==id);
   if(_lluviaCampo===id) _lluviaCampo='principal';
@@ -7838,7 +7879,7 @@ function guardarRecat(){
 function guardarPotrero(){
   const nom=$v('pot-nombre');
   if(!nom){toast('Nombre obligatorio','err');return;}
-  const p={id:Date.now(),nombre:nom,ha:parseFloat($v('pot-ha'))||0,pasto:$v('pot-pasto'),agua:$v('pot-agua'),cargaMax:parseFloat($v('pot-carga'))||0,estado:$v('pot-estado'),prodMS:parseFloat($v('pot-prodms'))||estimarProdMS($v('pot-pasto'))};
+  const p={id:Date.now(),nombre:nom,ha:parseFloat($v('pot-ha'))||0,pasto:$v('pot-pasto'),agua:$v('pot-agua'),cargaMax:parseFloat($v('pot-carga'))||0,estado:$v('pot-estado'),prodMS:parseFloat($v('pot-prodms'))||estimarProdMS($v('pot-pasto')),...(($v('pot-campo')&&$v('pot-campo')!=='principal')?{campo:$v('pot-campo')}:{})};
   DB.potreros.push(p);
   addHistorial('Potrero',`Alta potrero: ${nom}`,''  ,'');
   closeModal('modal-potrero');updateAllDropdowns();renderPotreros();updateKPIs();
@@ -9233,7 +9274,8 @@ function filtrarAnimales(){
   const cat=document.getElementById('filtro-categoria')?.value||'';
   const pot=document.getElementById('filtro-potrero')?.value||'';
   const busq=(document.getElementById('buscar-animal')?.value||'').toLowerCase();
-  const lista=DB.animales.filter(a=>a.activo&&(!cat||a.categoria===cat)&&(!pot||a.potrero===pot)&&(!busq||a.rp.toLowerCase().includes(busq)||(a.nombre||'').toLowerCase().includes(busq)));
+  const camp=document.getElementById('filtro-campo')?.value||'';
+  const lista=DB.animales.filter(a=>a.activo&&(!camp||campoDeAnimal(a)===camp)&&(!cat||a.categoria===cat)&&(!pot||a.potrero===pot)&&(!busq||a.rp.toLowerCase().includes(busq)||(a.nombre||'').toLowerCase().includes(busq)));
   renderAnimales(lista);
 }
 
@@ -10488,7 +10530,7 @@ function renderPotreros(){
   const tbody=document.getElementById('potreros-tbody');if(!tbody)return;
   tbody.innerHTML=DB.potreros.map((p,i)=>{
     const animales=saldoPotrero(p.nombre);
-    return `<tr><td>${esc(p.nombre)}</td><td class="td-mono">${p.ha||'--'} ha</td><td class="td-mono text-green">${animales}</td><td>${p.pasto||'--'}</td><td><span class="badge ${p.estado==='Activo'?'badge-green':'badge-gray'}">${p.estado}</span></td><td>
+    return `<tr><td>${esc(p.nombre)}${potCampoSelect(p)}</td><td class="td-mono">${p.ha||'--'} ha</td><td class="td-mono text-green">${animales}</td><td>${p.pasto||'--'}</td><td><span class="badge ${p.estado==='Activo'?'badge-green':'badge-gray'}">${p.estado}</span></td><td>
       <button class="btn-secondary" style="padding:2px 10px;font-size:13px" onclick="irAMapaPotrero(${p.id})">🛰️ Mapa</button>
       <button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaPotrero(${i})">🗑 Baja</button>
     </td></tr>`;
@@ -11540,11 +11582,12 @@ function valPrecioAnimal(a){
 }
 function valuarHacienda(){
   const hoy=lluviaHoy(), filas={}, t={cab:0,cabV:0,kg:0,min:0,prom:0,max:0};
-  let sinPeso=0, aprox=0, viejos=0, sinPrecio=0;
+  let sinPeso=0, aprox=0, viejos=0, sinPrecio=0; const porCampo={};
   (DB.animales||[]).filter(a=>a.activo).forEach(a=>{
     const cat=a.categoria||'Sin categoría';
     const f=filas[cat]||(filas[cat]={cat,cab:0,cabV:0,kg:0,min:0,prom:0,max:0,sinPrecio:0});
     f.cab++; t.cab++;
+    const cid=campoDeAnimal(a), pc=porCampo[cid]||(porCampo[cid]={cab:0,cabV:0,kg:0,prom:0}); pc.cab++;
     const peso=parseFloat(a.peso)||0;
     if(peso<=0){ sinPeso++; return; }
     const ph=a.pesoHistorico, ult=(ph&&ph.length)?ph[ph.length-1].fecha:'';
@@ -11552,10 +11595,10 @@ function valuarHacienda(){
     const p=valPrecioAnimal(a);
     if(!p){ f.sinPrecio++; sinPrecio++; return; }
     if(p.aprox) aprox++;
-    f.cabV++; t.cabV++; f.kg+=peso; t.kg+=peso;
+    f.cabV++; t.cabV++; f.kg+=peso; t.kg+=peso; pc.cabV++; pc.kg+=peso; pc.prom+=peso*p.prom;
     ['min','prom','max'].forEach(k=>{ f[k]+=peso*p[k]; t[k]+=peso*p[k]; });
   });
-  return {filas:Object.values(filas).sort((x,y)=>y.prom-x.prom||y.cab-x.cab),total:t,sinPeso,aprox,viejos,sinPrecio};
+  return {filas:Object.values(filas).sort((x,y)=>y.prom-x.prom||y.cab-x.cab),total:t,sinPeso,aprox,viejos,sinPrecio,porCampo};
 }
 function valAutoSnapshot(){
   try{
@@ -11614,6 +11657,7 @@ function renderValuacionHacienda(){
       return `<tr><td>${esc(f.cat)}</td><td>${f.cab}</td><td>${f.kg?Math.round(f.kg).toLocaleString('es-AR'):'—'}</td><td>${f.kg?fmt(f.prom/f.kg):'—'}</td><td>${f.cabV?'<b>'+fmt(f.prom)+'</b>':'—'}${f.sinPrecio?`<div style="font-size:11px;color:var(--amber)">${f.sinPrecio} sin precio MAG. Cargá $/kg:</div>${celda}`:''}</td></tr>`;
     }).join('')+
     `<tr style="font-weight:700"><td>Total</td><td>${t.cab}</td><td>${Math.round(t.kg).toLocaleString('es-AR')}</td><td>${t.kg?fmt(t.prom/t.kg):'—'}</td><td>${fmt(t.prom)}</td></tr></tbody></table></div>`;
+  h+=valTablaCampos(r);
   const manuales=Object.keys(valCfg().manual);
   if(manuales.length) h+=`<div style="font-size:12px;color:var(--text3);margin-top:6px">Precios cargados a mano: ${manuales.map(c=>esc(c)+' $'+valCfg().manual[c]+'/kg').join(' · ')}. Para cambiarlos, escribí otro valor (o 0 para quitarlo).</div>`;
   // Selector de referencia para vacas y toros
@@ -11786,6 +11830,7 @@ function renderGastosCampo(){
   const card=document.getElementById('gastos-card'); if(!card) return;
   if(rolActual()!=='Dueño'){ card.style.display='none'; return; }
   card.style.display='';
+  renderSelectorCampos();
   const sel=document.getElementById('gasto-cat');
   if(sel&&!sel.options.length) sel.innerHTML=GASTO_CATS.map(c=>`<option>${c}</option>`).join('');
   const fe=document.getElementById('gasto-fecha'); if(fe&&!fe.value) fe.value=lluviaHoy();
@@ -11804,20 +11849,21 @@ function renderGastosCampo(){
     <div class="kpi blue"><div class="kpi-label">Mayor rubro</div><div class="kpi-val" style="font-size:18px">${esc(cats[0][0])}</div><div class="kpi-sub">${Math.round(cats[0][1]/total*100)}% del total</div></div>
   </div>`;
   h+=cats.map(([c,m])=>`<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${esc(c)}</span><span><b>${fmt(m)}</b> <span style="color:var(--text3)">· ${Math.round(m/total*100)}%</span></span></div><div style="height:6px;background:var(--bg3);border-radius:3px"><div style="height:6px;width:${(m/total*100).toFixed(1)}%;background:var(--red);border-radius:3px"></div></div></div>`).join('');
+  h+=gastosPorCampoHtml(lista,fmt);
   h+=`<div style="font-weight:700;font-size:13px;margin:14px 0 6px">Detalle</div><div style="max-height:280px;overflow-y:auto">`+
     lista.map(g=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border);padding:7px 4px;font-size:13px">
-      <span><b>${lluviaFmtF(g.fecha)}</b> · ${esc(g.cat||'Otros')}${g.desc?` <span style="color:var(--text3)">· ${esc(g.desc)}</span>`:''}</span>
+      <span><b>${lluviaFmtF(g.fecha)}</b> · ${esc(g.cat||'Otros')}${g.campo?` <span style="color:var(--text3)">· 📍 ${esc(campoPorId(g.campo).nombre)}</span>`:''}${g.desc?` <span style="color:var(--text3)">· ${esc(g.desc)}</span>`:''}</span>
       <span style="white-space:nowrap"><b>${fmt(parseFloat(g.monto)||0)}</b> <span style="cursor:pointer;color:var(--red);margin-left:6px" onclick="eliminarGasto(${g.id})">🗑</span></span></div>`).join('')+`</div>`;
   box.innerHTML=h;
 }
 function guardarGasto(){
-  const fecha=$v('gasto-fecha'), cat=$v('gasto-cat')||'Otros', desc=$v('gasto-desc');
+  const fecha=$v('gasto-fecha'), cat=$v('gasto-cat')||'Otros', desc=$v('gasto-desc'), campo=$v('gasto-campo');
   const raw=String($v('gasto-monto')), monto=parseFloat(raw.includes(',')?raw.replace(/\./g,'').replace(',','.'):raw);
   if(!fecha){ toast('Elegí la fecha','err'); return; }
   if(fecha>lluviaHoy()){ toast('La fecha no puede ser futura','err'); return; }
   if(!(monto>0)){ toast('Ingresá el monto del gasto','err'); return; }
   if(!DB.gastos) DB.gastos=[];
-  DB.gastos.push({id:Date.now(),fecha,cat,monto,desc});
+  DB.gastos.push({id:Date.now(),fecha,cat,monto,desc,...((campo&&campo!=='general')?{campo}:{})});
   addHistorial('Gasto',`${cat}: $${Math.round(monto).toLocaleString('es-AR')}${desc?' · '+desc:''}`,'','');
   saveToStorage();
   const m=document.getElementById('gasto-monto'); if(m) m.value='';
@@ -11835,7 +11881,7 @@ function exportarGastosExcel(){
   const lista=[...(DB.gastos||[])].sort((a,b)=>a.fecha.localeCompare(b.fecha));
   if(!lista.length){ toast('No hay gastos para exportar','err'); return; }
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Fecha','Rubro','Monto $','Descripción'],...lista.map(g=>[lluviaFmtF(g.fecha),g.cat||'Otros',parseFloat(g.monto)||0,g.desc||''])]),'Gastos');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Fecha','Rubro','Campo','Monto $','Descripción'],...lista.map(g=>[lluviaFmtF(g.fecha),g.cat||'Otros',g.campo?campoPorId(g.campo).nombre:'General',parseFloat(g.monto)||0,g.desc||''])]),'Gastos');
   const porCat={}; lista.forEach(g=>{ const c=g.cat||'Otros'; porCat[c]=(porCat[c]||0)+(parseFloat(g.monto)||0); });
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Rubro','Total $'],...Object.entries(porCat).sort((a,b)=>b[1]-a[1]),['TOTAL',Object.values(porCat).reduce((s,v)=>s+v,0)]]),'Por rubro');
   XLSX.writeFile(wb,nombreArchivoExport('Gastos_del_campo','xlsx'));
