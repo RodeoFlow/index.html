@@ -166,6 +166,7 @@
     if (!_authListo) return; // sin sesión de auth, no intentar escribir
     if (_aplicandoRemoto) return; // no pushear mientras se procesa un cambio remoto
     if (!window.ESTAB_ID_ACTIVO) return;
+    if (String(window.ESTAB_ID_ACTIVO).startsWith('demo-')) return; // la demo no se sube
     if (!window.DB || !Array.isArray(window.DB.animales)) return;
     const ahora = Date.now();
     if (!forzar && ahora - _ultimoGuardado < 3000) return;
@@ -299,6 +300,11 @@
   }
 
   window.iniciarSync = async function(estabId) {
+    if (String(estabId).startsWith('demo-')) { // la demo es local: nada de Firebase
+      if (_refColecciones) { _refColecciones.off(); _refColecciones = null; }
+      if (_refSuscripcion) { _refSuscripcion.off(); }
+      return;
+    }
     await _authPromise; // esperar sesión de Firebase Auth antes de leer/escribir
     await asegurarMembresia(estabId); // garantizar (o esperar) acceso autorizado a ESTE establecimiento
     if (_refColecciones) { _refColecciones.off(); _refColecciones = null; }
@@ -931,6 +937,7 @@
         <div class="page-title">Dashboard</div>
         <div class="page-sub" id="dash-estab-label">Resumen operativo en tiempo real</div>
       </div>
+      <div id="primeros-pasos"></div>
       <!-- KPIs Row 1 -->
       <div class="grid-4" style="margin-bottom:16px">
         <div class="kpi green"><div class="kpi-label">Stock Total</div><div class="kpi-val" id="k-stock">0</div><div class="kpi-sub">animales activos</div></div>
@@ -1476,7 +1483,8 @@
           <input type="text" id="lluvia-obs" class="form-control" placeholder="Ej: con granizo, viento fuerte">
           <button type="button" id="lluvia-obs-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('lluvia-obs','lluvia-obs-dictar-btn')">🎙️ Dictar</button>
         </div>
-        <button class="btn-primary" style="width:100%" onclick="guardarLluvia()">🌧️ Guardar lluvia</button>
+        <button class="btn-primary" id="lluvia-guardar" style="width:100%" onclick="guardarLluvia()">🌧️ Guardar lluvia</button>
+        <button class="btn-secondary" id="lluvia-cancelar" style="width:100%;margin-top:8px;display:none" onclick="lluviaCancelarEdicion()">✖ Cancelar edición</button>
         <div id="lluvias-box" style="margin-top:14px"></div>
       </div>
 
@@ -2298,7 +2306,7 @@
             <button class="btn-primary" onclick="openModal('modal-compra')">＋ Compra</button>
           </div>
         </div>
-        <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Categoría</th><th>Cant.</th><th>Peso</th><th>$/kg</th><th>Total</th><th>Potrero</th><th>Guía</th><th>RPs</th></tr></thead>
+        <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Categoría</th><th>Cant.</th><th>Peso</th><th>$/kg</th><th>Total</th><th>Potrero</th><th>Guía</th><th>RPs</th><th></th></tr></thead>
         <tbody id="compras-tbody"></tbody></table></div>
       </div>
       <!-- Ventas -->
@@ -2309,7 +2317,7 @@
             <button class="btn-primary" onclick="openModal('modal-venta')">＋ Venta</button>
           </div>
         </div>
-        <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Comprador</th><th>Categoría</th><th>Cant.</th><th>Peso</th><th>$/kg</th><th>Total</th><th>Guía</th><th>Destino</th><th>RPs</th></tr></thead>
+        <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Comprador</th><th>Categoría</th><th>Cant.</th><th>Peso</th><th>$/kg</th><th>Total</th><th>Guía</th><th>Destino</th><th>RPs</th><th></th></tr></thead>
         <tbody id="ventas-tbody"></tbody></table></div>
       </div>
       <!-- Traslados -->
@@ -2361,7 +2369,8 @@
             <input type="text" id="gasto-desc" class="form-control" placeholder="Ej: sueldo peón octubre, gasoil tractor">
             <button type="button" id="gasto-desc-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('gasto-desc','gasto-desc-dictar-btn')">🎙️ Dictar</button>
           </div>
-          <button class="btn-primary" style="width:100%" onclick="guardarGasto()">💸 Guardar gasto</button>
+          <button class="btn-primary" id="gasto-guardar" style="width:100%" onclick="guardarGasto()">💸 Guardar gasto</button>
+          <button class="btn-secondary" id="gasto-cancelar" style="width:100%;margin-top:8px;display:none" onclick="gastoCancelarEdicion()">✖ Cancelar edición</button>
           <div id="gastos-box" style="margin-top:14px"></div>
         </div>
       </div>
@@ -2393,7 +2402,8 @@
                 <input type="text" id="cp-concepto" class="form-control" placeholder="Ej: venta de novillos, alquiler del campo">
                 <button type="button" id="cp-concepto-dictar-btn" class="btn-secondary" style="width:100%;margin-top:8px;padding:12px;font-size:15px" onclick="iniciarDictado('cp-concepto','cp-concepto-dictar-btn')">🎙️ Dictar</button>
               </div>
-              <button class="btn-primary" style="width:100%" onclick="cpGuardarManual()">💾 Guardar vencimiento</button>
+              <button class="btn-primary" id="cp-guardar" style="width:100%" onclick="cpGuardarManual()">💾 Guardar vencimiento</button>
+              <button class="btn-secondary" id="cp-cancelar" style="width:100%;margin-top:8px;display:none" onclick="cpCancelarEdicion()">✖ Cancelar edición</button>
             </div>
           </details>
           <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 4px;gap:8px;flex-wrap:wrap">
@@ -2787,6 +2797,16 @@
         </div>
       </div>
       <div class="card">
+        <div class="card-title">🎬 Modo demo</div>
+        <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Un establecimiento de ejemplo, con animales, ventas, gastos y cobros, para mostrar la app. Está aparte: no toca tus datos reales y no se sincroniza.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-primary" onclick="abrirDemo()">🎬 Abrir demo</button>
+          <button class="btn-secondary" onclick="abrirDemo(true)">🔄 Restablecer demo</button>
+          <button class="btn-secondary" onclick="borrarDemo()">🗑 Borrar demo</button>
+        </div>
+        <div style="font-size:12.5px;color:var(--text3);margin-top:10px">Link directo para mostrarla: <span id="demo-link" style="word-break:break-all"></span> <button class="btn-secondary" style="padding:2px 10px;font-size:12px" onclick="copiarLinkDemo()">Copiar</button></div>
+      </div>
+      <div class="card">
         <div class="card-title">📜 Datos SENASA</div>
         <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Se usan para la Declaración Jurada de Existencias y el seguimiento de la vacunación antiaftosa obligatoria.</div>
         <div class="form-row">
@@ -3063,8 +3083,9 @@
 
 <div id="modal-animal" class="modal-overlay">
   <div class="modal">
-    <div class="modal-header"><div class="modal-title">🐄 Alta de Animal</div><button class="modal-close" onclick="closeModal('modal-animal')">✕</button></div>
+    <div class="modal-header"><div class="modal-title" id="a-modal-title">🐄 Alta de Animal</div><button class="modal-close" onclick="closeModal('modal-animal')">✕</button></div>
     <div class="modal-body">
+      <input type="hidden" id="a-edit-id">
       <div class="form-row">
         <div class="form-group"><label class="form-label">RP *</label><input type="text" id="a-rp" class="form-control" placeholder="1001"></div>
         <div class="form-group"><label class="form-label">RFID</label><input type="text" id="a-rfid" class="form-control"></div>
@@ -3112,7 +3133,7 @@
         </div>
       </div>
     </div>
-    <div class="modal-footer"><button class="btn-secondary" onclick="quitarFotoAnimal('a');closeModal('modal-animal')">Cancelar</button><button class="btn-primary" onclick="guardarAnimal()">💾 Guardar</button></div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="quitarFotoAnimal('a');closeModal('modal-animal')">Cancelar</button><button class="btn-primary" id="a-guardar-btn" onclick="guardarAnimal()">💾 Guardar</button></div>
   </div>
 </div>
 
@@ -3872,8 +3893,9 @@
 <!-- Modal: Compra -->
 <div id="modal-compra" class="modal-overlay">
   <div class="modal">
-    <div class="modal-header"><div class="modal-title">📥 Registrar Compra</div><button class="modal-close" onclick="closeModal('modal-compra')">✕</button></div>
+    <div class="modal-header"><div class="modal-title" id="co-modal-title">📥 Registrar Compra</div><button class="modal-close" onclick="closeModal('modal-compra')">✕</button></div>
     <div class="modal-body">
+      <input type="hidden" id="co-edit-id">
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="co-fecha" class="form-control"></div>
         <div class="form-group"><label class="form-label">Proveedor</label><input type="text" id="co-prov" class="form-control" list="prov-list"></div>
@@ -3909,15 +3931,16 @@
         </div>
       </div>
     </div>
-    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-compra')">Cancelar</button><button class="btn-primary" onclick="guardarCompra()">💾 Guardar</button></div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-compra')">Cancelar</button><button class="btn-primary" id="co-guardar-btn" onclick="guardarCompra()">💾 Guardar</button></div>
   </div>
 </div>
 
 <!-- Modal: Venta -->
 <div id="modal-venta" class="modal-overlay">
   <div class="modal">
-    <div class="modal-header"><div class="modal-title">📤 Registrar Venta</div><button class="modal-close" onclick="closeModal('modal-venta')">✕</button></div>
+    <div class="modal-header"><div class="modal-title" id="ve-modal-title">📤 Registrar Venta</div><button class="modal-close" onclick="closeModal('modal-venta')">✕</button></div>
     <div class="modal-body">
+      <input type="hidden" id="ve-edit-id">
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="ve-fecha" class="form-control"></div>
         <div class="form-group"><label class="form-label">Comprador</label><input type="text" id="ve-comp" class="form-control" list="comp-list"></div>
@@ -3958,7 +3981,7 @@
         </div>
       </div>
     </div>
-    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-venta')">Cancelar</button><button class="btn-primary" onclick="guardarVenta()">💾 Guardar</button></div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-venta')">Cancelar</button><button class="btn-primary" id="ve-guardar-btn" onclick="guardarVenta()">💾 Guardar</button></div>
   </div>
 </div>
 
@@ -4847,7 +4870,7 @@ function switchTab(section, tab) {
 }
 
 // ─── MODAL ───
-function openModal(id) { document.getElementById(id)?.classList.add('open'); if(id==='modal-venta') veDesbInit(); if(id==='modal-potrero') potCampoInit(); }
+function openModal(id) { document.getElementById(id)?.classList.add('open'); if(id==='modal-venta'){ veEditReset(); veDesbInit(); } if(id==='modal-compra') coEditReset(); if(id==='modal-potrero') potCampoInit(); }
 function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
 document.addEventListener('click', e => { if(e.target.classList.contains('modal-overlay')) closeModal(e.target.id); });
 
@@ -5325,6 +5348,7 @@ function renderAll() {
 
 // ─── DASHBOARD ───
 function renderDashboard() {
+  renderPrimerosPasos(); renderDemoPill();
   updateKPIs();
   renderCategoryChart();
   renderActivityFeed();
@@ -6180,6 +6204,304 @@ function renderClima(data, cfg){
   box.innerHTML=html;
 }
 
+// ═══ MODO DEMO Y PRIMEROS PASOS ═══
+function esDemo(){ return String(window.ESTAB_ID_ACTIVO||'').startsWith('demo-'); }
+function demoRng(seed){ let x=seed>>>0; return ()=>{ x=(Math.imul(x,1664525)+1013904223)>>>0; return x/4294967296; }; }
+function generarDemoDB(){
+  const r=demoRng(20260), pick=a=>a[Math.floor(r()*a.length)], rnd=(a,b)=>a+Math.floor(r()*(b-a+1));
+  const dia=n=>{ const d=new Date(Date.now()-n*86400000); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+  let seq=1; const nid=()=>Date.now()+(seq++);
+  const db=dbVacia('Estancia La Aurora (demo)');
+  // La demo hereda el estado de suscripción del establecimiento actual: no da una prueba nueva
+  ['trialStart','subscribed','activationDate','activationCode'].forEach(k=>{ if(DB&&DB.settings&&DB.settings[k]!==undefined) db.settings[k]=DB.settings[k]; });
+  db.settings.clima={lat:-36.78,lon:-59.86,nombre:'Azul, Buenos Aires, Argentina'};
+  db.settings.valuacion={vaca:'',toro:'',manual:{'Ternero M':5200,'Ternera H':4800}};
+  if(DB&&DB.precios&&Object.keys(DB.precios).length) db.precios=JSON.parse(JSON.stringify(DB.precios));
+  db.potreros=[['Lote Norte',120,'Pastura implantada','Aguada',0.9],['La Cañada',90,'Natural','Laguna',0.7],['Loma Alta',150,'Pastura implantada','Molino',1.0],['El Bajo',70,'Natural','Aguada',0.6]]
+    .map(([nombre,ha,pasto,agua,cargaMax])=>({id:nid(),nombre,ha,pasto,agua,cargaMax,estado:'Activo',prodMS:(typeof estimarProdMS==='function'?estimarProdMS(pasto):0)}));
+  const razas=['Aberdeen Angus','Hereford','Brangus'], colores=['Negro','Colorado','Pampa'];
+  let rp=4001; const animales=[], pesadas=[];
+  const alta=(cat,sexo,peso,edad,pot,extra)=>{
+    const gdp=/^Terner/.test(cat)?0.75:cat==='Novillo'?0.95:cat==='Vaquillona'?0.55:0.15;
+    const p45=Math.max(40,Math.round(peso-gdp*45)), p90=Math.max(40,Math.round(peso-gdp*90)), n=String(rp++);
+    const a=Object.assign({id:nid(),rp:n,nombre:'',rfid:'982000'+String(100000+Number(n)),categoria:cat,sexo,raza:pick(razas),color:pick(colores),fnac:dia(edad),peso,potrero:pot,procedencia:'Propio (Nacido)',prenada:'No',obs:'',activo:true,pesoHistorico:[{fecha:dia(90),kg:p90},{fecha:dia(45),kg:p45},{fecha:dia(3),kg:peso}]},extra||{});
+    animales.push(a);
+    [[90,p90],[45,p45],[3,peso]].forEach(([d,k])=>pesadas.push({id:nid(),rp:n,rfid:a.rfid,peso:k,fecha:dia(d),potrero:pot,operador:'Juan Pérez'}));
+    return a;
+  };
+  for(let i=0;i<3;i++) alta('Toro','Macho',rnd(640,760),rnd(1800,2400),'Lote Norte');
+  const vacas=[]; for(let i=0;i<24;i++) vacas.push(alta('Vaca','Hembra',rnd(420,520),rnd(1500,3200),i%2?'La Cañada':'Lote Norte',{prenada:i<15?`Sí – ${rnd(2,8)} meses`:'No'}));
+  for(let i=0;i<8;i++) alta('Vaquillona','Hembra',rnd(280,340),rnd(540,700),'La Cañada');
+  const terneros=[]; for(let i=0;i<14;i++){ const m=i<7; terneros.push(alta(m?'Ternero M':'Ternera H',m?'Macho':'Hembra',rnd(110,190),rnd(100,220),vacas[i].potrero,{procedencia:'Propio (Nacido) – madre RP '+vacas[i].rp})); }
+  for(let i=0;i<11;i++) alta('Novillo','Macho',rnd(390,470),rnd(700,900),'Loma Alta');
+  const vendidos=[]; for(let i=0;i<8;i++){ const a=alta('Novillo','Macho',rnd(440,480),rnd(750,950),'Loma Alta',{activo:false,motivoBaja:'Venta',fechaBaja:dia(40),detalleBaja:'Vendido a Frigorífico La Pampa SA · Guía: DTE-48213'}); vendidos.push(a); }
+  db.animales=animales; db.pesadas=pesadas;
+  const activos=animales.filter(a=>a.activo);
+  db.vacunas=[]; activos.forEach(a=>db.vacunas.push({id:nid(),rp:a.rp,fecha:dia(60),vacuna:'Aftosa',dosis:'2',lab:'Biogénesis Bagó',lote:'AF-2210',refuerzo:dia(-120),operador:'Juan Pérez',costo:900}));
+  terneros.forEach(a=>db.vacunas.push({id:nid(),rp:a.rp,fecha:dia(45),vacuna:'Clostridiosis',dosis:'2',lab:'Biogénesis Bagó',lote:'CL-1180',refuerzo:dia(-15),operador:'Juan Pérez',costo:700}));
+  db.tratamientos=[['Queratoconjuntivitis','Oxitetraciclina LA','10','IM',3,'Finalizado',3500,28],['Diarrea neonatal','Suero + antibiótico','20','IV',4,'Finalizado',5200,14],['Cojera','Antiinflamatorio','15','IM',3,'En curso',2800,7],['Mastitis','Cefalexina intramamaria','10','Intramamaria',5,'Finalizado',6100,5],['Neumonía','Enrofloxacina','12','IM',5,'En curso',7400,10]]
+    .map(([diag,med,dosis,via,dias,estado,costo,retiro],i)=>({id:nid(),rp:activos[3+i*5].rp,fecha:dia(8+i*9),diag,med,dosis,via,dias:String(dias),vet:'Dr. Sosa',estado,costo,retiro}));
+  db.nacimientos=terneros.map((t,i)=>({id:nid(),rp:t.rp,fecha:t.fnac,madre:vacas[i].rp,sexo:t.sexo,raza:t.raza,peso:String(rnd(32,40)),potrero:t.potrero,vet:'Dr. Sosa',obs:''}));
+  db.transportistas=[{id:1,nombre:'Juan Transportes SRL',patente:'AGB 452',tipo:'Semi-trailer',cap:100,tel:'2344-456789',cuit:'30-12345678-9',habilitacion:'SENASA-2024-001',localidad:'Azul'},{id:2,nombre:'Pedro Camionero',patente:'MCP 123',tipo:'Camión',cap:50,tel:'2342-567890',cuit:'20-23456789-0',habilitacion:'SENASA-2024-015',localidad:'Olavarría'}];
+  db.clientes=[{id:1,nombre:'Frigorífico La Pampa SA',tipo:'Comprador',tel:'11-5555-1234',email:'compras@lapampa.com.ar',cuit:'30-99887766-5',localidad:'Luján',provincia:'Buenos Aires',notas:''},{id:2,nombre:'Don Carlos Proveedora',tipo:'Proveedor',tel:'2344-123456',email:'',cuit:'20-11223344-5',localidad:'Azul',provincia:'Buenos Aires',notas:''},{id:3,nombre:'Acopio Los Álamos',tipo:'Acopio',tel:'2342-654321',email:'',cuit:'30-55443322-1',localidad:'Olavarría',provincia:'Buenos Aires',notas:'Trabaja con novillo'}];
+  const kgV=vendidos.reduce((s,a)=>s+a.peso,0), precioV=4300, totalV=kgV*0.96*precioV;
+  const venta={id:nid(),fecha:dia(40),comp:'Frigorífico La Pampa SA',cat:'Novillo',cant:8,peso:kgV,precio:precioV,desbaste:4,total:totalV,dest:'Frigorífico La Pampa SA',guia:'DTE-48213',trans:'1',rps:vendidos.map(a=>a.rp)};
+  db.ventas=[venta];
+  const compra={id:nid(),fecha:dia(75),prov:'Don Carlos Proveedora',cat:'Ternero M',cant:10,peso:180,precio:4500,total:10*180*4500,potrero:'Loma Alta',guia:'DTE-47001',trans:'2',rps:[]};
+  db.compras=[compra];
+  db.viajes=[{id:nid(),fecha:dia(40),transId:'1',transNombre:'Juan Transportes SRL',patente:'AGB 452',origen:'Estancia La Aurora',destino:'Frigorífico La Pampa SA',animales:8,cat:'Novillo',guia:'DTE-48213',peso:kgV,pesoDestino:Math.round(kgV*0.962),horas:5,flete:380000},
+             {id:nid(),fecha:dia(75),transId:'2',transNombre:'Pedro Camionero',patente:'MCP 123',origen:'Don Carlos Proveedora',destino:'Estancia La Aurora',animales:10,cat:'Ternero M',guia:'DTE-47001',peso:1800,pesoDestino:1735,horas:3,flete:150000}];
+  db.compromisos=[{id:nid(),tipo:'cobro',venc:dia(10),monto:Math.round(totalV/2),contraparte:venta.comp,concepto:'Venta 8 Novillo · cuota 1/2',medio:'Cheque',nro:'',estado:'cumplido',fechaCumplido:dia(10),origen:'venta',origenId:venta.id},
+    {id:nid(),tipo:'cobro',venc:dia(-20),monto:Math.round(totalV/2),contraparte:venta.comp,concepto:'Venta 8 Novillo · cuota 2/2',medio:'Cheque',nro:'',estado:'pendiente',fechaCumplido:'',origen:'venta',origenId:venta.id},
+    {id:nid(),tipo:'pago',venc:dia(-12),monto:1800000,contraparte:compra.prov,concepto:'Compra 10 Ternero M · saldo',medio:'Transferencia',nro:'',estado:'pendiente',fechaCumplido:'',origen:'compra',origenId:compra.id},
+    {id:nid(),tipo:'pago',venc:dia(-5),monto:185000,contraparte:'Veterinaria Sosa',concepto:'Medicamentos',medio:'Transferencia',nro:'',estado:'pendiente',fechaCumplido:'',origen:'manual',origenId:''}];
+  db.gastos=[['Mano de obra',650000,'Sueldo peón'],['Mano de obra',650000,'Sueldo peón'],['Combustible',210000,'Gasoil tractor'],['Mantenimiento',180000,'Alambrado Lote Norte'],['Mantenimiento',95000,'Molino Loma Alta'],['Impuestos y tasas',320000,'Inmobiliario rural'],['Honorarios',150000,'Contador'],['Sanidad',185000,'Medicamentos'],['Alimentación',420000,'Suplemento terneros'],['Fletes',380000,'Flete a frigorífico']]
+    .map(([cat,monto,desc],i)=>({id:nid(),fecha:dia(4+i*9),cat,monto,desc}));
+  db.precipitaciones=[...Array(12)].map((_,i)=>({id:nid(),fecha:dia(3+i*9),mm:[22,8,35,14,60,5,28,40,12,18,7,25][i],fuente:'manual'}));
+  db.valuaciones=[{f:dia(88),v:38500000,cab:58,cabV:58,kg:21200,usd:0},{f:dia(60),v:41200000,cab:60,cabV:60,kg:22300,usd:0},{f:dia(30),v:44000000,cab:60,cabV:60,kg:23100,usd:0}];
+  db.historial=[['Venta',`Venta: 8 Novillo – Frigorífico La Pampa SA`,dia(40)],['Vacuna','Masiva: Aftosa – 60 animales',dia(60)],['Compra','Compra: 10 Ternero M – Don Carlos Proveedora',dia(75)],['Potrero','Alta potrero: Loma Alta',dia(120)],['Tratamiento',`RP ${db.tratamientos[0].rp}: Queratoconjuntivitis · Oxitetraciclina LA`,dia(8)],['Clima','Lluvia registrada: 22 mm',dia(3)],['Animal','Nacimientos de la temporada cargados',dia(150)]]
+    .map(([tipo,desc,fecha])=>({id:nid(),fecha,tipo,desc,rp:'',responsable:'Juan Pérez',valor:''}));
+  return db;
+}
+async function abrirDemo(restablecer,auto){
+  const lista=await getEstablecimientos(), demo=lista.find(e=>e.demo);
+  if(esDemo()&&!restablecer){ if(!auto) toast('Ya estás en la demo','ok'); return; }
+  if(!esDemo()&&ESTAB_ID_ACTIVO) await idbSet('rf_demo_volver',ESTAB_ID_ACTIVO);
+  if(demo&&!restablecer){ await cambiarEstablecimiento(demo.id); if(typeof recalcularTodosLosSaldosPotreros==='function') recalcularTodosLosSaldosPotreros(); return; }
+  const id=demo?demo.id:'demo-'+Date.now().toString(36), db=generarDemoDB();
+  if(!demo){ lista.push({id,nombre:db.settings.establecimiento,creadoEn:Date.now(),demo:true}); await saveEstablecimientos(lista); }
+  if(esDemo()&&ESTAB_ID_ACTIVO===id){ DB=db; window.DB=db; await saveEstabActivo(); init(); }
+  else { await idbSet('rf_estab_'+id,JSON.stringify(db)); await cambiarEstablecimiento(id); }
+  if(typeof recalcularTodosLosSaldosPotreros==='function') recalcularTodosLosSaldosPotreros();
+  toast(restablecer?'Demo restablecida':'Modo demo: datos de ejemplo','ok');
+}
+async function salirDeDemo(){
+  const lista=await getEstablecimientos();
+  let volver=await idbGet('rf_demo_volver');
+  if(!volver||!lista.some(e=>e.id===volver&&!e.demo)) volver=(lista.find(e=>!e.demo)||{}).id;
+  if(volver){ await cambiarEstablecimiento(volver); return; }
+  await crearNuevoEstablecimiento('Mi Establecimiento');
+}
+async function borrarDemo(){
+  const lista=await getEstablecimientos(), d=lista.find(e=>e.demo);
+  if(!d){ toast('No hay una demo para borrar','err'); return; }
+  if(!confirm('¿Borrar la demo y sus datos de ejemplo? No toca tus datos reales.')) return;
+  if(d.id===ESTAB_ID_ACTIVO) await salirDeDemo();
+  await saveEstablecimientos((await getEstablecimientos()).filter(e=>!e.demo));
+  await idbSet('rf_estab_'+d.id,null);
+  toast('Demo borrada','ok');
+}
+function copiarLinkDemo(){
+  const url=location.origin+location.pathname+'?demo=1';
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(()=>toast('Link copiado','ok'),()=>toast(url,'ok')); else toast(url,'ok');
+}
+function renderDemoPill(){
+  let el=document.getElementById('demo-pill');
+  if(!esDemo()){ if(el&&el.remove) el.remove(); return; }
+  if(el) return;
+  el=document.createElement('div'); el.id='demo-pill';
+  el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:9998;background:#E7A33E;color:#10241B;border-radius:999px;padding:8px 8px 8px 16px;font-size:13px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.35);display:flex;gap:10px;align-items:center';
+  el.innerHTML='<span>🎬 Modo demo · datos de ejemplo</span><button type="button" onclick="salirDeDemo()" style="background:#10241B;color:#fff;border:0;border-radius:999px;padding:6px 14px;font-weight:700;cursor:pointer">Salir</button>';
+  document.body.appendChild(el);
+}
+function ocultarPrimerosPasos(){ DB.settings.primerosPasosOculto=true; saveToStorage(); renderPrimerosPasos(); }
+function renderPrimerosPasos(){
+  const box=document.getElementById('primeros-pasos'); if(!box) return;
+  const st=DB.settings||{};
+  if(esDemo()||rolActual()!=='Dueño'||st.primerosPasosOculto||((DB.animales||[]).length>0&&(DB.potreros||[]).length>0)){ box.innerHTML=''; return; }
+  const nombreOk=!!st.establecimiento&&!/^(Nuevo Establecimiento|Mi Establecimiento|Establecimiento( \d+)?)$/.test(st.establecimiento);
+  const pasos=[
+    ['Poné el nombre de tu establecimiento',nombreOk,'configuracion'],
+    ['Indicá la ubicación de tu campo, para el clima',!!(st.clima&&st.clima.lat),'configuracion'],
+    ['Creá tus potreros',(DB.potreros||[]).length>0,'potreros'],
+    ['Cargá tus animales, de a uno o importando un Excel',(DB.animales||[]).length>0,'animales'],
+    ['Registrá una pesada',(DB.pesadas||[]).length>0,'scanner'],
+    ['Registrá una vacunación o un tratamiento',((DB.vacunas||[]).length+(DB.tratamientos||[]).length)>0,'sanidad']];
+  const hechos=pasos.filter(p=>p[1]).length;
+  box.innerHTML=`<div class="card" style="margin-bottom:16px;border-left:3px solid var(--green)"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>🚀 Primeros pasos</span><span style="font-size:12.5px;font-weight:400;color:var(--text3)">${hechos} de ${pasos.length}</span></div>
+    <div style="height:6px;background:var(--bg3);border-radius:3px;margin-bottom:10px"><div style="height:6px;width:${hechos/pasos.length*100}%;background:var(--green);border-radius:3px"></div></div>`+
+    pasos.map(([t,ok,pg])=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:14px"><span style="${ok?'color:var(--text3);text-decoration:line-through':''}">${ok?'✅':'⬜'} ${t}</span>${ok?'':`<button class="btn-secondary" style="padding:4px 12px;font-size:12.5px" onclick="showPage('${pg}')">Ir</button>`}</div>`).join('')+
+    `<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:12.5px"><span style="color:var(--text3)">¿Querés recorrer la app con datos de ejemplo? <a href="#" onclick="abrirDemo();return false" style="color:var(--green)">Abrir la demo</a></span><a href="#" onclick="ocultarPrimerosPasos();return false" style="color:var(--text3)">Ocultar</a></div></div>`;
+}
+(function esperarYAbrirDemo(){
+  try{
+    if(new URLSearchParams(location.search).get('demo')!=='1') return;
+    let n=0; const t=setInterval(()=>{ n++; if(window.ESTAB_ID_ACTIVO){ clearInterval(t); abrirDemo(false,true); } else if(n>40) clearInterval(t); },500);
+  }catch(e){}
+})();
+
+// ═══ EDICIÓN DE REGISTROS: corregir en lugar de borrar y volver a cargar ═══
+let _gastoEdit=null, _cpEdit=null, _lluviaEdit=null;
+function setV(id,v){ const e=document.getElementById(id); if(e) e.value=(v===undefined||v===null)?'':v; }
+function setSel(id,v){
+  const e=document.getElementById(id); if(!e) return;
+  if(v&&e.options&&![...e.options].some(o=>o.value===v||o.text===v)){ const o=document.createElement('option'); o.value=v; o.textContent=v; e.appendChild(o); }
+  e.value=v||'';
+}
+function irA(id){ const e=document.getElementById(id); if(e&&e.scrollIntoView) e.scrollIntoView({behavior:'smooth',block:'start'}); }
+function edBtn(id,on,normal){ const b=document.getElementById(id); if(b) b.textContent=on?'💾 Guardar cambios':normal; }
+function edShow(id,on){ const b=document.getElementById(id); if(b) b.style.display=on?'':'none'; }
+// ── Gastos ──
+function gastoEdicionUI(on){ edBtn('gasto-guardar',on,'💸 Guardar gasto'); edShow('gasto-cancelar',on); }
+function gastoEditar(id){
+  const g=(DB.gastos||[]).find(x=>x.id===id); if(!g) return;
+  _gastoEdit=id; renderSelectorCampos();
+  setV('gasto-fecha',g.fecha); setSel('gasto-cat',g.cat||'Otros'); setV('gasto-monto',g.monto); setSel('gasto-campo',g.campo||'general'); setV('gasto-desc',g.desc);
+  gastoEdicionUI(true); irA('gastos-card');
+}
+function gastoCancelarEdicion(){ _gastoEdit=null; setV('gasto-monto',''); setV('gasto-desc',''); gastoEdicionUI(false); }
+// ── Cobros y pagos ──
+function cpEdicionUI(on){ edBtn('cp-guardar',on,'💾 Guardar vencimiento'); edShow('cp-cancelar',on); }
+function cpEditar(id){
+  const c=(DB.compromisos||[]).find(x=>x.id===id); if(!c) return;
+  _cpEdit=id;
+  const d=document.querySelector('#cp-card details'); if(d) d.open=true;
+  setSel('cp-tipo',c.tipo); setV('cp-venc',c.venc); setV('cp-monto',c.monto); setSel('cp-medio',c.medio||'Cheque'); setV('cp-contra',c.contraparte); setV('cp-nro',c.nro); setV('cp-concepto',c.concepto);
+  cpEdicionUI(true); irA('cp-card');
+}
+function cpCancelarEdicion(){ _cpEdit=null; ['cp-monto','cp-contra','cp-concepto','cp-nro'].forEach(i=>setV(i,'')); cpEdicionUI(false); }
+// ── Lluvias ──
+function lluviaEdicionUI(on){ edBtn('lluvia-guardar',on,'🌧️ Guardar lluvia'); edShow('lluvia-cancelar',on); }
+function lluviaEditar(id){
+  const p=(DB.precipitaciones||[]).find(x=>x.id===id); if(!p) return;
+  _lluviaEdit=id; _lluviaCampo=campoDeRegistro(p); renderLluvias();
+  setV('lluvia-fecha',p.fecha); setV('lluvia-mm',p.mm); setSel('lluvia-potrero',p.potrero||''); setV('lluvia-obs',p.obs);
+  lluviaEdicionUI(true); irA('lluvia-voz-btn');
+}
+function lluviaCancelarEdicion(){ _lluviaEdit=null; setV('lluvia-mm',''); setV('lluvia-obs',''); lluviaEdicionUI(false); }
+// ── RP: renombrar con todas sus referencias ──
+const RP_CLAVES=['rp','madre','ternero','toro','padre'];
+function rpReferencias(viejo,nuevo,aplicar){
+  let n=0;
+  Object.keys(DB).forEach(k=>{
+    const v=DB[k]; if(!Array.isArray(v)||k==='animales') return;
+    v.forEach(o=>{
+      if(!o||typeof o!=='object') return;
+      RP_CLAVES.forEach(c=>{ if(o[c]===viejo){ n++; if(aplicar) o[c]=nuevo; } });
+      if(Array.isArray(o.rps)){ const i=o.rps.indexOf(viejo); if(i>=0){ n++; if(aplicar) o.rps[i]=nuevo; } }
+    });
+  });
+  return n;
+}
+// ── Animales ──
+function animalModalReset(){
+  setV('a-edit-id',''); const pe=document.getElementById('a-peso'); if(pe) pe.disabled=false;
+  const t=document.getElementById('a-modal-title'); if(t) t.textContent='🐄 Alta de Animal';
+  edBtn('a-guardar-btn',false,'💾 Guardar');
+}
+function animalEditar(id){
+  const a=DB.animales.find(x=>x.id===id); if(!a) return;
+  openModalAnimal();
+  setV('a-edit-id',id); setV('a-rp',a.rp); setV('a-nombre',a.nombre); setV('a-rfid',a.rfid); setSel('a-cat',a.categoria); setSel('a-sexo',a.sexo); setSel('a-raza',a.raza);
+  setV('a-color',a.color); setV('a-fnac',a.fnac); setSel('a-potrero',a.potrero); setV('a-proc',a.procedencia); setSel('a-prenada',a.prenada||'No'); setV('a-obs',a.obs); setV('a-peso',a.peso);
+  const pe=document.getElementById('a-peso'); if(pe) pe.disabled=true;
+  const t=document.getElementById('a-modal-title'); if(t) t.textContent='✏️ Editar animal';
+  edBtn('a-guardar-btn',true,'');
+}
+function guardarEdicionAnimal(id){
+  const a=DB.animales.find(x=>x.id===id); if(!a) return;
+  const rp=$v('a-rp'), rfid=$v('a-rfid');
+  if(!rp){ toast('RP obligatorio','err'); return; }
+  if(rp!==a.rp&&DB.animales.some(x=>x.rp===rp)){ toast('Ese RP ya existe','err'); return; }
+  if(rfid&&rfid!==a.rfid&&DB.animales.some(x=>x!==a&&x.rfid===rfid)){ toast('Ese RFID ya está en otro animal','err'); return; }
+  const potViejo=a.potrero, rpViejo=a.rp;
+  if(rp!==rpViejo){
+    const n=rpReferencias(rpViejo,rp,false);
+    if(!confirm(`Cambiar el RP de ${rpViejo} a ${rp} también corrige ${n} registros del historial (pesadas, vacunas, ventas, etc.). ¿Continuar?`)) return;
+    rpReferencias(rpViejo,rp,true); a.rp=rp;
+  }
+  Object.assign(a,{nombre:$v('a-nombre'),rfid,categoria:$v('a-cat'),sexo:$v('a-sexo'),raza:$v('a-raza'),color:$v('a-color'),fnac:$v('a-fnac'),potrero:$v('a-potrero'),procedencia:$v('a-proc'),prenada:$v('a-prenada'),obs:$v('a-obs')});
+  if(_fotoTemp['a']) a.foto=_fotoTemp['a'];
+  actualizarSaldosPotreros(potViejo,a.potrero);
+  addHistorial('Animal',`Datos corregidos: RP ${a.rp}${rp!==rpViejo?' (antes '+rpViejo+')':''}`,a.rp,'');
+  quitarFotoAnimal('a'); closeModal('modal-animal'); animalModalReset();
+  saveToStorage(); filtrarAnimales(); updateKPIs();
+  toast(`Animal actualizado: RP ${a.rp}`,'ok');
+}
+// ── Ventas y compras ──
+function reajustarCompromisos(origen,id,nuevoTotal){
+  const lig=(DB.compromisos||[]).filter(c=>c.origen===origen&&c.origenId===id), pend=lig.filter(c=>c.estado!=='cumplido');
+  if(!pend.length) return 0;
+  const cumplido=lig.filter(c=>c.estado==='cumplido').reduce((s,c)=>s+(parseFloat(c.monto)||0),0), resto=Math.max(0,nuevoTotal-cumplido);
+  let acum=0;
+  pend.forEach((c,i)=>{ const m=i<pend.length-1?Math.round(resto/pend.length*100)/100:Math.round((resto-acum)*100)/100; acum+=m; c.monto=m; });
+  return pend.length;
+}
+function opEditReset(p,campos,previo){
+  const prev=document.getElementById(p+'-edit-id'); const estabaEditando=prev&&prev.value;
+  setV(p+'-edit-id','');
+  [p+'-cant',p+'-rps',p+'-potrero'].forEach(i=>{ const e=document.getElementById(i); if(e) e.disabled=false; });
+  const w=document.getElementById(p+'-pago-wrap'); if(w&&rolActual()==='Dueño') w.style.display='';
+  const t=document.getElementById(p+'-modal-title'); if(t) t.textContent=p==='ve'?'📤 Registrar Venta':'📥 Registrar Compra';
+  edBtn(p+'-guardar-btn',false,'💾 Guardar');
+  if(estabaEditando){ campos.forEach(i=>setV(i,'')); setV(p+'-fecha',lluviaHoy()); }
+}
+function veEditReset(){ opEditReset('ve',['ve-comp','ve-cant','ve-peso','ve-precio','ve-desb','ve-dest','ve-guia','ve-trans','ve-rps']); }
+function coEditReset(){ opEditReset('co',['co-prov','co-cant','co-peso','co-precio','co-guia','co-trans','co-rps']); }
+function opEditUI(p,titulo){
+  ['-cant','-rps','-potrero'].forEach(s=>{ const e=document.getElementById(p+s); if(e) e.disabled=true; });
+  const w=document.getElementById(p+'-pago-wrap'); if(w) w.style.display='none';
+  const t=document.getElementById(p+'-modal-title'); if(t) t.textContent=titulo;
+  edBtn(p+'-guardar-btn',true,'');
+}
+function veEditar(id){
+  const v=DB.ventas.find(x=>x.id===id); if(!v) return;
+  openModal('modal-venta');
+  setV('ve-edit-id',id); setV('ve-fecha',v.fecha); setV('ve-comp',v.comp); setSel('ve-cat',v.cat); setV('ve-cant',v.cant); setV('ve-peso',v.peso); setV('ve-precio',v.precio);
+  setV('ve-desb',v.desbaste||''); setSel('ve-dest',v.dest); setV('ve-guia',v.guia); setSel('ve-trans',v.trans); setV('ve-rps',(v.rps||[]).join(', '));
+  opEditUI('ve','✏️ Editar venta'); veDesbRecalcular();
+}
+function guardarEdicionVenta(id){
+  const v=DB.ventas.find(x=>x.id===id); if(!v) return;
+  const peso=parseFloat($v('ve-peso'))||0, precio=parseFloat($v('ve-precio'))||0, desb=Math.min(50,Math.max(0,parseFloat($v('ve-desb'))||0)), totalViejo=v.total||0;
+  Object.assign(v,{fecha:$v('ve-fecha'),comp:$v('ve-comp'),cat:$v('ve-cat'),peso,precio,desbaste:desb,total:peso*(1-desb/100)*precio,dest:$v('ve-dest'),guia:$v('ve-guia'),trans:$v('ve-trans')});
+  (v.rps||[]).forEach(rp=>{ const an=DB.animales.find(a=>a.rp===rp&&!a.activo&&a.motivoBaja==='Venta'); if(an){ an.fechaBaja=v.fecha; an.detalleBaja='Vendido a '+(v.comp||'--')+' · Guía: '+(v.guia||'--'); } });
+  const lig=(DB.compromisos||[]).filter(c=>c.origen==='venta'&&c.origenId===v.id); lig.forEach(c=>{ c.contraparte=v.comp||''; });
+  const pend=lig.filter(c=>c.estado!=='cumplido').length; let aj=0;
+  if(pend&&Math.round(v.total)!==Math.round(totalViejo)&&confirm(`Esta venta tiene ${pend} ${pend===1?'cobro pendiente':'cobros pendientes'}. ¿Ajustarlos al nuevo total?`)) aj=reajustarCompromisos('venta',v.id,v.total);
+  addHistorial('Venta',`Venta corregida: ${v.cant} ${v.cat} – ${v.comp||'--'} · $${Math.round(v.total).toLocaleString('es-AR')}`,(v.rps||[]).join(', '),v.comp);
+  closeModal('modal-venta'); veEditReset(); saveToStorage(); renderVentas(); updateKPIs(); renderCobrosPagos();
+  toast('Venta actualizada'+(aj?' · cobros ajustados':''),'ok');
+}
+function eliminarVenta(id){
+  const v=DB.ventas.find(x=>x.id===id); if(!v) return;
+  const lig=(DB.compromisos||[]).filter(c=>c.origen==='venta'&&c.origenId===id);
+  const rest=(v.rps||[]).filter(rp=>DB.animales.some(a=>a.rp===rp&&!a.activo&&a.motivoBaja==='Venta'));
+  if(!confirm(`¿Eliminar esta venta?${rest.length?`\n• ${rest.length} animales vuelven a estar activos.`:''}${lig.length?`\n• Se borran ${lig.length} cobros asociados.`:''}`)) return;
+  const pots=[];
+  rest.forEach(rp=>{ const a=DB.animales.find(x=>x.rp===rp&&!x.activo&&x.motivoBaja==='Venta'); if(a){ a.activo=true; a.motivoBaja=''; a.fechaBaja=''; a.detalleBaja=''; pots.push(a.potrero); } });
+  DB.ventas=DB.ventas.filter(x=>x.id!==id); DB.compromisos=(DB.compromisos||[]).filter(c=>!(c.origen==='venta'&&c.origenId===id));
+  actualizarSaldosPotreros(...pots);
+  addHistorial('Venta',`Venta eliminada: ${v.cant} ${v.cat} – ${v.comp||'--'}`,(v.rps||[]).join(', '),v.comp);
+  saveToStorage(); renderVentas(); renderAnimales(); updateKPIs(); renderCobrosPagos(); toast('Venta eliminada','ok');
+}
+function coEditar(id){
+  const c=DB.compras.find(x=>x.id===id); if(!c) return;
+  openModal('modal-compra');
+  setV('co-edit-id',id); setV('co-fecha',c.fecha); setV('co-prov',c.prov); setSel('co-cat',c.cat); setV('co-cant',c.cant); setV('co-peso',c.peso); setV('co-precio',c.precio);
+  setSel('co-potrero',c.potrero); setV('co-guia',c.guia); setSel('co-trans',c.trans); setV('co-rps',(c.rps||[]).join(', '));
+  opEditUI('co','✏️ Editar compra');
+}
+function guardarEdicionCompra(id){
+  const c=DB.compras.find(x=>x.id===id); if(!c) return;
+  const peso=parseFloat($v('co-peso'))||0, precio=parseFloat($v('co-precio'))||0, totalViejo=c.total||0;
+  Object.assign(c,{fecha:$v('co-fecha'),prov:$v('co-prov'),cat:$v('co-cat'),peso,precio,total:(parseInt(c.cant)||0)*peso*precio,guia:$v('co-guia'),trans:$v('co-trans')});
+  const lig=(DB.compromisos||[]).filter(x=>x.origen==='compra'&&x.origenId===c.id); lig.forEach(x=>{ x.contraparte=c.prov||''; });
+  const pend=lig.filter(x=>x.estado!=='cumplido').length; let aj=0;
+  if(pend&&Math.round(c.total)!==Math.round(totalViejo)&&confirm(`Esta compra tiene ${pend} ${pend===1?'pago pendiente':'pagos pendientes'}. ¿Ajustarlos al nuevo total?`)) aj=reajustarCompromisos('compra',c.id,c.total);
+  addHistorial('Compra',`Compra corregida: ${c.cant} ${c.cat} – ${c.prov||'--'} · $${Math.round(c.total).toLocaleString('es-AR')}`,(c.rps||[]).join(', '),c.prov);
+  closeModal('modal-compra'); coEditReset(); saveToStorage(); renderCompras(); updateKPIs(); renderCobrosPagos();
+  toast('Compra actualizada'+(aj?' · pagos ajustados':''),'ok');
+}
+function eliminarCompra(id){
+  const c=DB.compras.find(x=>x.id===id); if(!c) return;
+  const lig=(DB.compromisos||[]).filter(x=>x.origen==='compra'&&x.origenId===id);
+  if(!confirm(`¿Eliminar esta compra?${lig.length?`\n• Se borran ${lig.length} pagos asociados.`:''}\n• Los animales que se cargaron con ella NO se borran: si hace falta, quitalos desde Animales.`)) return;
+  DB.compras=DB.compras.filter(x=>x.id!==id); DB.compromisos=(DB.compromisos||[]).filter(x=>!(x.origen==='compra'&&x.origenId===id));
+  addHistorial('Compra',`Compra eliminada: ${c.cant} ${c.cat} – ${c.prov||'--'}`,(c.rps||[]).join(', '),c.prov);
+  saveToStorage(); renderCompras(); updateKPIs(); renderCobrosPagos(); toast('Compra eliminada','ok');
+}
+
 // ═══ VARIOS CAMPOS: cada uno con su ubicación para clima y lluvias ═══
 let _lluviaCampo='principal', _climaCampo='principal';
 function camposLista(){
@@ -6257,6 +6579,7 @@ function lluviaMesTxt(pref){
   return l.length<2?`${por[0].mm} mm`:por.map(x=>`${x.c.nombre} ${x.mm} mm`).join(' · ');
 }
 function renderConfigCampos(){
+  const dl=document.getElementById('demo-link'); if(dl) dl.textContent=location.origin+location.pathname+'?demo=1';
   const box=document.getElementById('config-campos-lista'); if(!box) return;
   const extra=(DB.settings&&DB.settings.campos)||[];
   box.innerHTML=extra.length?extra.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>📍 <b>${esc(c.nombre)}</b> <span style="color:var(--text3)">· ${esc(c.loc||'')} (${(+c.lat).toFixed(2)}, ${(+c.lon).toFixed(2)})</span></span><span style="cursor:pointer;color:var(--red)" data-id="${esc(c.id)}" onclick="eliminarCampo(this.dataset.id)">🗑</span></div>`).join(''):'<div style="font-size:13px;color:var(--text3);margin-bottom:6px">Todavía no agregaste otros campos.</div>';
@@ -6348,7 +6671,7 @@ function renderLluvias(){
   html+=`<div style="font-weight:700;font-size:13px;margin:14px 0 6px">Registros ${A} (${lista.length})</div>`;
   html+= lista.length? `<div style="max-height:260px;overflow-y:auto">`+lista.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border);padding:7px 4px;font-size:13px">
       <span><b>${lluviaFmtF(p.fecha)}</b> · <span style="color:var(--blue);font-weight:700">${parseFloat(p.mm)} mm</span>${p.potrero?` · ${esc(p.potrero)}`:''}${p.obs?` <span style="color:var(--text3)">· ${esc(p.obs)}</span>`:''}</span>
-      <span style="cursor:pointer;color:var(--red)" onclick="eliminarLluvia(${p.id})">🗑</span></div>`).join('')+`</div>`
+      <span style="white-space:nowrap"><span style="cursor:pointer;margin-left:6px" title="Editar" onclick="lluviaEditar(${p.id})">✏️</span> <span style="cursor:pointer;color:var(--red);margin-left:6px" onclick="eliminarLluvia(${p.id})">🗑</span></span></div>`).join('')+`</div>`
     : `<div style="text-align:center;color:var(--text3);padding:14px;font-size:13px">Sin lluvias registradas en ${A}.</div>`;
   box.innerHTML=lluviaResumenCampos(A)+html;
 }
@@ -6416,6 +6739,15 @@ function guardarLluvia(){
   if(isNaN(mm) || mm<=0){ toast('Ingresá los mm de lluvia (mayor a 0)','err'); return; }
   if(!DB.precipitaciones) DB.precipitaciones=[];
   const potrero=$v('lluvia-potrero'), obs=$v('lluvia-obs');
+  const edRec=_lluviaEdit?DB.precipitaciones.find(p=>p.id===_lluviaEdit):null;
+  if(edRec){
+    if(DB.precipitaciones.some(p=>p.id!==edRec.id&&p.fecha===fecha&&campoDeRegistro(p)===_lluviaCampo)){ toast('Ya hay una lluvia cargada ese día en este campo','err'); return; }
+    Object.assign(edRec,{fecha,mm,potrero,obs}); if(_lluviaCampo!=='principal') edRec.campo=_lluviaCampo; else delete edRec.campo;
+    _lluviaEdit=null; lluviaEdicionUI(false); _lluviaAnio=parseInt(fecha.slice(0,4));
+    addHistorial('Clima',`Lluvia corregida ${lluviaFmtF(fecha)}: ${mm} mm`,'','');
+    saveToStorage(); setV('lluvia-mm',''); setV('lluvia-obs','');
+    toast('Lluvia actualizada','ok'); renderLluvias(); actualizarClima(); return;
+  }
   const ex=DB.precipitaciones.find(p=>p.fecha===fecha&&campoDeRegistro(p)===_lluviaCampo);
   if(ex){
     if(!confirm(`Ya hay ${ex.mm} mm cargados el ${lluviaFmtF(fecha)}. ¿Reemplazar por ${mm} mm?`)) return;
@@ -6435,6 +6767,7 @@ function guardarLluvia(){
 }
 function eliminarLluvia(id){
   if(!confirm('¿Eliminar este registro de lluvia?')) return;
+  if(_lluviaEdit===id) lluviaCancelarEdicion();
   DB.precipitaciones=(DB.precipitaciones||[]).filter(p=>p.id!==id);
   saveToStorage(); renderLluvias(); actualizarClima();
 }
@@ -7205,6 +7538,7 @@ function guardarPesada(){
 }
 
 function openModalAnimal() {
+  animalModalReset();
   // Limpiar todos los campos
   ['a-rp','a-rfid','a-color','a-nombre','a-obs','a-proc'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
@@ -7513,6 +7847,7 @@ function impPlanillaModelo(){
 }
 
 function guardarAnimal(){
+  const _ea=document.getElementById('a-edit-id'); if(_ea&&_ea.value){ guardarEdicionAnimal(Number(_ea.value)); return; }
   const rp=$v('a-rp');
   if(!rp){toast('RP obligatorio','err');return;}
   if(DB.animales.find(a=>a.rp===rp)){toast('RP ya existe','err');return;}
@@ -7942,6 +8277,7 @@ function guardarCambioPotrero(){
 }
 
 function guardarCompra(){
+  const _ec=document.getElementById('co-edit-id'); if(_ec&&_ec.value){ guardarEdicionCompra(Number(_ec.value)); return; }
   const cant=parseInt($v('co-cant')),peso=parseFloat($v('co-peso'))||0,precio=parseFloat($v('co-precio'))||0;
   const rpsRaw=$v('co-rps')||'';
   const rps=rpsRaw.split(',').map(r=>r.trim()).filter(r=>r);
@@ -7979,6 +8315,7 @@ function guardarCompra(){
 }
 
 function guardarVenta(){
+  const _ev=document.getElementById('ve-edit-id'); if(_ev&&_ev.value){ guardarEdicionVenta(Number(_ev.value)); return; }
   const cant=parseInt($v('ve-cant')),peso=parseFloat($v('ve-peso'))||0,precio=parseFloat($v('ve-precio'))||0;
   const rpsRaw=$v('ve-rps')||'';
   const rps=rpsRaw.split(',').map(r=>r.trim()).filter(r=>r);
@@ -9040,7 +9377,7 @@ function renderAnimales(filtrados){
     <td><span class="badge ${a.activo?'badge-green':'badge-red'}">${a.activo?'Activo':'Baja'}</span></td>
     <td>${a.obs?`<button class="btn-secondary" style="padding:2px 8px;font-size:14px" onclick="verObsAnimal('${a.rp}')" title="Ver observaciones">📝</button>`:'--'}</td>
     <td><button class="btn-secondary" style="padding:2px 8px;font-size:14px" onclick="abrirFichaAnimal('${a.rp}')" title="Ver ficha completa">👁</button></td>
-    <td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaAnimal(${a.id})">🗑 Baja</button></td>
+    <td style="white-space:nowrap"><button class="btn-secondary" style="padding:2px 8px;font-size:14px" onclick="animalEditar(${a.id})" title="Editar datos">✏️</button> <button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaAnimal(${a.id})">🗑 Baja</button></td>
   </tr>`).join('')||emptyRow(15);
 }
 
@@ -11672,7 +12009,7 @@ function renderValuacionHacienda(){
   const snaps=(DB.valuaciones||[]).filter(s=>s.f<hoy);
   h+=`<div style="font-weight:700;font-size:14px;margin:16px 0 6px">📈 Resultado del período</div>`;
   if(!snaps.length){
-    h+=`<div style="font-size:12.5px;color:var(--text3)">Esta es tu primera valuación guardada. Desde hoy la app va registrando la evolución del valor de la hacienda y, cuando haya una valuación anterior, acá vas a ver el resultado del período.</div>`;
+    h+=`<div style="font-size:12.5px;color:var(--text3)">Esta es tu primera valuación guardada. Desde hoy la app va registrando la evolución del valor de la hacienda y, cuando haya una valuación anterior, acá vas a ver el resultado del período. Si ya tenías hacienda antes, podés cargar una valuación anterior más abajo.</div>`;
   } else {
     const anio=hoy.slice(0,4), delAnio=snaps.filter(s=>s.f.startsWith(anio));
     let base=snaps.find(s=>s.f===_valBase)||(delAnio.length?delAnio[0]:snaps[0]);
@@ -11683,7 +12020,7 @@ function renderValuacionHacienda(){
     const en=(arr)=>(arr||[]).filter(x=>x.fecha>base.f&&x.fecha<=hoy).reduce((s,x)=>s+(parseFloat(x.total)||0),0);
     const ventas=en(DB.ventas), compras=en(DB.compras), dif=t.prom-base.v, res=ventas-compras+dif;
     const gts=(DB.gastos||[]).filter(x=>x.fecha>base.f&&x.fecha<=hoy).reduce((a,x)=>a+(parseFloat(x.monto)||0),0), neto=res-gts;
-    h+=`<div style="font-size:12.5px;margin-bottom:8px">Comparar contra la valuación del: <select class="form-control" style="width:auto;padding:4px 8px;font-size:12px;display:inline-block" onchange="_valBase=this.value;renderValuacionHacienda()">${opciones.map(s=>`<option value="${s.f}" ${s.f===base.f?'selected':''}>${lluviaFmtF(s.f)} (${fmt(s.v)})</option>`).join('')}</select></div>`;
+    h+=`<div style="font-size:12.5px;margin-bottom:8px">Comparar contra la valuación del: <select class="form-control" style="width:auto;padding:4px 8px;font-size:12px;display:inline-block" onchange="_valBase=this.value;renderValuacionHacienda()">${opciones.map(s=>`<option value="${s.f}" ${s.f===base.f?'selected':''}>${lluviaFmtF(s.f)} (${fmt(s.v)})${s.manual?' · cargada a mano':''}</option>`).join('')}</select></div>`;
     const fila=(l,v,c)=>`<tr><td>${l}</td><td style="text-align:right;${c?'color:'+c+';':''}font-weight:600">${v}</td></tr>`;
     h+=`<div class="tbl-wrap"><table><tbody>
       ${fila('Ventas del período','+ '+fmt(ventas))}
@@ -11695,8 +12032,35 @@ function renderValuacionHacienda(){
     </tbody></table></div>
     <div style="font-size:11.5px;color:var(--text3);margin-top:6px">Es ventas − compras + variación del stock valuado. ${gts?'El neto descuenta los gastos que cargaste en Gastos del campo; si faltan rubros (alimentación, sanidad, mano de obra) queda sobreestimado.':'Todavía no descuenta alimentación, sanidad, mano de obra ni gastos del campo: cargalos en Gastos del campo, más abajo.'} La variación mezcla engorde, cambios de precio y entradas o salidas de animales.</div>`;
   }
+  h+=valFormManual();
   h+=`<div style="margin-top:12px"><button class="btn-secondary" style="font-size:12.5px;padding:6px 12px" onclick="exportarValuacionExcel()">📥 Excel</button></div>`;
   box.innerHTML=h;
+}
+function valFormManual(){
+  const man=(DB.valuaciones||[]).filter(s=>s.manual), fmt=n=>'$'+Math.round(n).toLocaleString('es-AR');
+  return `<details style="margin-top:14px"><summary class="btn-secondary" style="display:inline-block;cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px">＋ Cargar una valuación anterior</summary>
+    <div style="margin-top:10px;font-size:12.5px;color:var(--text3)">Si ya tenías hacienda en otra fecha, por ejemplo el 1 de enero, cargá cuánto valía a precio de mercado y el resultado del período se calcula desde ahí. Conviene usar el mismo criterio de precios que la valuación de hoy.</div>
+    <div class="form-row" style="margin-top:8px"><div class="form-group"><label class="form-label">Fecha</label><input type="date" id="val-man-fecha" class="form-control" max="${lluviaHoy()}"></div><div class="form-group"><label class="form-label">Valor de la hacienda ($)</label><input type="number" id="val-man-valor" class="form-control" min="0" step="any" inputmode="decimal"></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-secondary" style="font-size:12.5px;padding:6px 12px" onclick="valUsarHoy()">Usar el valor de hoy</button><button class="btn-primary" style="font-size:12.5px;padding:6px 14px" onclick="valGuardarManual()">💾 Guardar</button></div>
+    ${man.length?`<div style="margin-top:10px;font-size:12.5px">Cargadas a mano:${man.map(s=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)"><span>${lluviaFmtF(s.f)} · ${fmt(s.v)}</span><span style="cursor:pointer;color:var(--red)" data-f="${s.f}" onclick="valBorrarManual(this.dataset.f)">🗑</span></div>`).join('')}</div>`:''}
+  </details>`;
+}
+function valUsarHoy(){ const r=valuarHacienda(); if(r.total.prom>0) setV('val-man-valor',Math.round(r.total.prom)); else toast('Todavía no hay una valuación de hoy para copiar','err'); }
+function valGuardarManual(){
+  const f=$v('val-man-fecha'), v=parseFloat($v('val-man-valor')), hoy=lluviaHoy();
+  if(!f){ toast('Elegí la fecha','err'); return; }
+  if(f>=hoy){ toast('La fecha tiene que ser anterior a hoy','err'); return; }
+  if(!(v>0)){ toast('Ingresá el valor de la hacienda en esa fecha','err'); return; }
+  if(!DB.valuaciones) DB.valuaciones=[];
+  const reg={f,v:Math.round(v),cab:0,kg:0,usd:0,manual:true}, i=DB.valuaciones.findIndex(s=>s.f===f);
+  if(i>=0){ if(!confirm(`Ya hay una valuación del ${lluviaFmtF(f)}. ¿Reemplazarla?`)) return; DB.valuaciones[i]=reg; } else DB.valuaciones.push(reg);
+  DB.valuaciones.sort((a,b)=>a.f.localeCompare(b.f));
+  _valBase=f; saveToStorage(); toast(`Valuación del ${lluviaFmtF(f)} guardada`,'ok'); renderValuacionHacienda();
+}
+function valBorrarManual(f){
+  if(!confirm('¿Borrar esta valuación cargada a mano?')) return;
+  DB.valuaciones=(DB.valuaciones||[]).filter(s=>!(s.f===f&&s.manual));
+  if(_valBase===f) _valBase=''; saveToStorage(); renderValuacionHacienda();
 }
 function exportarValuacionExcel(){
   if(typeof XLSX==='undefined'){ toast('No se pudo cargar el exportador de Excel','err'); return; }
@@ -11705,7 +12069,7 @@ function exportarValuacionExcel(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Categoría','Cabezas','Cabezas valuadas','Kg','$/kg promedio','Valor mínimo','Valor promedio','Valor máximo'],
     ...r.filas.map(f=>[f.cat,f.cab,f.cabV,Math.round(f.kg),f.kg?Math.round(f.prom/f.kg):'',Math.round(f.min),Math.round(f.prom),Math.round(f.max)]),
     ['TOTAL',r.total.cab,r.total.cabV,Math.round(r.total.kg),r.total.kg?Math.round(r.total.prom/r.total.kg):'',Math.round(r.total.min),Math.round(r.total.prom),Math.round(r.total.max)]]),'Valuación '+lluviaFmtF(hoy).replace(/\//g,'-'));
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Fecha','Valor $','USD','Cabezas','Kg'],...(DB.valuaciones||[]).map(s=>[lluviaFmtF(s.f),s.v,s.usd||'',s.cab,s.kg])]),'Evolución');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Fecha','Valor $','USD','Cabezas','Kg','Origen'],...(DB.valuaciones||[]).map(s=>[lluviaFmtF(s.f),s.v,s.usd||'',s.cab||'',s.kg||'',s.manual?'A mano':'Automática'])]),'Evolución');
   XLSX.writeFile(wb,nombreArchivoExport('Valuacion_hacienda','xlsx'));
 }
 setTimeout(valAutoSnapshot,25000);
@@ -11775,7 +12139,7 @@ function renderCobrosPagos(){
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border);padding:8px 4px;font-size:13px${cum?';opacity:.6':''}">
       <span><b>${lluviaFmtF(c.venc)}</b> <span style="color:${!cum&&d<0?'var(--amber)':'var(--text3)'}">(${cuando})</span><br>${c.tipo==='cobro'?'💵':'💸'} ${esc(c.contraparte||'—')} <span style="color:var(--text3)">· ${esc(c.concepto||'')}${c.medio?' · '+esc(c.medio):''}${c.nro?' Nº '+esc(c.nro):''}</span></span>
       <span style="white-space:nowrap;text-align:right"><b style="color:${c.tipo==='cobro'?'var(--green)':'var(--red)'}">${cpFmt(parseFloat(c.monto)||0)}</b><br>
-        <span style="cursor:pointer" title="${cum?'Volver a pendiente':'Marcar como cumplido'}" onclick="cpMarcar(${c.id})">${cum?'↩️':'✅'}</span> <span style="cursor:pointer;color:var(--red);margin-left:6px" onclick="cpEliminar(${c.id})">🗑</span></span></div>`;
+        <span style="cursor:pointer" title="${cum?'Volver a pendiente':'Marcar como cumplido'}" onclick="cpMarcar(${c.id})">${cum?'↩️':'✅'}</span> <span style="cursor:pointer;margin-left:6px" title="Editar" onclick="cpEditar(${c.id})">✏️</span> <span style="cursor:pointer;color:var(--red);margin-left:6px" onclick="cpEliminar(${c.id})">🗑</span></span></div>`;
   };
   let h='';
   if(!lista.length) h=`<div style="color:var(--text3);font-size:13px;padding:8px 0">${_cpFiltro==='cumplido'?'Todavía no marcaste nada como cumplido.':'No hay cobros ni pagos pendientes. Cargalos desde una venta o compra con "Cheques / a plazo", o a mano con el botón de arriba.'}</div>`;
@@ -11793,6 +12157,7 @@ function cpMarcar(id){
 }
 function cpEliminar(id){
   if(!confirm('¿Eliminar este vencimiento?')) return;
+  if(_cpEdit===id) cpCancelarEdicion();
   DB.compromisos=(DB.compromisos||[]).filter(x=>x.id!==id); saveToStorage(); renderCobrosPagos();
 }
 function cpGuardarManual(){
@@ -11800,9 +12165,11 @@ function cpGuardarManual(){
   if(!venc){ toast('Elegí la fecha de vencimiento','err'); return; }
   if(!(monto>0)){ toast('Ingresá el monto','err'); return; }
   if(!DB.compromisos) DB.compromisos=[];
-  DB.compromisos.push({id:Date.now(),tipo,venc,monto,contraparte:$v('cp-contra'),concepto:$v('cp-concepto'),medio:$v('cp-medio'),nro:$v('cp-nro'),estado:'pendiente',fechaCumplido:'',origen:'manual',origenId:''});
+  const cEd=_cpEdit?DB.compromisos.find(x=>x.id===_cpEdit):null;
+  if(cEd){ Object.assign(cEd,{tipo,venc,monto,contraparte:$v('cp-contra'),concepto:$v('cp-concepto'),medio:$v('cp-medio'),nro:$v('cp-nro')}); _cpEdit=null; cpEdicionUI(false); }
+  else DB.compromisos.push({id:Date.now(),tipo,venc,monto,contraparte:$v('cp-contra'),concepto:$v('cp-concepto'),medio:$v('cp-medio'),nro:$v('cp-nro'),estado:'pendiente',fechaCumplido:'',origen:'manual',origenId:''});
   ['cp-monto','cp-contra','cp-concepto','cp-nro'].forEach(i=>{ const e=document.getElementById(i); if(e) e.value=''; });
-  saveToStorage(); toast(`${tipo==='cobro'?'Cobro':'Pago'} registrado: ${cpFmt(monto)} para el ${lluviaFmtF(venc)}`,'ok'); renderCobrosPagos();
+  saveToStorage(); toast(`${tipo==='cobro'?'Cobro':'Pago'} ${cEd?'corregido':'registrado'}: ${cpFmt(monto)} para el ${lluviaFmtF(venc)}`,'ok'); renderCobrosPagos();
 }
 function exportarCobrosPagosExcel(){
   if(typeof XLSX==='undefined'){ toast('No se pudo cargar el exportador de Excel','err'); return; }
@@ -11853,7 +12220,7 @@ function renderGastosCampo(){
   h+=`<div style="font-weight:700;font-size:13px;margin:14px 0 6px">Detalle</div><div style="max-height:280px;overflow-y:auto">`+
     lista.map(g=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border);padding:7px 4px;font-size:13px">
       <span><b>${lluviaFmtF(g.fecha)}</b> · ${esc(g.cat||'Otros')}${g.campo?` <span style="color:var(--text3)">· 📍 ${esc(campoPorId(g.campo).nombre)}</span>`:''}${g.desc?` <span style="color:var(--text3)">· ${esc(g.desc)}</span>`:''}</span>
-      <span style="white-space:nowrap"><b>${fmt(parseFloat(g.monto)||0)}</b> <span style="cursor:pointer;color:var(--red);margin-left:6px" onclick="eliminarGasto(${g.id})">🗑</span></span></div>`).join('')+`</div>`;
+      <span style="white-space:nowrap"><b>${fmt(parseFloat(g.monto)||0)}</b> <span style="cursor:pointer;margin-left:6px" title="Editar" onclick="gastoEditar(${g.id})">✏️</span> <span style="cursor:pointer;color:var(--red);margin-left:6px" onclick="eliminarGasto(${g.id})">🗑</span></span></div>`).join('')+`</div>`;
   box.innerHTML=h;
 }
 function guardarGasto(){
@@ -11863,16 +12230,19 @@ function guardarGasto(){
   if(fecha>lluviaHoy()){ toast('La fecha no puede ser futura','err'); return; }
   if(!(monto>0)){ toast('Ingresá el monto del gasto','err'); return; }
   if(!DB.gastos) DB.gastos=[];
-  DB.gastos.push({id:Date.now(),fecha,cat,monto,desc,...((campo&&campo!=='general')?{campo}:{})});
+  const gEd=_gastoEdit?DB.gastos.find(x=>x.id===_gastoEdit):null;
+  if(gEd){ Object.assign(gEd,{fecha,cat,monto,desc}); if(campo&&campo!=='general') gEd.campo=campo; else delete gEd.campo; _gastoEdit=null; gastoEdicionUI(false); }
+  else DB.gastos.push({id:Date.now(),fecha,cat,monto,desc,...((campo&&campo!=='general')?{campo}:{})});
   addHistorial('Gasto',`${cat}: $${Math.round(monto).toLocaleString('es-AR')}${desc?' · '+desc:''}`,'','');
   saveToStorage();
   const m=document.getElementById('gasto-monto'); if(m) m.value='';
   const d=document.getElementById('gasto-desc'); if(d) d.value='';
-  toast(`Gasto registrado: $${Math.round(monto).toLocaleString('es-AR')} (${cat})`,'ok');
+  toast(`Gasto ${gEd?'corregido':'registrado'}: $${Math.round(monto).toLocaleString('es-AR')} (${cat})`,'ok');
   renderResultadoEconomico(); renderValuacionHacienda();
 }
 function eliminarGasto(id){
   if(!confirm('¿Eliminar este gasto?')) return;
+  if(_gastoEdit===id) gastoCancelarEdicion();
   DB.gastos=(DB.gastos||[]).filter(g=>g.id!==id);
   saveToStorage(); renderResultadoEconomico(); renderValuacionHacienda();
 }
@@ -12549,12 +12919,12 @@ async function iaPreguntar(texto){
 
 function renderCompras(){
   const tbody=document.getElementById('compras-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.compras].reverse().map(c=>`<tr><td>${c.fecha}</td><td>${esc(c.prov||'--')}</td><td>${c.cat}</td><td class="td-mono">${c.cant}</td><td class="td-mono">${c.peso||'--'} kg</td><td class="td-mono">$${(c.precio||0).toLocaleString('es-AR')}</td><td class="td-mono text-amber">$${(c.total||0).toLocaleString('es-AR')}</td><td>${c.potrero||'--'}</td><td class="td-mono">${esc(c.guia||'--')}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(c.rps&&c.rps.length)?c.rps.join(', '):'--'}</td></tr>`).join('')||emptyRow(10);
+  tbody.innerHTML=[...DB.compras].reverse().map(c=>`<tr><td>${c.fecha}</td><td>${esc(c.prov||'--')}</td><td>${c.cat}</td><td class="td-mono">${c.cant}</td><td class="td-mono">${c.peso||'--'} kg</td><td class="td-mono">$${(c.precio||0).toLocaleString('es-AR')}</td><td class="td-mono text-amber">$${(c.total||0).toLocaleString('es-AR')}</td><td>${c.potrero||'--'}</td><td class="td-mono">${esc(c.guia||'--')}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(c.rps&&c.rps.length)?c.rps.join(', '):'--'}</td><td style="white-space:nowrap"><span style="cursor:pointer" title="Editar" onclick="coEditar(${c.id})">✏️</span> <span style="cursor:pointer;color:var(--red);margin-left:6px" title="Eliminar" onclick="eliminarCompra(${c.id})">🗑</span></td></tr>`).join('')||emptyRow(11);
 }
 
 function renderVentas(){
   const tbody=document.getElementById('ventas-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.ventas].reverse().map(v=>`<tr><td>${v.fecha}</td><td>${esc(v.comp||'--')}</td><td>${v.cat}</td><td class="td-mono">${v.cant}</td><td class="td-mono">${v.peso||'--'} kg</td><td class="td-mono">$${(v.precio||0).toLocaleString('es-AR')}</td><td class="td-mono text-green">$${(v.total||0).toLocaleString('es-AR')}</td><td class="td-mono">${esc(v.guia||'--')}</td><td>${v.dest||'--'}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(v.rps&&v.rps.length)?v.rps.join(', '):'--'}</td></tr>`).join('')||emptyRow(10);
+  tbody.innerHTML=[...DB.ventas].reverse().map(v=>`<tr><td>${v.fecha}</td><td>${esc(v.comp||'--')}</td><td>${v.cat}</td><td class="td-mono">${v.cant}</td><td class="td-mono">${v.peso||'--'} kg</td><td class="td-mono">$${(v.precio||0).toLocaleString('es-AR')}</td><td class="td-mono text-green">$${(v.total||0).toLocaleString('es-AR')}</td><td class="td-mono">${esc(v.guia||'--')}</td><td>${v.dest||'--'}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(v.rps&&v.rps.length)?v.rps.join(', '):'--'}</td><td style="white-space:nowrap"><span style="cursor:pointer" title="Editar" onclick="veEditar(${v.id})">✏️</span> <span style="cursor:pointer;color:var(--red);margin-left:6px" title="Eliminar" onclick="eliminarVenta(${v.id})">🗑</span></td></tr>`).join('')||emptyRow(11);
 }
 
 function renderTraslados(){
