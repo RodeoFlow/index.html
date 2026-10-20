@@ -6983,7 +6983,7 @@ function renderVencimientos(){
     if(DB.settings.subscribed){
       subBox.innerHTML='';
     } else {
-      const elapsed=Date.now()-(DB.settings.trialStart||Date.now());
+      const elapsed=Date.now()-trialInicio();
       const daysLeft=Math.max(0,TRIAL_DAYS-Math.floor(elapsed/86400000));
       if(daysLeft<=5){
         const color=daysLeft===0?'var(--red)':'var(--amber)';
@@ -8784,7 +8784,7 @@ function usarUbicacionActual(){
 function updateTrialStatus(){
   const el=document.getElementById('trial-status-info'); if(!el) return;
   if(!el._rfTap){ el._rfTap=1; el.addEventListener('click',trialTapSecreto); }
-  const elapsed=Date.now()-(DB.settings.trialStart||Date.now());
+  const elapsed=Date.now()-trialInicio();
   const daysUsed=Math.floor(elapsed/86400000);
   const daysLeft=Math.max(0,TRIAL_DAYS-daysUsed);
   if(DB.settings.subscribed){
@@ -8793,8 +8793,8 @@ function updateTrialStatus(){
     el.innerHTML=`
       <div style="font-family:var(--font-mono);font-size:48px;color:${daysLeft<=5?'var(--accent)':'var(--green)'}">${daysLeft}</div>
       <div style="color:var(--text2);font-size:13px">días restantes de prueba</div>
-      <div style="margin-top:8px;font-size:13px;color:var(--text3)">Iniciado: ${new Date(DB.settings.trialStart).toLocaleDateString('es-AR')}</div>
-      <div style="font-size:13px;color:var(--text3)">Expira: ${new Date(DB.settings.trialStart+TRIAL_DAYS*86400000).toLocaleDateString('es-AR')}</div>`;
+      <div style="margin-top:8px;font-size:13px;color:var(--text3)">Iniciado: ${new Date(trialInicio()).toLocaleDateString('es-AR')}</div>
+      <div style="font-size:13px;color:var(--text3)">Expira: ${new Date(trialInicio()+TRIAL_DAYS*86400000).toLocaleDateString('es-AR')}</div>`;
     avisarProximoVencimiento(daysLeft);
   } else {
     el.innerHTML=`<div style="color:var(--red);font-size:16px;font-weight:600">⛔ Período de prueba expirado</div><div style="color:var(--text2);font-size:14px;margin-top:4px">Activá tu suscripción para continuar</div>`;
@@ -8823,6 +8823,7 @@ function trialTapSecreto(){
 async function reiniciarTrialTitular(){
   if(!esTitularMaestro()) return;
   DB.settings.trialStart = Date.now();
+  window._rfTrialAnchor = DB.settings.trialStart; rfSetItem('rf_trial_anchor', String(DB.settings.trialStart));
   await saveToStorage();
   updateTrialStatus();
   toast('Prueba reiniciada: 30 días desde hoy','ok');
@@ -14798,13 +14799,29 @@ async function detectarManipulacionFecha() {
   return { manipulado: false, maxKnown };
 }
 
+// ── Inicio de la prueba por DISPOSITIVO: un establecimiento nuevo no reinicia los 30 días ──
+window._rfTrialAnchor=0;
+async function rfAnchorTrial(){
+  let a=parseInt(await rfGetItem('rf_trial_anchor'))||0;
+  const hayDB=!!(window.DB&&DB.settings), ts=(hayDB&&DB.settings.trialStart)||0;
+  if(!a){ if(!hayDB) return 0; a=ts||Date.now(); rfSetItem('rf_trial_anchor',String(a)); }
+  else if(ts&&ts<a){ a=ts; rfSetItem('rf_trial_anchor',String(a)); }
+  window._rfTrialAnchor=a; return a;
+}
+function trialInicio(){
+  const a=window._rfTrialAnchor||0, ts=(window.DB&&DB.settings&&DB.settings.trialStart)||0;
+  if(a&&ts) return Math.min(a,ts);
+  return a||ts||Date.now();
+}
+setTimeout(()=>{ rfAnchorTrial().catch(()=>{}); },1500);
 // Calcular días de trial/sub usando el timestamp máximo conocido (anti-cheat)
 async function calcularEstadoSuscripcion() {
+  await rfAnchorTrial();
   const { manipulado, maxKnown } = await detectarManipulacionFecha();
   // Si hay manipulación, usar maxKnown en lugar de Date.now()
   const now = manipulado ? maxKnown : Date.now();
 
-  const trialElapsed  = Math.floor((now - (DB.settings.trialStart || now)) / 86400000);
+  const trialElapsed  = Math.floor((now - trialInicio()) / 86400000);
   const trialDaysLeft = Math.max(0, TRIAL_DAYS - trialElapsed);
   const inTrial       = trialDaysLeft > 0;
 
@@ -15135,7 +15152,11 @@ async function crearNuevoEstablecimiento(nombre) {
   const lista  = await getEstablecimientos();
   lista.push({ id, nombre: nombre.trim(), creadoEn: Date.now() });
   await saveEstablecimientos(lista);
-  await idbSet('rf_estab_' + id, JSON.stringify(dbVacia(nombre.trim())));
+  const dbNueva = dbVacia(nombre.trim());
+  // El nuevo establecimiento hereda la prueba y la suscripción del dispositivo: no inicia otra prueba
+  dbNueva.settings.trialStart = (await rfAnchorTrial()) || Date.now();
+  ['subscribed','activationDate','activationCode'].forEach(k=>{ if(DB&&DB.settings&&DB.settings[k]!==undefined) dbNueva.settings[k]=DB.settings[k]; });
+  await idbSet('rf_estab_' + id, JSON.stringify(dbNueva));
   await cambiarEstablecimiento(id);
   await renderSelectorEstab();
 }
