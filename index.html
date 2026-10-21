@@ -8819,22 +8819,43 @@ function updateTrialStatus(){
 // si el rol es Dueño y el establecimiento tiene registrado el teléfono maestro.
 // OJO: es un control del lado del cliente (comodidad, no seguridad); la
 // seguridad real de cobro vive en suscripciones/{estabId} (servidor).
-const RF_TEL_MAESTRO = '2314446643';
+// Reinicio de la prueba (solo el titular de RodeoFlow): 5 toques sobre «Estado suscripción» y un código de 6 cifras.
+// Se guarda únicamente el hash del código (no el código). Es una barrera del lado del cliente, no una protección de servidor.
+const RF_CODIGO_SAL = 'rodeoflow-titular-v1';
+const RF_CODIGO_HASH = '5bc64d1e5b28a0764d068c6fe00991c4da4ad6850a480b3d6b8f09404cea1c5d';
 let _rfTaps = 0, _rfTapT = null;
-function esTitularMaestro(){
-  if(rolActual() !== 'Dueño') return false;
-  return (DB.settings.phones||[]).some(p => String(p).replace(/\D/g,'').endsWith(RF_TEL_MAESTRO));
+async function rfHashCodigo(c){
+  const enc = new TextEncoder();
+  const base = await crypto.subtle.importKey('raw', enc.encode(String(c)), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:enc.encode(RF_CODIGO_SAL), iterations:150000}, base, 256);
+  return [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 function trialTapSecreto(){
-  if(!esTitularMaestro()) return;
   _rfTaps++; clearTimeout(_rfTapT); _rfTapT = setTimeout(()=>{_rfTaps=0;}, 2000);
-  if(_rfTaps >= 5){
-    _rfTaps = 0;
-    if(confirm('¿Reiniciar la prueba gratuita a 30 días desde hoy?')) reiniciarTrialTitular();
-  }
+  if(_rfTaps < 5) return;
+  _rfTaps = 0;
+  pedirCodigoTitular();
 }
-async function reiniciarTrialTitular(){
-  if(!esTitularMaestro()) return;
+async function pedirCodigoTitular(){
+  if(rolActual() !== 'Dueño'){ toast('Solo el Dueño puede reiniciar la prueba','err'); return; }
+  if(Date.now() < (parseInt(localStorage.getItem('rf_cod_bloq')||'0')||0)){ toast('Demasiados intentos: probá de nuevo en unos minutos','err'); return; }
+  const c = prompt('Código del titular (6 cifras):');
+  if(c === null) return;
+  if(!/^\d{6}$/.test(c.trim())){ toast('El código tiene 6 cifras','err'); return; }
+  let ok = false;
+  try{ ok = (await rfHashCodigo(c.trim())) === RF_CODIGO_HASH; }
+  catch(e){ toast('Este navegador no pudo verificar el código','err'); return; }
+  if(!ok){
+    const n = (parseInt(localStorage.getItem('rf_cod_fallos')||'0')||0) + 1;
+    if(n >= 5){ localStorage.setItem('rf_cod_bloq', String(Date.now()+15*60000)); localStorage.setItem('rf_cod_fallos','0'); }
+    else localStorage.setItem('rf_cod_fallos', String(n));
+    toast('Código incorrecto','err'); return;
+  }
+  localStorage.setItem('rf_cod_fallos','0');
+  if(confirm('¿Reiniciar la prueba gratuita a 30 días desde hoy?')) reiniciarTrialTitular(true);
+}
+async function reiniciarTrialTitular(autorizado){
+  if(!autorizado) return;
   DB.settings.trialStart = Date.now();
   DB.settings.trialEpoch = (DB.settings.trialEpoch||0) + 1; // los demás dispositivos adoptan este reinicio
   window._rfTrialAnchor = DB.settings.trialStart; rfSetItem('rf_trial_anchor', String(DB.settings.trialStart));
