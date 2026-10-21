@@ -99,6 +99,16 @@
   // ── Colecciones económicas: no deben llegar a dispositivos logueados como no-Dueño ─
   const COLECCIONES_SOLO_DUENO = ['ventas','compras','clientes','romaneos','valuaciones','gastos','compromisos'];
 
+  // ── Prueba gratuita: todos los dispositivos del establecimiento convergen al mismo inicio ─
+  // Gana la "época" más nueva (reinicio del titular); si empatan, gana la fecha más antigua.
+  function mergeTrial(prev, remoto) {
+    const lEp = prev.trialEpoch || 0, rEp = remoto.trialEpoch || 0;
+    if (lEp > rEp) return { trialStart: prev.trialStart || null, trialEpoch: lEp };
+    if (rEp > lEp) return { trialStart: remoto.trialStart || null, trialEpoch: rEp };
+    const a = remoto.trialStart || 0, b = prev.trialStart || 0;
+    return { trialStart: (a && b) ? Math.min(a, b) : (a || b || null), trialEpoch: lEp };
+  }
+
   // ── Aplicar el cambio de UNA colección (no toda la base) ─
   function aplicarCambioColeccion(key, payload, esCargaInicial) {
     if (!payload || payload.data === undefined || payload.data === 'undefined') return;
@@ -125,8 +135,11 @@
         // incompleto/viejo nunca lo puede volver a poner en false (eso era lo que
         // hacía reaparecer la pantalla de setup sobre un establecimiento con datos reales).
         const prev = window.DB.settings || {};
+        const _tr = mergeTrial(prev, parsed);
         window.DB[key] = {
           ...parsed,
+          trialStart:      _tr.trialStart,
+          trialEpoch:      _tr.trialEpoch,
           subscribed:      prev.subscribed,
           activationDate:  prev.activationDate,
           activationCode:  prev.activationCode,
@@ -8823,6 +8836,7 @@ function trialTapSecreto(){
 async function reiniciarTrialTitular(){
   if(!esTitularMaestro()) return;
   DB.settings.trialStart = Date.now();
+  DB.settings.trialEpoch = (DB.settings.trialEpoch||0) + 1; // los demás dispositivos adoptan este reinicio
   window._rfTrialAnchor = DB.settings.trialStart; rfSetItem('rf_trial_anchor', String(DB.settings.trialStart));
   await saveToStorage();
   updateTrialStatus();
@@ -14809,9 +14823,9 @@ async function rfAnchorTrial(){
   window._rfTrialAnchor=a; return a;
 }
 function trialInicio(){
-  const a=window._rfTrialAnchor||0, ts=(window.DB&&DB.settings&&DB.settings.trialStart)||0;
-  if(a&&ts) return Math.min(a,ts);
-  return a||ts||Date.now();
+  // El inicio es el del establecimiento (se sincroniza entre dispositivos). El anchor del dispositivo solo sirve de respaldo si falta.
+  const ts=(window.DB&&DB.settings&&DB.settings.trialStart)||0;
+  return ts||window._rfTrialAnchor||Date.now();
 }
 setTimeout(()=>{ rfAnchorTrial().catch(()=>{}); },1500);
 // Calcular días de trial/sub usando el timestamp máximo conocido (anti-cheat)
