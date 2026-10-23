@@ -120,8 +120,9 @@
     if ((payload.updatedAt || 0) <= (_ultimoTsPorColeccion[key] || 0) && !esCargaInicial) return;
     try {
       const parsed = JSON.parse(payload.data);
-      // Protección: no vaciar una colección local con datos remotos vacíos (ej: animales)
-      if (Array.isArray(parsed) && parsed.length === 0 &&
+      // Protección: solo en la carga inicial no vaciar una colección local con un remoto vacío.
+      // En cambios en vivo de otro dispositivo, el vaciado es legítimo y se aplica.
+      if (esCargaInicial && Array.isArray(parsed) && parsed.length === 0 &&
           Array.isArray(window.DB?.[key]) && window.DB[key].length > 0) {
         console.warn(`⚠️ Remoto vacío para "${key}", se mantiene lo local`);
         return;
@@ -135,7 +136,9 @@
         // incompleto/viejo nunca lo puede volver a poner en false (eso era lo que
         // hacía reaparecer la pantalla de setup sobre un establecimiento con datos reales).
         const prev = window.DB.settings || {};
-        const _tr = mergeTrial(prev, parsed);
+        const _tr = window._rfTrialServidor
+          ? { trialStart: prev.trialStart || null, trialEpoch: prev.trialEpoch || 0 } // manda el servidor
+          : mergeTrial(prev, parsed);
         window.DB[key] = {
           ...parsed,
           trialStart:      _tr.trialStart,
@@ -189,7 +192,11 @@
     const claves  = Object.keys(window.DB);
     let huboCambios = false;
 
+    const _rolPush = sessionStorage.getItem('rf_role');
+    const _esDueno = !_rolPush || _rolPush === 'Dueño';
     claves.forEach(key => {
+      // Un dispositivo no-Dueño nunca recibe las colecciones económicas (queda vacío/viejo): no las subimos, o pisaríía las del Dueño.
+      if (!_esDueno && COLECCIONES_SOLO_DUENO.includes(key)) return;
       let json;
       try {
         // 'settings' sigue sincronizando establecimiento/phones/trialStart normalmente,
@@ -200,6 +207,7 @@
         // ese valor se subiría a Firebase y se propagaría a todos los dispositivos.
         if (key === 'settings') {
           const { subscribed, activationDate, activationCode, ...resto } = window.DB[key] || {};
+          if (window._rfTrialServidor) { delete resto.trialStart; delete resto.trialEpoch; } // el inicio de prueba es solo-lectura para el cliente
           json = JSON.stringify(resto);
         } else {
           json = JSON.stringify(window.DB[key]);
@@ -215,7 +223,7 @@
 
     // Blob completo de respaldo/compatibilidad (para dispositivos con una versión vieja de la app
     // que todavía no conocen el modelo por colecciones). Se manda espaciado, no en cada cambio.
-    if (forzar || ahora - _ultimoLegacyPush > 45000) {
+    if (_esDueno && (forzar || ahora - _ultimoLegacyPush > 45000)) { // el blob legacy incluye datos económicos: solo lo sube el Dueño
       _ultimoLegacyPush = ahora;
       const jsonCompleto = JSON.stringify(window.DB);
       rtdb.ref('establecimientos/' + estabId).update({
@@ -339,13 +347,28 @@
     //    de acá. Sólo la Cloud Function validarCodigoActivacion (Admin SDK,
     //    no pasa por las reglas) puede escribir en suscripciones/{id}.
     if (_refSuscripcion) { _refSuscripcion.off(); }
+    window._rfTrialServidor = false; window._rfTrialStartServidor = 0; // el inicio de prueba autoritativo llega por el listener
     _refSuscripcion = rtdb.ref(`suscripciones/${estabId}`);
     _refSuscripcion.on('value', snap => {
       const s = snap.val();
+      // Inicio de prueba AUTORITATIVO: lo escribe solo el servidor (Cloud Functions iniciarTrial / reiniciarTrial).
+      if ((!s || !s.trialStart) && window._rfTrialInitPedido !== estabId && window.DB && window.DB.settings && !String(estabId).startsWith('demo-')) {
+        window._rfTrialInitPedido = estabId;
+        try {
+          firebase.app().functions('us-central1').httpsCallable('iniciarTrial')({ estabId, trialStartLocal: window.DB.settings.trialStart || 0 })
+            .catch(e => console.warn('iniciarTrial no disponible (se usa el inicio local):', e?.message || e));
+        } catch(e) {}
+      }
       if (!s || !window.DB || !window.DB.settings) return;
       window.DB.settings.subscribed     = !!s.subscribed;
       window.DB.settings.activationDate = s.activationDate || null;
       window.DB.settings.activationCode = s.activationCode || null;
+      if (typeof s.trialStart === 'number' && s.trialStart > 0) {
+        window._rfTrialServidor = true;
+        window._rfTrialStartServidor = s.trialStart;
+        window.DB.settings.trialStart = s.trialStart;
+        window.DB.settings.trialEpoch = s.trialEpoch || 0;
+      }
       window.saveToStorage?.();
       window.updateTrialStatus?.();
     });
@@ -5238,7 +5261,7 @@ function mostrarAlertaSanitaria(animal, info) {
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   const diasRestantes = info.fechaApto ? Math.round((info.fechaApto - hoy)/86400000) : null;
   texto.innerHTML = `
-    <div style="font-size:17px;font-weight:800;margin-bottom:8px">🚫 RP ${animal.rp} — ${animal.categoria}</div>
+    <div style="font-size:17px;font-weight:800;margin-bottom:8px">🚫 RP ${esc(animal.rp)} — ${animal.categoria}</div>
     <div><b>Motivo:</b> ${esc(info.motivo)}</div>
     <div><b>Diagnóstico:</b> ${esc(t.diag||'--')} · <b>Medicamento:</b> ${esc(t.med||'--')}</div>
     <div><b>Fecha de tratamiento:</b> ${t.fecha||'--'}</div>
@@ -5293,7 +5316,7 @@ function updateAllDropdowns() {
     if(!sel) return;
     const cur = sel.value;
     sel.innerHTML = '<option value="">-- Sin transporte --</option>';
-    DB.transportistas.forEach(t => { sel.innerHTML += `<option value="${t.id}" ${cur===String(t.id)?'selected':''}>${esc(t.nombre)} – ${t.patente}</option>`; });
+    DB.transportistas.forEach(t => { sel.innerHTML += `<option value="${t.id}" ${cur===String(t.id)?'selected':''}>${esc(t.nombre)} – ${esc(t.patente)}</option>`; });
   });
   // Clientes datalists
   const provs = DB.clientes.filter(c=>c.tipo==='Proveedor').map(c=>c.nombre);
@@ -5825,7 +5848,7 @@ function simulateRFID() {
   if(bp)bp.textContent=peso+' kg';
   if(animal){if(mr)mr.value=animal.rp;if(mrf)mrf.value=tag;if(mp)mp.value=peso;}
   const disp=document.getElementById('last-rfid-display');
-  if(disp)disp.innerHTML=`<span style="color:var(--green)">▶</span> Tag: <strong>${tag}</strong> · Peso: <strong>${peso} kg</strong> · RP: <strong>${animal?.rp||'--'}</strong> · Cat: <strong>${animal?.categoria||'--'}</strong>`;
+  if(disp)disp.innerHTML=`<span style="color:var(--green)">▶</span> Tag: <strong>${tag}</strong> · Peso: <strong>${peso} kg</strong> · RP: <strong>${esc(animal?.rp||'--')}</strong> · Cat: <strong>${animal?.categoria||'--'}</strong>`;
   alertaDatoRecibido('lectura', `📡 Bastón: RFID ${tag}`, 'rfid-reading-val');
   setTimeout(()=>alertaDatoRecibido('peso', `⚖️ Balanza: ${peso} kg`, 'balanza-peso'), 350);
   if(!animal){
@@ -5922,10 +5945,10 @@ function cargarTropa(){
     return;
   }
   tbody.innerHTML=animales.map(a=>`<tr>
-    <td><input type="checkbox" class="tropa-check" data-rp="${a.rp}" checked></td>
-    <td class="td-mono">${a.rp}</td>
+    <td><input type="checkbox" class="tropa-check" data-rp="${esc(a.rp)}" checked></td>
+    <td class="td-mono">${esc(a.rp)}</td>
     <td>${a.categoria}</td>
-    <td class="td-mono"><input type="number" class="form-control tropa-peso-input" data-rp="${a.rp}" value="${a.peso||''}" style="width:90px;padding:4px 8px"></td>
+    <td class="td-mono"><input type="number" class="form-control tropa-peso-input" data-rp="${esc(a.rp)}" value="${a.peso||''}" style="width:90px;padding:4px 8px"></td>
   </tr>`).join('');
   info.textContent=`${animales.length} animal(es) en el potrero "${pot}"`;
   box.style.display='block';
@@ -6077,7 +6100,7 @@ function renderGDPResumen(){
     bajoBox.innerHTML='<div style="color:var(--green);font-size:13px">✅ Ningún animal por debajo del umbral de GDP bajo.</div>';
   } else {
     bajoBox.innerHTML=bajos.map(({a,gdp})=>`<div style="display:flex;justify-content:space-between;padding:5px 4px;border-bottom:1px solid var(--border);font-size:13px">
-      <span class="td-mono">RP ${a.rp} <span style="color:var(--text3)">(${a.categoria})</span></span>
+      <span class="td-mono">RP ${esc(a.rp)} <span style="color:var(--text3)">(${a.categoria})</span></span>
       <span class="td-mono" style="color:var(--red);font-weight:600">${gdp} g/d</span>
     </div>`).join('');
   }
@@ -6429,7 +6452,7 @@ function guardarEdicionAnimal(id){
   addHistorial('Animal',`Datos corregidos: RP ${a.rp}${rp!==rpViejo?' (antes '+rpViejo+')':''}`,a.rp,'');
   quitarFotoAnimal('a'); closeModal('modal-animal'); animalModalReset();
   saveToStorage(); filtrarAnimales(); updateKPIs();
-  toast(`Animal actualizado: RP ${a.rp}`,'ok');
+  toast(`Animal actualizado: RP ${esc(a.rp)}`,'ok');
 }
 // ── Ventas y compras ──
 function reajustarCompromisos(origen,id,nuevoTotal){
@@ -6559,7 +6582,7 @@ function potCampoSelect(p){
 function setCampoPotrero(pid,cid){
   const p=(DB.potreros||[]).find(x=>x.id===pid); if(!p) return;
   if(cid==='principal') delete p.campo; else p.campo=cid;
-  saveToStorage(); renderPotreros(); toast(`Potrero asignado a ${campoPorId(cid).nombre}`,'ok');
+  saveToStorage(); renderPotreros(); toast(`Potrero asignado a ${esc(campoPorId(cid).nombre)}`,'ok');
 }
 function valTablaCampos(r){
   const l=camposLista(); if(l.length<2) return '';
@@ -6589,7 +6612,7 @@ function lluviaResumenCampos(anio){
 function lluviaMesTxt(pref){
   const l=camposLista();
   const por=l.map(c=>({c,mm:precipDeCampo(c.id).filter(x=>x.fecha.startsWith(pref)).reduce((s,x)=>s+(parseFloat(x.mm)||0),0)}));
-  return l.length<2?`${por[0].mm} mm`:por.map(x=>`${x.c.nombre} ${x.mm} mm`).join(' · ');
+  return l.length<2?`${por[0].mm} mm`:por.map(x=>`${esc(x.c.nombre)} ${x.mm} mm`).join(' · ');
 }
 function renderConfigCampos(){
   const dl=document.getElementById('demo-link'); if(dl) dl.textContent=location.origin+location.pathname+'?demo=1';
@@ -6775,7 +6798,7 @@ function guardarLluvia(){
   const vzEl=document.getElementById('lluvia-voz'); if(vzEl) vzEl.value='';
   const veEl=document.getElementById('lluvia-voz-estado'); if(veEl) veEl.textContent='';
   _lluviaAnio=parseInt(fecha.slice(0,4));
-  toast(`Registrado: ${mm} mm el ${lluviaFmtF(fecha)}${camposLista().length>1?' en '+campoPorId(_lluviaCampo).nombre:''}`,'ok');
+  toast(`Registrado: ${mm} mm el ${lluviaFmtF(fecha)}${camposLista().length>1?' en '+esc(campoPorId(_lluviaCampo).nombre):''}`,'ok');
   renderLluvias(); actualizarClima();
 }
 function eliminarLluvia(id){
@@ -6805,7 +6828,7 @@ function registrarPrecipitacionManual(){
   DB.precipitaciones.push({ id:Date.now(), fecha:lluviaHoy(), mm, fuente:'manual', ...(_climaCampo!=='principal'?{campo:_climaCampo}:{}) });
   addHistorial('Clima', `Registro de lluvia manual: ${mm} mm`, '', '');
   saveToStorage();
-  toast(`Registrado: ${mm} mm de lluvia hoy${camposLista().length>1?' en '+campoPorId(_climaCampo).nombre:''}`,'ok');
+  toast(`Registrado: ${mm} mm de lluvia hoy${camposLista().length>1?' en '+esc(campoPorId(_climaCampo).nombre):''}`,'ok');
   renderLluvias();
   actualizarClima();
 }
@@ -6932,7 +6955,7 @@ function obtenerVencimientos(diasVentana){
     if(f<=limite){
       const dias=Math.round((f-hoy)/86400000);
       items.push({fecha:v.refuerzo,dias,icono:'💉',
-        texto:`Refuerzo ${v.vacuna||'vacuna'} · RP ${v.rp} — ${dias<0?`vencido hace ${Math.abs(dias)}d`:dias===0?'hoy':`en ${dias}d`}`});
+        texto:`Refuerzo ${v.vacuna||'vacuna'} · RP ${esc(v.rp)} — ${dias<0?`vencido hace ${Math.abs(dias)}d`:dias===0?'hoy':`en ${dias}d`}`});
     }
   });
 
@@ -6943,7 +6966,7 @@ function obtenerVencimientos(diasVentana){
     if(fin<=limite){
       const dias=Math.round((fin-hoy)/86400000);
       items.push({fecha:fin.toISOString().split('T')[0],dias,icono:'🩺',
-        texto:`Fin tratamiento ${esc(t.med||t.diag||'')} · RP ${t.rp} — ${dias<0?`venció hace ${Math.abs(dias)}d`:dias===0?'hoy':`en ${dias}d`}`});
+        texto:`Fin tratamiento ${esc(t.med||t.diag||'')} · RP ${esc(t.rp)} — ${dias<0?`venció hace ${Math.abs(dias)}d`:dias===0?'hoy':`en ${dias}d`}`});
     }
   });
 
@@ -6954,7 +6977,7 @@ function obtenerVencimientos(diasVentana){
     if(f<=limite){
       const dias=Math.round((f-hoy)/86400000);
       items.push({fecha:tc.parto,dias,icono:'🐄',
-        texto:`Parto estimado · RP ${tc.rp} — ${dias<0?`atrasado ${Math.abs(dias)}d`:dias===0?'hoy':`en ${dias}d`}`});
+        texto:`Parto estimado · RP ${esc(tc.rp)} — ${dias<0?`atrasado ${Math.abs(dias)}d`:dias===0?'hoy':`en ${dias}d`}`});
     }
   });
 
@@ -6966,7 +6989,7 @@ function obtenerVencimientos(diasVentana){
       const dias=Math.round((f-hoy)/86400000);
       const insumo=(DB.insumos||[]).find(i=>i.id===l.insumoId);
       items.push({fecha:l.vencimiento,dias,icono:'📦',
-        texto:`Vencimiento ${insumo?.nombre||'insumo'} (lote ${l.lote}) — ${dias<0?`vencido hace ${Math.abs(dias)}d`:dias===0?'hoy':`en ${dias}d`}`});
+        texto:`Vencimiento ${esc(insumo?.nombre||'insumo')} (lote ${esc(l.lote)}) — ${dias<0?`vencido hace ${Math.abs(dias)}d`:dias===0?'hoy':`en ${dias}d`}`});
     }
   });
 
@@ -7272,7 +7295,7 @@ function renderSenasaResumen(){
       pendBox.innerHTML = pendientes.slice(0,25).map(d=>{
         const txt = d.ultima ? `última dosis hace ${d.dias}d` : 'sin registro de vacuna';
         return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">
-          <span class="td-mono">RP ${d.a.rp} <span style="color:var(--text3)">(${d.a.categoria})</span></span>
+          <span class="td-mono">RP ${esc(d.a.rp)} <span style="color:var(--text3)">(${d.a.categoria})</span></span>
           <span style="color:var(--red)">${txt}</span>
         </div>`;
       }).join('') + (pendientes.length>25?`<div style="font-size:11px;color:var(--text3);margin-top:6px">…y ${pendientes.length-25} más</div>`:'');
@@ -7479,7 +7502,7 @@ function renderRentabilidad(){
     const filas=[...datos].sort((x,y)=>x.margen-y.margen).map(d=>{
       const color=d.margen>=0?'var(--green)':'var(--red)';
       return `<tr>
-        <td class="td-mono">${d.a.rp}</td>
+        <td class="td-mono">${esc(d.a.rp)}</td>
         <td>${d.a.categoria}</td>
         <td>${d.a.potrero||'--'}</td>
         <td>${d.vendido?'Vendido':'Activo'}</td>
@@ -7497,7 +7520,9 @@ function renderRentabilidad(){
 }
 
 // ─── GUARDAR FUNCIONES ───
-function $v(id){return document.getElementById(id)?.value?.trim()||'';}
+// RP/caravana: se quitan caracteres que permiten inyectar HTML/JS (< > " ' ` & \ $ { })
+function rpLimpio(s){return String(s??'').replace(/[<>"'`&$\\{}]/g,'').trim();}
+function $v(id){const r=document.getElementById(id)?.value?.trim()||''; return (/(^|-)rp$/.test(id)||id==='de-ternero')?rpLimpio(r):r;}
 
 // ── Rangos de peso plausibles por categoría (kg) para detectar lecturas atípicas ──
 const RANGOS_PESO_CATEGORIA = {
@@ -7926,7 +7951,7 @@ function renderRaspaje(){
   const badgeRes = r => r==='Positivo'?'badge-red':r==='Negativo'?'badge-green':r==='Dudoso'?'badge-amber':'badge-gray';
   tbody.innerHTML=[...lista].reverse().map(r=>`<tr>
     <td class="td-mono">${r.fecha}</td>
-    <td class="td-mono">${r.rp}</td>
+    <td class="td-mono">${esc(r.rp)}</td>
     <td>${r.parte||'--'}</td>
     <td>${esc(r.diag||'--')}</td>
     <td><span class="badge ${badgeRes(r.resultado)}">${r.resultado||'Pendiente'}</span></td>
@@ -7993,7 +8018,7 @@ function renderSangrado(){
   const badgeRes = r => r==='Positivo'?'badge-red':r==='Negativo'?'badge-green':r==='Dudoso'?'badge-amber':'badge-gray';
   tbody.innerHTML=[...lista].reverse().map(s=>`<tr>
     <td class="td-mono">${s.fecha}</td>
-    <td class="td-mono">${s.rp}</td>
+    <td class="td-mono">${esc(s.rp)}</td>
     <td>${s.enfermedad||'--'}</td>
     <td>${esc(s.lab||'--')}</td>
     <td><span class="badge ${badgeRes(s.resultado)}">${s.resultado||'Pendiente'}</span></td>
@@ -8469,7 +8494,7 @@ function renderTransportistas(){
       <div class="transporte-header">
         <div class="transporte-nombre">🚛 ${esc(t.nombre)}</div>
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="transporte-patente">${t.patente}</div>
+          <div class="transporte-patente">${esc(t.patente)}</div>
           <button class="btn-danger" style="padding:3px 10px;font-size:13px" onclick="bajaTransportista(${t.id})">🗑 Baja</button>
         </div>
       </div>
@@ -8489,7 +8514,7 @@ function renderViajes(){
   if(!DB.viajes||!DB.viajes.length){tbody.innerHTML=emptyRow(8);return;}
   tbody.innerHTML=[...DB.viajes].reverse().map(v=>`<tr>
     <td>${v.fecha}</td><td>${v.transNombre}</td>
-    <td class="td-mono" style="color:var(--accent)">${v.patente}</td>
+    <td class="td-mono" style="color:var(--accent)">${esc(v.patente)}</td>
     <td>${esc(v.origen||'--')}</td><td>${esc(v.destino||'--')}</td>
     <td class="td-mono">${v.animales}</td>
     <td class="td-mono">${esc(v.guia||'--')}</td>
@@ -8556,7 +8581,7 @@ function renderClientes(){
   const tipoBadge={Comprador:'badge-blue',Proveedor:'badge-green',Acopio:'badge-amber',Veterinaria:'badge-purple',Consignatario:'badge-gray',Feria:'badge-amber'};
   list.innerHTML=clientes.map(c=>`
     <div class="cliente-card">
-      <div class="cliente-avatar">${c.nombre.charAt(0).toUpperCase()}</div>
+      <div class="cliente-avatar">${esc(c.nombre.charAt(0).toUpperCase())}</div>
       <div class="cliente-info">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div class="cliente-nombre">${esc(c.nombre)}</div>
@@ -8852,9 +8877,16 @@ async function pedirCodigoTitular(){
     toast('Código incorrecto','err'); return;
   }
   localStorage.setItem('rf_cod_fallos','0');
-  if(confirm('¿Reiniciar la prueba gratuita a 30 días desde hoy?')) reiniciarTrialTitular(true);
+  if(confirm('¿Reiniciar la prueba gratuita a 30 días desde hoy?')) reiniciarTrialTitular(true, c.trim());
 }
-async function reiniciarTrialTitular(autorizado){
+async function reiniciarTrialTitular(autorizado, codigo){
+  if(!autorizado) return;
+  if(window._rfTrialServidor){ // con servidor: la Cloud Function valida el código y reinicia; el listener actualiza la UI
+    try{ await firebase.app().functions('us-central1').httpsCallable('reiniciarTrial')({ estabId: window.ESTAB_ID_ACTIVO, codigo }); }
+    catch(e){ toast(e?.message||'No se pudo reiniciar la prueba','err'); return; }
+    toast('Prueba reiniciada: 30 días desde hoy','ok');
+    return;
+  }
   if(!autorizado) return;
   DB.settings.trialStart = Date.now();
   DB.settings.trialEpoch = (DB.settings.trialEpoch||0) + 1; // los demás dispositivos adoptan este reinicio
@@ -8927,7 +8959,7 @@ function renderPesadas(){
   const tbody=document.getElementById('pesadas-tbody');if(!tbody)return;
   tbody.innerHTML=[...DB.pesadas].reverse().map(p=>{
     const a=DB.animales.find(x=>x.rp===p.rp);const gdp=a?calcGDP(a):'--';
-    return `<tr><td>${p.fecha}</td><td class="td-mono">${p.rp}</td><td class="td-mono" style="font-size:13px">${p.rfid||'--'}</td><td class="td-mono text-green">${p.peso} kg</td><td>${p.potrero||'--'}</td><td>${esc(p.operador||'--')}</td><td class="td-mono">${gdp} g/d</td></tr>`;
+    return `<tr><td>${p.fecha}</td><td class="td-mono">${esc(p.rp)}</td><td class="td-mono" style="font-size:13px">${p.rfid||'--'}</td><td class="td-mono text-green">${p.peso} kg</td><td>${p.potrero||'--'}</td><td>${esc(p.operador||'--')}</td><td class="td-mono">${gdp} g/d</td></tr>`;
   }).join('')||emptyRow(7);
   renderUltimasPesadas();
 }
@@ -8945,7 +8977,7 @@ function renderUltimasPesadas(){
     const chk=a?evaluarPesoAnormal({...a,pesoHistorico:(a.pesoHistorico||[]).filter(h=>!(h.fecha===p.fecha&&h.kg===p.peso))},p.peso):{anormal:false};
     const flag=chk.anormal?' <span title="'+chk.motivo.replace(/"/g,'')+'" style="color:var(--amber)">⚠️</span>':'';
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid var(--border);font-size:13px">
-      <span><span class="td-mono" style="color:var(--accent)">RP ${p.rp}</span>${flag}</span>
+      <span><span class="td-mono" style="color:var(--accent)">RP ${esc(p.rp)}</span>${flag}</span>
       <span class="td-mono" style="color:var(--green);font-weight:600">${p.peso} kg</span>
       <span style="color:var(--text3);font-size:12px">${p.fecha||'--'}</span>
     </div>`;
@@ -9096,7 +9128,7 @@ function calcularConversionLote(){
 // Conversión alimenticia por animal: usa la 1ª y última pesada del RP (o el rango indicado) y le asigna el consumo
 // de los registros de encierre de su potrero que caen dentro de ese mismo rango.
 function calcularConversionAnimal(){
-  const rp = document.getElementById('ca-rp').value.trim();
+  const rp = rpLimpio(document.getElementById('ca-rp').value.trim());
   const div = document.getElementById('ca-animal-resultado');
   if(!rp){ toast('Ingresá un RP','err'); return; }
 
@@ -9255,7 +9287,7 @@ function renderTendenciaGDP(){
   let serieFinal = []; // [{label, valor}]
 
   if(tipo==='rp'){
-    const rp = document.getElementById('gdp-trend-rp')?.value.trim();
+    const rp = rpLimpio(document.getElementById('gdp-trend-rp')?.value.trim());
     if(!rp){ dibujarLineaGDP('chart-gdp-tendencia', []); return; }
     puntos = puntos.filter(p=>p.rp===rp).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
     serieFinal = puntos.map(p=>({label:p.fecha, valor:p.gdp}));
@@ -9401,18 +9433,18 @@ function renderAnimales(filtrados){
   const tbody=document.getElementById('animales-tbody');if(!tbody)return;
   const lista=filtrados||DB.animales.filter(a=>a.activo);
   tbody.innerHTML=lista.map(a=>`<tr>
-    <td>${a.foto?`<img src="${a.foto}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;cursor:pointer" onclick="verFotoAnimal('${a.rp}')">`:`<div style="width:36px;height:36px;border-radius:6px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:15px">🐄</div>`}</td>
-    <td class="td-mono">${a.rp}</td><td class="td-mono" style="font-size:13px">${a.rfid||'--'}</td>
+    <td>${a.foto?`<img src="${a.foto}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;cursor:pointer" data-rp="${esc(a.rp)}" onclick="verFotoAnimal(this.dataset.rp)">`:`<div style="width:36px;height:36px;border-radius:6px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:15px">🐄</div>`}</td>
+    <td class="td-mono">${esc(a.rp)}</td><td class="td-mono" style="font-size:13px">${a.rfid||'--'}</td>
     <td><span class="badge badge-white">${a.categoria}</span></td>
-    <td>${a.raza||'--'}</td><td>${a.sexo||'--'}</td>
+    <td>${esc(a.raza||'--')}</td><td>${a.sexo||'--'}</td>
     <td class="td-mono" style="font-size:14px">${a.fnac||'--'}</td>
     <td class="td-mono text-green">${a.peso||'0'} kg</td>
     <td class="td-mono">${calcGDP(a)} g/d</td>
     <td>${a.potrero||'--'}</td>
     <td>${a.prenada&&a.prenada!=='No'?`<span class="badge badge-blue">${a.prenada}</span>`:'--'}</td>
     <td><span class="badge ${a.activo?'badge-green':'badge-red'}">${a.activo?'Activo':'Baja'}</span></td>
-    <td>${a.obs?`<button class="btn-secondary" style="padding:2px 8px;font-size:14px" onclick="verObsAnimal('${a.rp}')" title="Ver observaciones">📝</button>`:'--'}</td>
-    <td><button class="btn-secondary" style="padding:2px 8px;font-size:14px" onclick="abrirFichaAnimal('${a.rp}')" title="Ver ficha completa">👁</button></td>
+    <td>${a.obs?`<button class="btn-secondary" style="padding:2px 8px;font-size:14px" data-rp="${esc(a.rp)}" onclick="verObsAnimal(this.dataset.rp)" title="Ver observaciones">📝</button>`:'--'}</td>
+    <td><button class="btn-secondary" style="padding:2px 8px;font-size:14px" data-rp="${esc(a.rp)}" onclick="abrirFichaAnimal(this.dataset.rp)" title="Ver ficha completa">👁</button></td>
     <td style="white-space:nowrap"><button class="btn-secondary" style="padding:2px 8px;font-size:14px" onclick="animalEditar(${a.id})" title="Editar datos">✏️</button> <button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaAnimal(${a.id})">🗑 Baja</button></td>
   </tr>`).join('')||emptyRow(15);
 }
@@ -9424,7 +9456,7 @@ function verObsAnimal(rp){
   const win=document.createElement('div');
   win.style.cssText='position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:24px';
   win.innerHTML=`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:480px;width:100%;cursor:default" onclick="event.stopPropagation()">
-    <div style="color:var(--accent);font-weight:700;margin-bottom:10px">RP ${a.rp} · Observaciones</div>
+    <div style="color:var(--accent);font-weight:700;margin-bottom:10px">RP ${esc(a.rp)} · Observaciones</div>
     <div style="color:var(--text);white-space:pre-wrap;line-height:1.5">${esc(a.obs)}</div>
     <div style="color:var(--text3);font-size:12px;margin-top:16px;text-align:right">Tocá afuera para cerrar</div>
   </div>`;
@@ -9439,7 +9471,7 @@ function verFotoAnimal(rp){
   const win=document.createElement('div');
   win.style.cssText='position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;flex-direction:column;cursor:pointer';
   win.innerHTML=`<img src="${a.foto}" style="max-width:90vw;max-height:80vh;border-radius:10px;border:2px solid var(--accent)">
-    <div style="color:#fff;margin-top:14px;font-size:15px">RP ${a.rp} · ${a.categoria}</div>
+    <div style="color:#fff;margin-top:14px;font-size:15px">RP ${esc(a.rp)} · ${a.categoria}</div>
     <div style="color:var(--text3);font-size:12px;margin-top:4px">Tocá para cerrar</div>`;
   win.onclick=()=>win.remove();
   document.body.appendChild(win);
@@ -9513,8 +9545,8 @@ function abrirFichaAnimal(rp){
   win.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:820px;width:100%;cursor:default" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px">
       <div>
-        <div style="font-size:22px;font-weight:700;color:var(--accent)">🐄 RP ${a.rp}</div>
-        <div style="color:var(--text2);font-size:13px;margin-top:2px">${a.categoria} · ${a.raza||'--'} · ${a.sexo||'--'} · Nac. ${a.fnac||'--'} (${edadTxt})</div>
+        <div style="font-size:22px;font-weight:700;color:var(--accent)">🐄 RP ${esc(a.rp)}</div>
+        <div style="color:var(--text2);font-size:13px;margin-top:2px">${a.categoria} · ${esc(a.raza||'--')} · ${a.sexo||'--'} · Nac. ${a.fnac||'--'} (${edadTxt})</div>
       </div>
       <div style="display:flex;gap:8px">
       </div>
@@ -9524,7 +9556,7 @@ function abrirFichaAnimal(rp){
       <div class="kpi ${a.activo?'green':'red'}"><div class="kpi-label">Estado</div><div class="kpi-val" style="font-size:16px">${a.activo?'Activo':'Baja'}</div><div class="kpi-sub">${a.potrero||'--'}</div></div>
       <div class="kpi blue"><div class="kpi-label">Peso actual</div><div class="kpi-val">${a.peso||'--'}</div><div class="kpi-sub">kg</div></div>
       <div class="kpi amber"><div class="kpi-label">GDP</div><div class="kpi-val">${gdp!==null?gdp.toFixed(2):'--'}</div><div class="kpi-sub">kg/día</div></div>
-      <div class="kpi ${retencion?'red':'green'}"><div class="kpi-label">Faena</div><div class="kpi-val" style="font-size:14px">${retencion?'🔴 Retenido':'✅ Apto'}</div><div class="kpi-sub">${retencion?retencion.motivo:'sin restricción'}</div></div>
+      <div class="kpi ${retencion?'red':'green'}"><div class="kpi-label">Faena</div><div class="kpi-val" style="font-size:14px">${retencion?'🔴 Retenido':'✅ Apto'}</div><div class="kpi-sub">${esc(retencion?retencion.motivo:'sin restricción')}</div></div>
     </div>
 
     ${a.prenada && a.prenada!=='No' ? `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--purple,#9b59b6)">
@@ -9654,7 +9686,7 @@ function filtrarAnimales(){
 
 function renderVacunas(){
   const tbody=document.getElementById('vacunas-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.vacunas].reverse().map(v=>`<tr><td>${v.fecha}</td><td class="td-mono">${v.rp}</td><td>${v.vacuna}</td><td class="td-mono">${v.dosis} ml</td><td>${esc(v.lab||'--')}</td><td class="td-mono">${v.refuerzo||'--'}</td><td>${esc(v.operador||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaVacuna(${v.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(8);
+  tbody.innerHTML=[...DB.vacunas].reverse().map(v=>`<tr><td>${v.fecha}</td><td class="td-mono">${esc(v.rp)}</td><td>${v.vacuna}</td><td class="td-mono">${v.dosis} ml</td><td>${esc(v.lab||'--')}</td><td class="td-mono">${v.refuerzo||'--'}</td><td>${esc(v.operador||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaVacuna(${v.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(8);
 }
 
 // ═══ CALENDARIO SANITARIO PREVENTIVO ═══
@@ -9754,13 +9786,13 @@ function renderCalendarioSanitario(){
       default: estadoTxt='✅ Al día'; color='var(--green)';
     }
     return `<tr>
-      <td class="td-mono">${f.a.rp}</td>
+      <td class="td-mono">${esc(f.a.rp)}</td>
       <td>${f.a.categoria||'--'}</td>
       <td class="td-mono">${edadTxt}</td>
       <td>${esc(f.protocolo.nombre)}</td>
       <td class="td-mono">${f.ultima||'--'}</td>
       <td style="color:${color};font-weight:600">${estadoTxt}</td>
-      <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirModalVacunaDesdeCalendario('${f.a.rp}','${esc(f.protocolo.nombre)}')">＋ Vacunar</button></td>
+      <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirModalVacunaDesdeCalendario('${esc(f.a.rp)}','${esc(f.protocolo.nombre)}')">＋ Vacunar</button></td>
     </tr>`;
   }).join('');
 }
@@ -9773,12 +9805,12 @@ function abrirModalVacunaDesdeCalendario(rp, nombreVacuna){
 
 function renderTratamientos(){
   const tbody=document.getElementById('tratamientos-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.tratamientos].reverse().map(t=>`<tr><td>${t.fecha}</td><td class="td-mono">${t.rp}</td><td>${esc(t.diag||'--')}</td><td>${esc(t.med||'--')}</td><td class="td-mono">${t.dosis||'--'}</td><td class="td-mono">${t.dias||'--'}</td><td>${esc(t.vet||'--')}</td><td><span class="badge ${t.estado==='En Curso'?'badge-amber':t.estado==='Completado'?'badge-green':'badge-gray'}">${t.estado}</span></td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaTratamiento(${t.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
+  tbody.innerHTML=[...DB.tratamientos].reverse().map(t=>`<tr><td>${t.fecha}</td><td class="td-mono">${esc(t.rp)}</td><td>${esc(t.diag||'--')}</td><td>${esc(t.med||'--')}</td><td class="td-mono">${t.dosis||'--'}</td><td class="td-mono">${t.dias||'--'}</td><td>${esc(t.vet||'--')}</td><td><span class="badge ${t.estado==='En Curso'?'badge-amber':t.estado==='Completado'?'badge-green':'badge-gray'}">${t.estado}</span></td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaTratamiento(${t.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
 }
 
 function renderEnfermedades(){
   const tbody=document.getElementById('enf-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.enfermedades].reverse().map(e=>`<tr><td>${e.fecha}</td><td class="td-mono">${e.rp}</td><td>${esc(e.nombre||'--')}</td><td>${e.sint||'--'}</td><td><span class="badge badge-gray">${e.res||'--'}</span></td><td>${esc(e.vet||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaEnfermedad(${e.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
+  tbody.innerHTML=[...DB.enfermedades].reverse().map(e=>`<tr><td>${e.fecha}</td><td class="td-mono">${esc(e.rp)}</td><td>${esc(e.nombre||'--')}</td><td>${e.sint||'--'}</td><td><span class="badge badge-gray">${e.res||'--'}</span></td><td>${esc(e.vet||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaEnfermedad(${e.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
 }
 
 function renderNacimientos(){
@@ -9786,10 +9818,10 @@ function renderNacimientos(){
   if(!DB.nacimientos||!DB.nacimientos.length){tbody.innerHTML=emptyRow(9);return;}
   tbody.innerHTML=[...DB.nacimientos].reverse().map(n=>`<tr>
     <td>${n.fecha||'--'}</td>
-    <td class="td-mono">${n.rp}</td>
+    <td class="td-mono">${esc(n.rp)}</td>
     <td class="td-mono">${n.madre||'--'}</td>
     <td><span class="badge ${n.sexo==='Macho'?'badge-blue':'badge-purple'}">${n.sexo||'--'}</span></td>
-    <td>${n.raza||'--'}</td>
+    <td>${esc(n.raza||'--')}</td>
     <td class="td-mono">${n.peso?n.peso+' kg':'--'}</td>
     <td>${n.potrero||'--'}</td>
     <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">${esc(n.obs||'--')}</td>
@@ -9862,7 +9894,7 @@ function renderPrenadas(){
         +(estH?`<br><span class="badge ${estHBadge}" style="font-size:11px">${estH}</span>`:'');
     }
     return `<tr>
-      <td class="td-mono">${a.rp}</td>
+      <td class="td-mono">${esc(a.rp)}</td>
       <td><span class="badge badge-white">${a.categoria}</span></td>
       <td>${raza}</td>
       <td class="td-mono text-green">${meses}m</td>
@@ -9875,7 +9907,7 @@ function renderPrenadas(){
       <td class="td-mono">${rpToro}</td>
       <td>${estMon?`<span class="badge ${badgeMon}">${estMon}</span> `:''}${monitoreo!=='--'?monitoreo:''}</td>
       <td>${a.potrero||'--'}</td>
-      <td><button class="btn-danger" style="padding:3px 8px;font-size:13px" onclick="quitarPrenada('${a.rp}')">✕ Quitar</button></td>
+      <td><button class="btn-danger" style="padding:3px 8px;font-size:13px" data-rp="${esc(a.rp)}" onclick="quitarPrenada(this.dataset.rp)">✕ Quitar</button></td>
     </tr>`;
   }).join('');
 }
@@ -9962,13 +9994,13 @@ function renderDestetes(){
 function renderAbortos(){
   const tbody=document.getElementById('aborto-tbody');if(!tbody)return;
   if(!DB.abortos){tbody.innerHTML=emptyRow(7);return;}
-  tbody.innerHTML=[...DB.abortos].reverse().map(a=>`<tr><td>${a.fecha}</td><td class="td-mono">${a.rp}</td><td class="td-mono">${a.meses||'--'}</td><td><span class="badge badge-red">${esc(a.causa||'--')}</span></td><td>${esc(a.vet||'--')}</td><td style="color:var(--text2);max-width:200px;white-space:normal">${esc(a.obs||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaAborto(${a.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
+  tbody.innerHTML=[...DB.abortos].reverse().map(a=>`<tr><td>${a.fecha}</td><td class="td-mono">${esc(a.rp)}</td><td class="td-mono">${a.meses||'--'}</td><td><span class="badge badge-red">${esc(a.causa||'--')}</span></td><td>${esc(a.vet||'--')}</td><td style="color:var(--text2);max-width:200px;white-space:normal">${esc(a.obs||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaAborto(${a.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
 }
 
 function renderCelos(){
   const tbody=document.getElementById('celo-tbody');if(!tbody)return;
   tbody.innerHTML=[...(DB.celos||[])].reverse().map(c=>`<tr>
-    <td>${c.fecha}</td><td class="td-mono">${c.hora||'--'}</td><td class="td-mono">${c.rp}</td>
+    <td>${c.fecha}</td><td class="td-mono">${c.hora||'--'}</td><td class="td-mono">${esc(c.rp)}</td>
     <td>${c.metodo||'--'}</td><td><span class="badge ${c.intensidad==='Alta'?'badge-green':c.intensidad==='Media'?'badge-amber':'badge-red'}">${c.intensidad||'--'}</span></td>
     <td class="td-mono">${c.diaProtocolo||'--'}</td>
     <td style="color:var(--text2);max-width:180px;white-space:normal">${esc(c.obs||'--')}</td>
@@ -9979,7 +10011,7 @@ function renderCelos(){
 function renderServicios(){
   const tbody=document.getElementById('servicio-tbody');if(!tbody)return;
   tbody.innerHTML=[...(DB.servicios||[])].reverse().map(s=>`<tr>
-    <td>${s.fecha}</td><td class="td-mono">${s.rp}</td><td>${s.tipo||'--'}</td>
+    <td>${s.fecha}</td><td class="td-mono">${esc(s.rp)}</td><td>${s.tipo||'--'}</td>
     <td class="td-mono">${s.toro||'--'}</td><td>${s.protocolo||'--'}</td><td>${esc(s.operador||'--')}</td>
     <td style="color:var(--text2);max-width:180px;white-space:normal">${esc(s.obs||'--')}</td>
     <td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaServicio(${s.id})">🗑</button></td>
@@ -10031,7 +10063,7 @@ function generarProtocoloIATF(){
 
   let sujetos = []; // [{tipo:'rp'|'lote', valor}]
   if(modo==='individual'){
-    const rp = document.getElementById('iatf-rp').value.trim();
+    const rp = rpLimpio(document.getElementById('iatf-rp').value.trim());
     if(!rp){ toast('Ingresá el RP','err'); return; }
     sujetos.push({tipo:'rp', valor:rp});
   } else {
@@ -10108,7 +10140,7 @@ function renderTareasIATF(){
     return `<tr>
       <td><input type="checkbox" onchange="marcarTareaIATF('${prot.id}',${idx})"></td>
       <td class="td-mono" style="color:${color};font-weight:600">${paso.fecha}</td>
-      <td class="td-mono">${prot.rp}${prot.potrero?` (${prot.potrero})`:''}</td>
+      <td class="td-mono">${esc(prot.rp)}${prot.potrero?` (${prot.potrero})`:''}</td>
       <td style="font-size:12px">${prot.plantillaNombre}</td>
       <td>${paso.esIA?'🔵 ':''}${paso.tarea}</td>
     </tr>`;
@@ -10124,7 +10156,7 @@ function renderProtocolosIATF(){
     const hechos = prot.pasos.filter(p=>p.hecho).length;
     return `<tr>
       <td class="td-mono">${prot.fechaInicio}</td>
-      <td class="td-mono">${prot.rp}${prot.potrero?` (${prot.potrero})`:''}</td>
+      <td class="td-mono">${esc(prot.rp)}${prot.potrero?` (${prot.potrero})`:''}</td>
       <td style="font-size:12px">${prot.plantillaNombre}</td>
       <td class="td-mono">${hechos}/${prot.pasos.length}</td>
       <td><button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarProtocoloIATF('${prot.id}')">🗑</button></td>
@@ -10135,7 +10167,7 @@ function renderProtocolosIATF(){
 function renderRecats(){
   const tbody=document.getElementById('recat-tbody');if(!tbody)return;
   if(!DB.recategorizaciones){tbody.innerHTML=emptyRow(6);return;}
-  tbody.innerHTML=[...DB.recategorizaciones].reverse().map(r=>`<tr><td>${r.fecha}</td><td class="td-mono">${r.rp}</td><td>${r.catAnt||'--'}</td><td>${r.catNueva}</td><td>${esc(r.motivo||'--')}</td><td class="td-mono">${r.peso||'--'} kg</td><td style="color:var(--text2);max-width:200px;white-space:normal">${esc(r.obs||'--')}</td></tr>`).join('')||emptyRow(7);
+  tbody.innerHTML=[...DB.recategorizaciones].reverse().map(r=>`<tr><td>${r.fecha}</td><td class="td-mono">${esc(r.rp)}</td><td>${r.catAnt||'--'}</td><td>${r.catNueva}</td><td>${esc(r.motivo||'--')}</td><td class="td-mono">${r.peso||'--'} kg</td><td style="color:var(--text2);max-width:200px;white-space:normal">${esc(r.obs||'--')}</td></tr>`).join('')||emptyRow(7);
 }
 
 // ── CRÍA ──
@@ -10176,9 +10208,9 @@ function renderRecria(){
     const estado=a.activo?'<span class="badge badge-green">Activo</span>':'<span class="badge badge-red">Baja</span>';
     const gdpStr=a.gdp&&parseFloat(a.gdp)>0?`<span style="color:var(--green)">${parseFloat(a.gdp).toFixed(0)} g/d</span>`:'--';
     return `<tr>
-      <td class="td-mono">${a.rp}</td>
+      <td class="td-mono">${esc(a.rp)}</td>
       <td><span class="badge ${catBadge}">${a.categoria}</span></td>
-      <td>${a.raza||'--'}</td>
+      <td>${esc(a.raza||'--')}</td>
       <td style="font-size:20px" title="${a.sexo||'--'}">${a.sexo==='Macho'?'<span style="color:#4aa8ff">♂️</span>':a.sexo==='Hembra'?'<span style="color:#ff6fa8">♀️</span>':'--'}</td>
       <td>${a.fnac||'--'}</td>
       <td class="td-mono">${mesesVida}</td>
@@ -10186,7 +10218,7 @@ function renderRecria(){
       <td>${gdpStr}</td>
       <td>${a.potrero||'--'}</td>
       <td>${estado}</td>
-      <td><button class="btn-secondary" style="padding:2px 8px;font-size:14px" onclick="abrirFichaAnimal('${a.rp}')" title="Ver ficha completa">👁</button></td>
+      <td><button class="btn-secondary" style="padding:2px 8px;font-size:14px" data-rp="${esc(a.rp)}" onclick="abrirFichaAnimal(this.dataset.rp)" title="Ver ficha completa">👁</button></td>
     </tr>`;
   }).join('');
 }
@@ -10240,12 +10272,12 @@ function renderListosDestetar(){
     const nac = (DB.nacimientos||[]).find(n=>n.rp===f.a.rp || n.cria===f.a.rp);
     const madre = nac?.madre || '--';
     return `<tr>
-      <td class="td-mono">${f.a.rp}</td>
+      <td class="td-mono">${esc(f.a.rp)}</td>
       <td class="td-mono">${madre}</td>
       <td class="td-mono">${f.meses!==null?f.meses.toFixed(1)+'m':'--'}</td>
       <td class="td-mono">${f.peso>0?f.peso+' kg':'--'}</td>
       <td style="color:var(--amber)">${esc(f.motivo)}</td>
-      <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirDesteteDesdeAlerta('${f.a.rp}','${madre}',${f.peso})">＋ Destetar</button></td>
+      <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirDesteteDesdeAlerta('${esc(f.a.rp)}','${madre}',${f.peso})">＋ Destetar</button></td>
     </tr>`;
   }).join('');
 }
@@ -10295,7 +10327,7 @@ function renderProyeccionEntore(){
       color = 'var(--red)';
     }
     return `<tr>
-      <td class="td-mono">${f.a.rp}</td>
+      <td class="td-mono">${esc(f.a.rp)}</td>
       <td class="td-mono">${f.meses!==null?f.meses.toFixed(1)+'m':'--'}</td>
       <td class="td-mono">${f.peso>0?f.peso+' kg':'--'}</td>
       <td class="td-mono">${f.gdp!==null?f.gdp.toFixed(2)+' kg/d':'--'}</td>
@@ -10331,12 +10363,12 @@ function renderRecatSugerida(){
   });
   if(!filas.length){ tbody.innerHTML = emptyRow(6); return; }
   tbody.innerHTML = filas.sort((x,y)=>y.meses-x.meses).map(f=>`<tr>
-    <td class="td-mono">${f.a.rp}</td>
+    <td class="td-mono">${esc(f.a.rp)}</td>
     <td><span class="badge badge-white">${f.a.categoria}</span></td>
     <td class="td-mono">${f.meses.toFixed(1)}m</td>
     <td class="td-mono">${f.peso} kg</td>
     <td><span class="badge badge-green">${f.regla.hacia}</span></td>
-    <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirRecatDesdeAlerta('${f.a.rp}','${f.a.categoria}','${f.regla.hacia}',${f.peso})">🔄 Recategorizar</button></td>
+    <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirRecatDesdeAlerta('${esc(f.a.rp)}','${f.a.categoria}','${f.regla.hacia}',${f.peso})">🔄 Recategorizar</button></td>
   </tr>`).join('');
 }
 
@@ -10540,7 +10572,7 @@ function renderCalendarioReproductivo(){
     const color=d.dias<0?'var(--red)':d.dias<=7?'var(--amber)':'var(--text2)';
     const diasTxt=d.dias<0?`Vencido ${Math.abs(d.dias)}d`:d.dias===0?'Hoy':`En ${d.dias}d`;
     return `<tr>
-      <td class="td-mono">${d.a.rp}</td>
+      <td class="td-mono">${esc(d.a.rp)}</td>
       <td>${d.a.categoria}</td>
       <td>${d.a.potrero||'--'}</td>
       <td>${d.estado}</td>
@@ -10888,13 +10920,13 @@ function generarPlanRotacion(){
       const listoTxt = m.listo.diasDesdeHoy===0 ? 'ya está listo' : `listo en ${m.listo.diasDesdeHoy} día(s) (${m.listo.fecha})`;
       return `<div class="card" style="margin-bottom:10px;border-left:3px solid ${urgenciaColor}">
         <b>Movimiento ${idx+1}:</b> Lote de <b>${esc(m.origen.nombre)}</b> (${m.calc.animales} cabezas, rota en <span style="color:${urgenciaColor};font-weight:600">${m.calc.diasRestantes} día(s)</span>)
-        → mover a <b>${esc(m.destino.nombre)}</b> (${m.destino.ha||'--'} ha) — ${listoTxt}, sostendría ~${m.listo.diasQueAlcanza} días de pastoreo
+        → mover a <b>${esc(m.destino.nombre)}</b> (${esc(m.destino.ha||'--')} ha) — ${listoTxt}, sostendría ~${m.listo.diasQueAlcanza} días de pastoreo
         ${m.alertaCarga?`<br><span style="color:var(--amber)">${m.alertaCarga}</span>`:''}
       </div>`;
     }).join('');
   }
   if(sinDestino.length){
-    html += `<div class="card" style="border-left:4px solid var(--red,#c00)">⚠️ Sin destino disponible para: ${sinDestino.map(p=>p.nombre).join(', ')}. Faltan potreros libres, o ninguno alcanzaría ${diasMinimos} días de pastoreo para ese lote a tiempo.</div>`;
+    html += `<div class="card" style="border-left:4px solid var(--red,#c00)">⚠️ Sin destino disponible para: ${esc(sinDestino.map(p=>p.nombre).join(', '))}. Faltan potreros libres, o ninguno alcanzaría ${diasMinimos} días de pastoreo para ese lote a tiempo.</div>`;
   }
   div.innerHTML = html || '<span style="color:var(--text3)">No se generaron movimientos.</span>';
 }
@@ -11211,12 +11243,12 @@ function irAMapaPotrero(potId){
 
 function renderPastoreos(){
   const tbody=document.getElementById('pastoreo-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.pastoreos].reverse().map(p=>`<tr><td>${p.lote||'--'}</td><td>${p.potrero||'--'}</td><td>${p.entrada||'--'}</td><td>${p.salida||'--'}</td><td>${p.carga||'--'}</td><td><span class="badge ${p.estado==='Activo'?'badge-green':'badge-gray'}">${p.estado}</span></td></tr>`).join('')||emptyRow(6);
+  tbody.innerHTML=[...DB.pastoreos].reverse().map(p=>`<tr><td>${esc(p.lote||'--')}</td><td>${p.potrero||'--'}</td><td>${p.entrada||'--'}</td><td>${p.salida||'--'}</td><td>${p.carga||'--'}</td><td><span class="badge ${p.estado==='Activo'?'badge-green':'badge-gray'}">${p.estado}</span></td></tr>`).join('')||emptyRow(6);
 }
 
 function renderNutricion(){
   const tbody=document.getElementById('nutricion-tbody');if(!tbody)return;
-  tbody.innerHTML=DB.nutricion.map(n=>`<tr><td>${n.lote||'--'}</td><td class="td-mono">${n.rp||'--'}</td><td>${n.cat}</td><td>${n.foraje||'--'}</td><td class="td-mono">${n.suple||'--'} kg</td><td class="td-mono">${n.gdp||'--'} g/d</td><td class="td-mono">${n.inicio||'--'}</td><td>${esc(n.obs||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaNutricion(${n.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
+  tbody.innerHTML=DB.nutricion.map(n=>`<tr><td>${esc(n.lote||'--')}</td><td class="td-mono">${esc(n.rp||'--')}</td><td>${n.cat}</td><td>${n.foraje||'--'}</td><td class="td-mono">${n.suple||'--'} kg</td><td class="td-mono">${n.gdp||'--'} g/d</td><td class="td-mono">${n.inicio||'--'}</td><td>${esc(n.obs||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaNutricion(${n.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
 }
 
 // ═══ FORMULACIÓN DE RACIÓN (optimización por programación lineal) ═══
@@ -11486,7 +11518,7 @@ function renderVentanasCriticas(){
 
   if(!filas.length){ tbody.innerHTML = emptyRow(3); return; }
   tbody.innerHTML = filas.map(f=>`<tr>
-    <td class="td-mono">${f.rp}</td>
+    <td class="td-mono">${esc(f.rp)}</td>
     <td>${f.ventana}</td>
     <td style="color:var(--text2);white-space:normal">${esc(f.detalle)}</td>
   </tr>`).join('');
@@ -12691,7 +12723,7 @@ function iaConstruirContexto(){
   sec('REPRODUCCIÓN (destetes y abortos)',`Destetes ${hoy.slice(0,4)}: ${(DB.destetes||[]).filter(d=>(d.fecha||'').startsWith(hoy.slice(0,4))).length}. Abortos ${hoy.slice(0,4)}: ${(DB.abortos||[]).filter(d=>(d.fecha||'').startsWith(hoy.slice(0,4))).length}. Abortos totales: ${(DB.abortos||[]).length}.`);
   sec('TRATAMIENTOS EN CURSO',(DB.tratamientos||[]).filter(t=>t.estado==='En Curso').slice(0,40).map(t=>`RP ${t.rp}: ${t.diag||''} · ${t.med||''} desde ${t.fecha||''}`).join('\n')||'(ninguno)');
   const vacUlt={}; (DB.vacunas||[]).forEach(v=>{const k=v.rp+'|'+v.vacuna;if(!vacUlt[k]||v.fecha>vacUlt[k].fecha)vacUlt[k]=v;});
-  sec('VACUNAS CON REFUERZO VENCIDO O VENCE EN 30 DÍAS',Object.values(vacUlt).filter(v=>v.refuerzo&&v.refuerzo<=d30).slice(0,40).map(v=>`RP ${v.rp}: ${v.vacuna} refuerzo ${v.refuerzo}`).join('\n')||'(ninguna)');
+  sec('VACUNAS CON REFUERZO VENCIDO O VENCE EN 30 DÍAS',Object.values(vacUlt).filter(v=>v.refuerzo&&v.refuerzo<=d30).slice(0,40).map(v=>`RP ${esc(v.rp)}: ${v.vacuna} refuerzo ${v.refuerzo}`).join('\n')||'(ninguna)');
   const reten=activos.map(a=>({a,r:chequearRetencionAnimal(a.rp)})).filter(x=>x.r);
   sec('ANIMALES EN RETENCIÓN (período de espera o tratamiento en curso)',reten.slice(0,40).map(({a,r})=>`RP ${a.rp}: ${r.motivo}${r.fechaApto?' hasta '+r.fechaApto.toISOString().split('T')[0]:''}`).join('\n')||'(ninguno)');
   sec('INSUMOS (stock)',(DB.insumos||[]).map(i=>`${i.nombre} (${i.categoria}): ${stockActualInsumo(i.id)} ${i.unidad||''} · mínimo ${i.stockMinimo||0}`).join('\n')||'(sin insumos)');
@@ -12889,15 +12921,15 @@ function iaLocal(pregunta){
   // ── Insumos, clima, potreros ──
   if(has(/vencer|vencimiento|agotar|stock bajo|se acaba|faltan insumos/)){
     const hoyD=new Date(); hoyD.setHours(0,0,0,0); const out=[];
-    (DB.insumos||[]).forEach(i=>{const st=stockActualInsumo(i.id);if(st<(i.stockMinimo||0))out.push(`🔴 ${i.nombre}: quedan ${st} ${i.unidad||''} (mínimo ${i.stockMinimo})`);});
-    (DB.insumoLotes||[]).forEach(l=>{if(l.cantidad<=0||!l.vencimiento)return;const d=Math.round((new Date(l.vencimiento)-hoyD)/86400000);if(d<=30){const i=(DB.insumos||[]).find(x=>x.id===l.insumoId);out.push(`⏰ ${(i&&i.nombre)||'Insumo'} (lote ${l.lote}): ${d<0?'vencido hace '+Math.abs(d)+' días':d===0?'vence hoy':'vence en '+d+' días'}`);}});
+    (DB.insumos||[]).forEach(i=>{const st=stockActualInsumo(i.id);if(st<(i.stockMinimo||0))out.push(`🔴 ${esc(i.nombre)}: quedan ${st} ${i.unidad||''} (mínimo ${i.stockMinimo})`);});
+    (DB.insumoLotes||[]).forEach(l=>{if(l.cantidad<=0||!l.vencimiento)return;const d=Math.round((new Date(l.vencimiento)-hoyD)/86400000);if(d<=30){const i=(DB.insumos||[]).find(x=>x.id===l.insumoId);out.push(`⏰ ${esc((i&&i.nombre)||'Insumo')} (lote ${esc(l.lote)}): ${d<0?'vencido hace '+Math.abs(d)+' días':d===0?'vence hoy':'vence en '+d+' días'}`);}});
     return out.length?out.join('\n'):'Sin insumos por agotarse ni por vencer en los próximos 30 días.';
   }
   if(has(/stock|cuanto (me )?queda|quedan|hay de/)){
     const ins=(DB.insumos||[]).filter(i=>(' '+qn+' ').includes(' '+iaNorm(i.nombre)+' ')||qn.includes(iaNorm(i.categoria).replace(/ /g,' ').split(' ')[0])&&iaNorm(i.categoria).length>3);
     const l=ins.length?ins:(DB.insumos||[]);
     if(!l.length) return 'No hay insumos cargados.';
-    return l.slice(0,25).map(i=>`${i.nombre}: **${stockActualInsumo(i.id)}** ${i.unidad||''}${stockActualInsumo(i.id)<(i.stockMinimo||0)?' ⚠️ bajo el mínimo':''}`).join('\n');
+    return l.slice(0,25).map(i=>`${esc(i.nombre)}: **${stockActualInsumo(i.id)}** ${i.unidad||''}${stockActualInsumo(i.id)<(i.stockMinimo||0)?' ⚠️ bajo el mínimo':''}`).join('\n');
   }
   if(has(/llovi|lluvia|precipitac|milimetros/)){
     const per=iaPeriodo(qn); const l=(DB.precipitaciones||[]).filter(x=>(x.fecha||'').startsWith(per.pref));
@@ -12965,14 +12997,14 @@ function renderVentas(){
 
 function renderTraslados(){
   const tbody=document.getElementById('traslados-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.traslados].reverse().map(t=>`<tr><td>${t.fecha}</td><td class="td-mono">${t.rp||'lote'}</td><td>${esc(t.origen||'--')}</td><td>${esc(t.destino||'--')}</td><td class="td-mono">${t.cant||'--'}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(t.rps&&t.rps.length)?t.rps.join(', '):'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaTraslado(${t.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
+  tbody.innerHTML=[...DB.traslados].reverse().map(t=>`<tr><td>${t.fecha}</td><td class="td-mono">${esc(t.rp||'lote')}</td><td>${esc(t.origen||'--')}</td><td>${esc(t.destino||'--')}</td><td class="td-mono">${t.cant||'--'}</td><td class="td-mono" style="font-size:13px;color:var(--text2)">${(t.rps&&t.rps.length)?t.rps.join(', '):'--'}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaTraslado(${t.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(7);
 }
 
 function renderHistorial(filtrados){
   const tbody=document.getElementById('historial-tbody');if(!tbody)return;
   const lista=filtrados||[...DB.historial].reverse();
   const icons={Pesada:'⚖️',Vacuna:'💉',Tratamiento:'🩺',Traslado:'🚛',Tacto:'🔬',Destete:'🍼',Compra:'📥',Venta:'📤',Aborto:'⚠️',Mortandad:'☠️',Animal:'🐄',Potrero:'🗺️'};
-  tbody.innerHTML=lista.map(h=>`<tr><td>${h.fecha}</td><td class="td-mono">${h.rp||'--'}</td><td><span style="margin-right:4px">${icons[h.tipo]||'📌'}</span>${h.tipo||'--'}</td><td>${esc(h.desc||'--')}</td><td>${h.valor||'--'}</td><td>${h.responsable||'--'}</td></tr>`).join('')||emptyRow(6);
+  tbody.innerHTML=lista.map(h=>`<tr><td>${h.fecha}</td><td class="td-mono">${esc(h.rp||'--')}</td><td><span style="margin-right:4px">${icons[h.tipo]||'📌'}</span>${h.tipo||'--'}</td><td>${esc(h.desc||'--')}</td><td>${h.valor||'--'}</td><td>${h.responsable||'--'}</td></tr>`).join('')||emptyRow(6);
 }
 
 function filtrarHistorial(){
@@ -12984,7 +13016,7 @@ function filtrarHistorial(){
 
 function renderMuertes(){
   const tbody=document.getElementById('muertes-tbody');if(!tbody)return;
-  tbody.innerHTML=[...DB.muertes].reverse().map(m=>`<tr><td>${m.fecha}</td><td class="td-mono">${m.rp}</td><td>${DB.animales.find(a=>a.rp===m.rp)?.categoria||'--'}</td><td class="td-mono">${m.peso||'--'} kg</td><td><span class="badge badge-red">${esc(m.causa||'--')}</span></td><td>${m.potrero||'--'}</td><td>${esc(m.diag||'--')}</td><td>${esc(m.vet||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaMuerte(${m.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
+  tbody.innerHTML=[...DB.muertes].reverse().map(m=>`<tr><td>${m.fecha}</td><td class="td-mono">${esc(m.rp)}</td><td>${DB.animales.find(a=>a.rp===m.rp)?.categoria||'--'}</td><td class="td-mono">${m.peso||'--'} kg</td><td><span class="badge badge-red">${esc(m.causa||'--')}</span></td><td>${m.potrero||'--'}</td><td>${esc(m.diag||'--')}</td><td>${esc(m.vet||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaMuerte(${m.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
 }
 
 // ═══ CONTROL DE STOCK DE INSUMOS ═══
@@ -13071,8 +13103,8 @@ function renderInsumosLotes(){
       vencColor = dias<0 ? 'var(--red)' : dias<=30 ? 'var(--amber)' : 'var(--text2)';
     }
     return `<tr>
-      <td>${insumo?insumo.nombre:'--'}</td>
-      <td class="td-mono">${l.lote||'--'}</td>
+      <td>${esc(insumo?insumo.nombre:'--')}</td>
+      <td class="td-mono">${esc(l.lote||'--')}</td>
       <td>${esc(l.proveedor||'--')}</td>
       <td class="td-mono">${l.fechaIngreso||'--'}</td>
       <td class="td-mono" style="color:${vencColor}">${l.vencimiento||'--'}</td>
@@ -13121,7 +13153,7 @@ function registrarEntradaInsumo(){
   renderInsumosCatalogo();
   renderAlertasInsumos();
   saveToStorage();
-  toast(`Entrada registrada: +${cant} ${insumo?.unidad||''} de ${insumo?.nombre||''}`,'ok');
+  toast(`Entrada registrada: +${cant} ${esc(insumo?.unidad||'')} de ${esc(insumo?.nombre||'')}`,'ok');
 }
 
 // ── Salida FIFO: descuenta primero de los lotes con vencimiento más próximo ──
@@ -13154,7 +13186,7 @@ function registrarSalidaInsumo(){
   renderInsumosCatalogo();
   renderAlertasInsumos();
   saveToStorage();
-  toast(`Salida registrada: -${cant} ${insumo?.unidad||''} de ${insumo?.nombre||''}`,'ok');
+  toast(`Salida registrada: -${cant} ${esc(insumo?.unidad||'')} de ${esc(insumo?.nombre||'')}`,'ok');
 }
 
 // ── Alertas de stock bajo y vencimientos próximos (30 días) ──
@@ -13175,7 +13207,7 @@ function renderAlertasInsumos(){
     const dias=Math.round((new Date(l.vencimiento)-hoy)/86400000);
     if(dias<=30){
       const insumo=DB.insumos.find(i=>i.id===l.insumoId);
-      alertas.push({icono:'⏰',texto:`${insumo?.nombre||'Insumo'} (lote ${l.lote}): ${dias<0?`vencido hace ${Math.abs(dias)}d`:dias===0?'vence hoy':`vence en ${dias}d`} — ${l.cantidad} ${insumo?.unidad||''}`});
+      alertas.push({icono:'⏰',texto:`${esc(insumo?.nombre||'Insumo')} (lote ${esc(l.lote)}): ${dias<0?`vencido hace ${Math.abs(dias)}d`:dias===0?'vence hoy':`vence en ${dias}d`} — ${l.cantidad} ${insumo?.unidad||''}`});
     }
   });
 
@@ -14286,7 +14318,7 @@ function bastonOnRFID(rfid) {
   lastRfidTs = Date.now();
   lastRfidRp = animal ? animal.rp : '';
   if (ba) ba.textContent = animal ? `RP ${animal.rp} · ${animal.categoria}` : 'Sin registro';
-  if (lrd) lrd.innerHTML = `<span style="color:var(--green)">▶</span> RFID: <strong>${rfid}</strong>${animal?` · RP: <strong>${animal.rp}</strong> · <strong>${animal.categoria}</strong>`:' · <span style="color:var(--amber)">Sin registro</span>'}`;
+  if (lrd) lrd.innerHTML = `<span style="color:var(--green)">▶</span> RFID: <strong>${rfid}</strong>${animal?` · RP: <strong>${esc(animal.rp)}</strong> · <strong>${animal.categoria}</strong>`:' · <span style="color:var(--amber)">Sin registro</span>'}`;
   const box = document.getElementById('rfid-scanner-box');
   if (box) { box.classList.add('active'); setTimeout(()=>box.classList.remove('active'),1500); }
   alertaDatoRecibido('lectura', `📡 Bastón: RFID ${rfid}${animal?' · RP '+animal.rp:' (sin registro)'}`, 'rfid-reading-val');
@@ -14300,7 +14332,7 @@ function bastonOnRFID(rfid) {
     toast(`📡 RFID desconocido: ${rfid} — completá el alta rápida`, 'warn');
   } else {
     ocultarAltaRapida();
-    toast(`📡 RFID: ${rfid} · RP ${animal.rp}`, 'ok');
+    toast(`📡 RFID: ${esc(rfid)} · RP ${esc(animal.rp)}`, 'ok');
     const retencion = chequearRetencionAnimal(animal.rp);
     if (retencion) mostrarAlertaSanitaria(animal, retencion);
   }
@@ -14329,7 +14361,7 @@ function bastonOnPeso(peso) {
     alertaDatoRecibido('peso', `⚖️ Balanza: ${peso.toFixed(1)} kg`, 'balanza-peso');
   }
   if (document.getElementById('baston-auto-save')?.checked) {
-    const rp = document.getElementById('m-rp')?.value?.trim();
+    const rp = rpLimpio(document.getElementById('m-rp')?.value?.trim());
     const rfidReciente = (Date.now() - lastRfidTs) <= RFID_PESO_CORRELACION_MS;
     const rpCoincide = rp && rp === lastRfidRp;
     if (rp && rfidReciente && rpCoincide) {
@@ -14845,6 +14877,7 @@ async function rfAnchorTrial(){
 }
 function trialInicio(){
   // El inicio es el del establecimiento (se sincroniza entre dispositivos). El anchor del dispositivo solo sirve de respaldo si falta.
+  if(window._rfTrialStartServidor) return window._rfTrialStartServidor; // autoritativo (servidor)
   const ts=(window.DB&&DB.settings&&DB.settings.trialStart)||0;
   return ts||window._rfTrialAnchor||Date.now();
 }
