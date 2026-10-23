@@ -277,9 +277,9 @@
     const uid = firebase.auth().currentUser && firebase.auth().currentUser.uid;
     if (!uid) throw new Error('Sin sesión de Firebase Auth');
     const estabRef = rtdb.ref(`establecimientos/${estabId}`);
-    const snap = await estabRef.once('value');
+    const snap = await estabRef.child('members').once('value'); // solo 'members': un no-miembro no puede leer el resto del establecimiento
 
-    if (!snap.child('members').exists()) {
+    if (!snap.exists()) {
       // Establecimiento nuevo, o viejo de antes del sistema de miembros: me auto-agrego.
       await estabRef.child('members/' + uid).set(true);
       // Índice liviano (solo existencia, sin datos) para poder validar códigos
@@ -287,7 +287,7 @@
       await rtdb.ref('estabs_index/' + estabId).set(true);
       return;
     }
-    if (snap.child('members/' + uid).exists()) {
+    if (snap.child(uid).exists()) {
       return; // ya soy miembro
     }
 
