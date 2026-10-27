@@ -1285,7 +1285,7 @@
             <div class="form-row">
               <div class="form-group"><label class="form-label">RP *</label><input type="text" id="ar-rp" class="form-control" placeholder="1001"></div>
               <div class="form-group"><label class="form-label">Categoría</label>
-                <select id="ar-cat" class="form-control"><option>Ternero M</option><option>Ternera H</option><option>Novillito</option><option>Novillo</option><option>Vaquillona</option><option>Vaca</option><option>Torito</option><option>Toro</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
+                <select id="ar-cat" class="form-control"><option>Ternero M</option><option>Ternera H</option><option>Destete Macho</option><option>Destete Hembra</option><option>Recría</option><option>Novillito</option><option>Novillo</option><option>Vaquillona</option><option>Vaca</option><option>Torito</option><option>Toro</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
               </div>
             </div>
             <div class="form-row">
@@ -1354,6 +1354,7 @@
             <label class="form-label">Potrero / Lote</label>
             <select id="tropa-potrero" class="form-control" onchange="cargarTropa()"><option value="">-- Seleccionar --</option></select>
           </div>
+          <div style="min-width:170px"><label class="form-label">Categoría</label><select id="tropa-cat" class="form-control" onchange="cargarTropa()"><option value="">Todas</option></select></div>
           <div style="font-size:13px;color:var(--text3)" id="tropa-count-info"></div>
         </div>
         <div id="tropa-lista-box" style="display:none">
@@ -3104,9 +3105,9 @@
         <div id="imp-mapeo"></div>
         <div class="form-row" style="margin-top:10px">
           <div class="form-group"><label class="form-label">Si no se reconoce la categoría (machos)</label>
-            <select id="imp-cat-m" class="form-control" onchange="impPreview()"><option>Novillo</option><option>Novillito</option><option>Toro</option><option>Torito</option><option>Ternero M</option><option>Invernada Machos</option></select></div>
+            <select id="imp-cat-m" class="form-control" onchange="impPreview()"><option>Novillo</option><option>Novillito</option><option>Toro</option><option>Torito</option><option>Ternero M</option><option>Destete Macho</option><option>Recría</option><option>Invernada Machos</option></select></div>
           <div class="form-group"><label class="form-label">Si no se reconoce la categoría (hembras)</label>
-            <select id="imp-cat-h" class="form-control" onchange="impPreview()"><option>Vaca</option><option>Vaquillona</option><option>Ternera H</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select></div>
+            <select id="imp-cat-h" class="form-control" onchange="impPreview()"><option>Vaca</option><option>Vaquillona</option><option>Ternera H</option><option>Destete Hembra</option><option>Recría</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select></div>
         </div>
         <div style="font-weight:700;font-size:13px;margin:10px 0 6px">2. Resultado</div>
         <div id="imp-resumen"></div>
@@ -3128,7 +3129,7 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoría</label>
-          <select id="a-cat" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Torito</option><option>Ternero M</option><option>Ternera H</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
+          <select id="a-cat" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Torito</option><option>Ternero M</option><option>Ternera H</option><option>Destete Macho</option><option>Destete Hembra</option><option>Recría</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
         </div>
         <div class="form-group"><label class="form-label">Sexo</label>
           <select id="a-sexo" class="form-control"><option>Macho</option><option>Hembra</option></select>
@@ -3210,7 +3211,7 @@
           <select id="vl-potrero" class="form-control"><option value="TODOS">Todos los potreros</option></select>
         </div>
         <div class="form-group"><label class="form-label">Categoría</label>
-          <select id="vl-cat" class="form-control"><option value="TODAS">Todas</option><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Ternero M</option><option>Ternera H</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
+          <select id="vl-cat" class="form-control"><option value="TODAS">Todas</option><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Ternero M</option><option>Ternera H</option><option>Destete Macho</option><option>Destete Hembra</option><option>Recría</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
         </div>
       </div>
       <div class="form-row">
@@ -3300,7 +3301,7 @@
           <select id="sangl-potrero" class="form-control"><option value="TODOS">Todos los potreros</option></select>
         </div>
         <div class="form-group"><label class="form-label">Categoría</label>
-          <select id="sangl-cat" class="form-control"><option value="TODAS">Todas</option><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Ternero M</option><option>Ternera H</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
+          <select id="sangl-cat" class="form-control"><option value="TODAS">Todas</option><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Ternero M</option><option>Ternera H</option><option>Destete Macho</option><option>Destete Hembra</option><option>Recría</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
         </div>
       </div>
       <div class="form-row">
@@ -3661,7 +3662,7 @@
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cat Anterior</label><input type="text" id="rc-ant" class="form-control" readonly placeholder="Se autocompleta"></div>
         <div class="form-group"><label class="form-label">Cat Nueva</label>
-          <select id="rc-nueva" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Torito</option><option>Ternero M</option><option>Ternera H</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
+          <select id="rc-nueva" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Torito</option><option>Ternero M</option><option>Ternera H</option><option>Destete Macho</option><option>Destete Hembra</option><option>Recría</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
         </div>
       </div>
       <div class="form-row">
@@ -3820,7 +3821,7 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoría</label>
-          <select id="nu-cat" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Ternero M</option><option>Ternera H</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
+          <select id="nu-cat" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Ternero M</option><option>Ternera H</option><option>Destete Macho</option><option>Destete Hembra</option><option>Recría</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
         </div>
         <div class="form-group"><label class="form-label">Tipo forraje</label><input type="text" id="nu-foraje" class="form-control" placeholder="Festuca, Agropiro..."></div>
       </div>
@@ -3938,7 +3939,7 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoría</label>
-          <select id="co-cat" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Ternero M</option><option>Ternera H</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
+          <select id="co-cat" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Ternero M</option><option>Ternera H</option><option>Destete Macho</option><option>Destete Hembra</option><option>Recría</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
         </div>
         <div class="form-group"><label class="form-label">Cantidad *</label><input type="number" id="co-cant" class="form-control" placeholder="10"></div>
       </div>
@@ -3983,7 +3984,7 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoría</label>
-          <select id="ve-cat" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Ternero M</option><option>Ternera H</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
+          <select id="ve-cat" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Toro</option><option>Ternero M</option><option>Ternera H</option><option>Destete Macho</option><option>Destete Hembra</option><option>Recría</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
         </div>
         <div class="form-group"><label class="form-label">Cantidad *</label><input type="number" id="ve-cant" class="form-control" placeholder="10"></div>
       </div>
@@ -4119,7 +4120,7 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoría</label>
-          <select id="vj-cat" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Ternero M</option><option>Ternera H</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
+          <select id="vj-cat" class="form-control"><option>Novillo</option><option>Novillito</option><option>Vaca</option><option>Vaquillona</option><option>Ternero M</option><option>Ternera H</option><option>Destete Macho</option><option>Destete Hembra</option><option>Recría</option><option>Invernada Machos</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select>
         </div>
         <div class="form-group"><label class="form-label">Guía DT-e</label><input type="text" id="vj-guia" class="form-control"></div>
       </div>
@@ -5427,7 +5428,7 @@ function renderCategoryChart() {
   const cats={};
   DB.animales.filter(a=>a.activo).forEach(a=>cats[a.categoria]=(cats[a.categoria]||0)+1);
   const total=DB.animales.filter(a=>a.activo).length||1;
-  const colors={'Novillo':'#e8a020','Novillito':'#f0c060','Vaca':'#3498db','Vaquillona':'#9b59b6','Toro':'#e74c3c','Ternero M':'#2ecc71','Ternera H':'#1abc9c','Torito':'#e67e22'};
+  const colors={'Novillo':'#e8a020','Novillito':'#f0c060','Vaca':'#3498db','Vaquillona':'#9b59b6','Toro':'#e74c3c','Ternero M':'#2ecc71','Ternera H':'#1abc9c','Torito':'#e67e22','Destete Macho':'#27ae60','Destete Hembra':'#16a085','Recría':'#f39c12'};
   el.innerHTML=Object.entries(cats).map(([cat,cnt])=>`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <div style="width:80px;font-size:14px;color:var(--text2)">${cat}</div>
@@ -5917,7 +5918,8 @@ function guardarAltaRapida(){
 function renderTropaPotreroSelect(){
   const sel=document.getElementById('tropa-potrero'); if(!sel)return;
   const cur=sel.value;
-  sel.innerHTML='<option value="">-- Seleccionar --</option>'+DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
+  const nSin=DB.animales.filter(a=>a.activo&&!a.potrero).length; // p.ej. los recién importados
+  sel.innerHTML='<option value="">-- Seleccionar --</option>'+(nSin?`<option value="__sin__">Sin potrero asignado (${nSin})</option>`:'')+DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
   sel.value=cur;
   const dest=document.getElementById('tropa-destino');
   if(dest) dest.innerHTML='<option value="">-- Seleccionar --</option>'+DB.potreros.map(p=>`<option>${esc(p.nombre)}</option>`).join('');
@@ -5938,7 +5940,14 @@ function cargarTropa(){
   const tbody=document.getElementById('tropa-tbody');
   const info=document.getElementById('tropa-count-info');
   if(!pot){ box.style.display='none'; info.textContent=''; return; }
-  const animales=DB.animales.filter(a=>a.activo&&a.potrero===pot);
+  const sinPot=pot==='__sin__';
+  const delPotrero=DB.animales.filter(a=>a.activo&&(sinPot?!a.potrero:a.potrero===pot));
+  // Filtro por categoría: sirve para separar, por ejemplo, Destete Macho de Destete Hembra
+  const selCat=document.getElementById('tropa-cat'); let catSel=selCat?selCat.value:'';
+  const catsDisp=[...new Set(delPotrero.map(a=>a.categoria).filter(Boolean))].sort();
+  if(!catsDisp.includes(catSel)) catSel='';
+  if(selCat) selCat.innerHTML='<option value="">Todas</option>'+catsDisp.map(c=>`<option${c===catSel?' selected':''}>${esc(c)}</option>`).join('');
+  const animales=catSel?delPotrero.filter(a=>a.categoria===catSel):delPotrero;
   if(!animales.length){
     box.style.display='none';
     info.textContent='No hay animales activos en este potrero.';
@@ -5950,7 +5959,7 @@ function cargarTropa(){
     <td>${a.categoria}</td>
     <td class="td-mono"><input type="number" class="form-control tropa-peso-input" data-rp="${esc(a.rp)}" value="${a.peso||''}" style="width:90px;padding:4px 8px"></td>
   </tr>`).join('');
-  info.textContent=`${animales.length} animal(es) en el potrero "${pot}"`;
+  info.textContent=sinPot?`${animales.length} animal(es) sin potrero asignado`:`${animales.length} animal(es) en el potrero "${pot}"`;
   box.style.display='block';
   document.getElementById('tropa-check-all').checked=true;
 }
@@ -5972,7 +5981,7 @@ function getTropaSeleccionados(){
 function ejecutarTrasladoTropa(){
   const rps=getTropaSeleccionados();
   if(!rps.length){toast('Seleccioná al menos un animal de la tropa','err');return;}
-  const origen=$v('tropa-potrero'), destino=$v('tropa-destino');
+  const origenSel=$v('tropa-potrero'), origen=origenSel==='__sin__'?'':origenSel, destino=$v('tropa-destino');
   if(!destino){toast('Elegí el potrero destino','err');return;}
   const fecha=$v('tropa-traslado-fecha')||new Date().toISOString().split('T')[0];
   const motivo=$v('tropa-traslado-motivo')||'Movimiento de tropa';
@@ -5983,9 +5992,9 @@ function ejecutarTrasladoTropa(){
   });
   DB.traslados.push({id:Date.now(),fecha,tipo:'Interno',rp:'',cant:cambios,origen,destino,guia:'',trans:'',rps,motivo});
   actualizarSaldosPotreros(origen, destino);
-  addHistorial('Traslado',`Tropa (${cambios} animales): ${origen} → ${destino}. ${motivo}`,rps.join(', '),'');
+  addHistorial('Traslado',`Tropa (${cambios} animales): ${origen||'Sin potrero'} → ${destino}. ${motivo}`,rps.join(', '),'');
   renderAnimales(); updateKPIs(); renderTraslados();
-  cargarTropa();
+  renderTropaPotreroSelect(); cargarTropa();
   saveToStorage();
   toast(`Tropa trasladada: ${cambios} animal(es) → ${destino}`,'ok');
 }
@@ -5996,7 +6005,7 @@ function ejecutarPesadaTropa(){
   if(!rps.length){toast('Seleccioná al menos un animal de la tropa','err');return;}
   const fecha=$v('tropa-pesada-fecha')||new Date().toISOString().split('T')[0];
   const operador=$v('tropa-pesada-operador')||'';
-  const potrero=$v('tropa-potrero');
+  const potrero=$v('tropa-potrero')==='__sin__'?'':$v('tropa-potrero');
   let registrados=0, alertas=0;
   rps.forEach(rp=>{
     const input=document.querySelector(`.tropa-peso-input[data-rp="${rp}"]`);
@@ -7674,8 +7683,8 @@ function quitarFotoAnimal(prefix){
 }
 
 // ── IMPORTAR ANIMALES DESDE EXCEL / CSV (migración desde otra app) ──
-const IMP_CATEGORIAS=['Novillo','Novillito','Vaca','Vaquillona','Toro','Torito','Ternero M','Ternera H','Invernada Machos','Invernada Hembras','Invernada Vientres'];
-const IMP_CAT_HEMBRA=['Vaca','Vaquillona','Ternera H','Invernada Hembras','Invernada Vientres'];
+const IMP_CATEGORIAS=['Novillo','Novillito','Vaca','Vaquillona','Toro','Torito','Ternero M','Ternera H','Destete Macho','Destete Hembra','Recría','Invernada Machos','Invernada Hembras','Invernada Vientres'];
+const IMP_CAT_HEMBRA=['Vaca','Vaquillona','Ternera H','Destete Hembra','Invernada Hembras','Invernada Vientres'];
 const IMP_RAZAS=['Aberdeen Angus','Hereford','Brangus','Braford','Shorthorn','Criolla','Cruza'];
 const IMP_CAMPOS=[
   {k:'rp',l:'RP (caravana visual) *',a:['rp','caravana','caravanavisual','idv','vid','numero','nro','n','id','caratula','tag','visual']},
@@ -10181,7 +10190,7 @@ function renderRecria(){
   const buscar=(document.getElementById('buscar-recria')?.value||'').toLowerCase();
   const filtroCat=document.getElementById('filtro-recria-cat')?.value||'';
   const filtroPot=document.getElementById('filtro-recria-potrero')?.value||'';
-  const catsRecria=['Novillito','Vaquillona','Torito','Ternero M','Ternera H'];
+  const catsRecria=['Novillito','Vaquillona','Torito','Ternero M','Ternera H','Destete Macho','Destete Hembra','Recría'];
   const hoy=new Date();
   let animales=DB.animales.filter(a=>{
     if(!a.activo) return false;
@@ -10392,7 +10401,7 @@ function poblarPotrerosCurva(){
   const sel = document.getElementById('curva-potrero');
   if(!sel) return;
   const cur = sel.value;
-  const catsRecria=['Novillito','Vaquillona','Torito','Ternero M','Ternera H'];
+  const catsRecria=['Novillito','Vaquillona','Torito','Ternero M','Ternera H','Destete Macho','Destete Hembra','Recría'];
   const potreros = [...new Set(DB.animales.filter(a=>a.activo && catsRecria.includes(a.categoria)).map(a=>a.potrero).filter(Boolean))].sort();
   sel.innerHTML = '<option value="">-- Todos --</option>' + potreros.map(p=>`<option>${p}</option>`).join('');
   if([...sel.options].some(o=>o.value===cur)) sel.value = cur;
@@ -10406,7 +10415,7 @@ function renderCurvaCrecimiento(){
   const gdpObjetivo = parseFloat(document.getElementById('curva-gdp-obj')?.value)||0.6;
   const pesoInicial = parseFloat(document.getElementById('curva-peso-inicial')?.value)||170;
 
-  const catsRecria=['Novillito','Vaquillona','Torito','Ternero M','Ternera H'];
+  const catsRecria=['Novillito','Vaquillona','Torito','Ternero M','Ternera H','Destete Macho','Destete Hembra','Recría'];
   const rpsRecria = new Set(DB.animales.filter(a=>a.activo && catsRecria.includes(a.categoria)
     && (!potreroFiltro || a.potrero===potreroFiltro)).map(a=>a.rp));
 
@@ -10589,7 +10598,7 @@ function renderCalendarioReproductivo(){
 
 function exportRecriaExcel(){
   if(typeof XLSX==='undefined'){toast('Excel no disponible','err');return;}
-  const catsRecria=['Novillito','Vaquillona','Torito','Ternero M','Ternera H'];
+  const catsRecria=['Novillito','Vaquillona','Torito','Ternero M','Ternera H','Destete Macho','Destete Hembra','Recría'];
   const hoy=new Date();
   const datos=DB.animales.filter(a=>a.activo&&catsRecria.includes(a.categoria)).map(a=>{
     const fnac=a.fnac?new Date(a.fnac):null;
