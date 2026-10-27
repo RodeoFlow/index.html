@@ -609,6 +609,15 @@
 
   /* Efecto "tocar para agrandar" (30%) en cualquier otro elemento clickeable: íconos de borrar,
      links de acción en tablas, badges, checkboxes con acción, etc. */
+  /* Distinción por sexo: contorno grueso de color alrededor de la fila (azul = macho, rosa = hembra) */
+  tr.sx-m > td { border-top:3px solid #3498db !important; border-bottom:3px solid #3498db !important; }
+  tr.sx-m > td:first-child { border-left:3px solid #3498db !important; }
+  tr.sx-m > td:last-child { border-right:3px solid #3498db !important; }
+  tr.sx-h > td { border-top:3px solid #e84393 !important; border-bottom:3px solid #e84393 !important; }
+  tr.sx-h > td:first-child { border-left:3px solid #e84393 !important; }
+  tr.sx-h > td:last-child { border-right:3px solid #e84393 !important; }
+  .sx-leyenda { display:inline-flex; gap:12px; align-items:center; font-size:13px; color:var(--text2); }
+  .sx-leyenda i { display:inline-block; width:16px; height:11px; border-radius:2px; border:3px solid; vertical-align:middle; margin-right:4px; }
   [onclick] { transition:transform 0.12s ease; }
   [onclick]:active { transform:scale(1.3); }
   .tab-content.active { display:block; }
@@ -1055,6 +1064,7 @@
         <select id="filtro-potrero" onchange="filtrarAnimales()" style="width:160px">
           <option value="">Todos los potreros</option>
         </select>
+        <span class="sx-leyenda"><span><i style="border-color:#3498db"></i>Macho</span><span><i style="border-color:#e84393"></i>Hembra</span></span>
         <div class="toolbar-right">
           <button class="btn-secondary" onclick="impReset();openModal('modal-import-animales')">📥 Importar</button>
           <button class="btn-secondary" onclick="exportExcelCompleto()">📊 Excel</button>
@@ -1355,6 +1365,7 @@
             <select id="tropa-potrero" class="form-control" onchange="cargarTropa()"><option value="">-- Seleccionar --</option></select>
           </div>
           <div style="min-width:170px"><label class="form-label">Categoría</label><select id="tropa-cat" class="form-control" onchange="cargarTropa()"><option value="">Todas</option></select></div>
+          <span class="sx-leyenda"><span><i style="border-color:#3498db"></i>Macho</span><span><i style="border-color:#e84393"></i>Hembra</span></span>
           <div style="font-size:13px;color:var(--text3)" id="tropa-count-info"></div>
         </div>
         <div id="tropa-lista-box" style="display:none">
@@ -5955,7 +5966,7 @@ function cargarTropa(){
     info.textContent='No hay animales activos en este potrero.';
     return;
   }
-  tbody.innerHTML=animales.map(a=>`<tr>
+  tbody.innerHTML=animales.map(a=>`<tr class="${claseSexo(a)}">
     <td><input type="checkbox" class="tropa-check" data-rp="${esc(a.rp)}" checked></td>
     <td class="td-mono">${esc(a.rp)}</td>
     <td>${a.categoria}</td>
@@ -9446,10 +9457,11 @@ function bajaAnimal(id){
   toast('Animal dado de baja: RP '+a.rp,'info');
 }
 
+function claseSexo(a){ return a&&a.sexo==='Macho'?'sx-m':(a&&a.sexo==='Hembra'?'sx-h':''); }
 function renderAnimales(filtrados){
   const tbody=document.getElementById('animales-tbody');if(!tbody)return;
   const lista=filtrados||DB.animales.filter(a=>a.activo);
-  tbody.innerHTML=lista.map(a=>`<tr>
+  tbody.innerHTML=lista.map(a=>`<tr class="${claseSexo(a)}">
     <td>${a.foto?`<img src="${a.foto}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;cursor:pointer" data-rp="${esc(a.rp)}" onclick="verFotoAnimal(this.dataset.rp)">`:`<div style="width:36px;height:36px;border-radius:6px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:15px">🐄</div>`}</td>
     <td class="td-mono">${esc(a.rp)}</td><td class="td-mono" style="font-size:13px">${a.rfid||'--'}</td>
     <td><span class="badge badge-white">${a.categoria}</span></td>
