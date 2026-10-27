@@ -7678,14 +7678,15 @@ const IMP_CATEGORIAS=['Novillo','Novillito','Vaca','Vaquillona','Toro','Torito',
 const IMP_CAT_HEMBRA=['Vaca','Vaquillona','Ternera H','Invernada Hembras','Invernada Vientres'];
 const IMP_RAZAS=['Aberdeen Angus','Hereford','Brangus','Braford','Shorthorn','Criolla','Cruza'];
 const IMP_CAMPOS=[
-  {k:'rp',l:'RP (caravana visual) *',a:['rp','caravana','caravanavisual','idv','numero','nro','n','id','caratula','tag','visual']},
+  {k:'rp',l:'RP (caravana visual) *',a:['rp','caravana','caravanavisual','idv','vid','numero','nro','n','id','caratula','tag','visual']},
   {k:'rfid',l:'RFID / EID',a:['rfid','eid','caravanaelectronica','caravanarfid','electronica','idelectronico','chip']},
   {k:'categoria',l:'Categoría',a:['categoria','cat','clase','tipo']},
   {k:'sexo',l:'Sexo',a:['sexo','sex']},
   {k:'raza',l:'Raza',a:['raza','breed']},
   {k:'color',l:'Color',a:['color','pelaje','capa']},
   {k:'fnac',l:'Fecha de nacimiento',a:['fechanacimiento','fechadenacimiento','fechanac','fnac','fnacimiento','nacimiento']},
-  {k:'peso',l:'Peso (kg)',a:['peso','kg','pesokg','pesoactual','ultimopeso']},
+  {k:'peso',l:'Peso (kg)',a:['peso','weight','kg','pesokg','pesoactual','ultimopeso']},
+  {k:'fpeso',l:'Fecha de la pesada',a:['fechapesada','fechapeso','fecha']},
   {k:'potrero',l:'Potrero',a:['potrero','lote','parcela','ubicacion']},
   {k:'proc',l:'Procedencia',a:['procedencia','origen','proveedor']},
   {k:'nombre',l:'Nombre',a:['nombre','name','apodo']},
@@ -7741,7 +7742,7 @@ function impAutoMapear(headers){
   const map={}, usado=new Set(), nh=headers.map(impNorm);
   IMP_CAMPOS.forEach(c=>{ const i=nh.findIndex((h,ix)=>!usado.has(ix)&&c.a.includes(h)); if(i>=0){ map[c.k]=i; usado.add(i); } });
   IMP_CAMPOS.forEach(c=>{
-    if(map[c.k]!==undefined) return;
+    if(map[c.k]!==undefined||c.k==='nombre') return; // 'nombre' solo por coincidencia exacta (evita tomar 'Initial group name')
     const i=nh.findIndex((h,ix)=>!usado.has(ix)&&h.length>=3&&c.a.some(a=>a.length>=3&&(h.includes(a)||a.includes(h))));
     if(i>=0){ map[c.k]=i; usado.add(i); }
   });
@@ -7806,9 +7807,10 @@ function impProcesar(){
   const rpEx=new Set((DB.animales||[]).map(a=>String(a.rp).trim()));
   const rfEx=new Set((DB.animales||[]).map(a=>String(a.rfid||'').trim()).filter(Boolean));
   const rpVis=new Set(), rfVis=new Set();
-  const res={ok:[],sinRp:0,dupDB:0,dupArch:0,catDef:0,sexoSup:0,potNo:new Set(),potNoN:0,rfidDup:0,fechaMala:0};
+  const res={ok:[],sinRp:0,rpDeRfid:0,dupDB:0,dupArch:0,catDef:0,sexoSup:0,potNo:new Set(),potNoN:0,rfidDup:0,fechaMala:0};
   _imp.data.forEach(r=>{
-    const rp=impTxt(g(r,'rp'));
+    let rp=rpLimpio(impTxt(g(r,'rp')));
+    if(!rp){ const eid=rpLimpio(impTxt(g(r,'rfid'))); if(eid){ rp=eid; res.rpDeRfid++; } } // sin RP visual: se usa el EID como RP
     if(!rp){ res.sinRp++; return; }
     if(rpEx.has(rp)){ res.dupDB++; return; }
     if(rpVis.has(rp)){ res.dupArch++; return; }
@@ -7830,7 +7832,8 @@ function impProcesar(){
       if(p) potrero=p.nombre; else { res.potNo.add(potrero); res.potNoN++; notas.push('Potrero original: '+potrero); potrero=''; }
     }
     const obs=[impTxt(g(r,'obs')),...notas].filter(Boolean).join(' · ');
-    res.ok.push({id:0,rp,nombre:impTxt(g(r,'nombre')),rfid,categoria:cat,sexo,raza:impRaza(impTxt(g(r,'raza'))),color:impTxt(g(r,'color')),fnac,peso:impPeso(g(r,'peso')),potrero,procedencia:impTxt(g(r,'proc'))||'Importado',prenada:'No',obs,activo:true,pesoHistorico:[],foto:''});
+    const peso=impPeso(g(r,'peso')), fpeso=impFecha(g(r,'fpeso'))||'';
+    res.ok.push({id:0,rp,nombre:impTxt(g(r,'nombre')),rfid,categoria:cat,sexo,raza:impRaza(impTxt(g(r,'raza'))),color:impTxt(g(r,'color')),fnac,peso,potrero,procedencia:impTxt(g(r,'proc'))||'Importado',prenada:'No',obs,activo:true,pesoHistorico:(peso>0&&fpeso)?[{fecha:fpeso,kg:peso}]:[],foto:''});
   });
   return res;
 }
@@ -7839,7 +7842,8 @@ function impPreview(){
   const res=_imp.res=impProcesar();
   const li=(ic,t)=>`<div style="font-size:13px;margin-bottom:4px">${ic} ${t}</div>`;
   let h=li(res.ok.length?'✅':'⚠️',`<b>${res.ok.length}</b> ${res.ok.length===1?'animal listo':'animales listos'} para importar`);
-  if(res.sinRp) h+=li('⚠️',`${res.sinRp} filas sin RP (se omiten)`);
+  if(res.sinRp) h+=li('⚠️',`${res.sinRp} filas sin RP ni EID (se omiten)`);
+  if(res.rpDeRfid) h+=li('ℹ️',`${res.rpDeRfid} sin RP visual: se usa el EID como RP`);
   if(res.dupDB) h+=li('⚠️',`${res.dupDB} ya existen en tu rodeo (se omiten)`);
   if(res.dupArch) h+=li('⚠️',`${res.dupArch} RP repetidos dentro del archivo (se omiten)`);
   if(res.catDef) h+=li('ℹ️',`${res.catDef} sin categoría reconocida: se cargan con la categoría por defecto y se anota la original en Observaciones`);
