@@ -4317,6 +4317,9 @@ async function startTrial() {
   saveToStorage();
   rfSetItem('rf_setup_done', '1');  // flag extra, sobrevive al reset (IDB)
   sessionStorage.setItem('rf_logged', '1');
+  sessionStorage.setItem('rf_role', 'Dueño');
+  sessionStorage.setItem('rf_user_name', 'Titular');
+  rfMarcarActividad();
 
   // Base de datos de clientes (registro separado, para uso del dueño de RodeoFlow) —
   // no depende de que el sync del establecimiento esté funcionando
@@ -4333,12 +4336,74 @@ async function startTrial() {
 
 // ── PIN por usuario: segundo factor además del número de teléfono.
 //    Se guarda hasheado (SHA-256), nunca en texto plano. ──
+const _rfHex = u8 => Array.from(u8).map(b => b.toString(16).padStart(2,'0')).join('');
+const _rfFromHex = h => new Uint8Array((h.match(/.{2}/g) || []).map(x => parseInt(x, 16)));
+async function _rfPbkdf2(pin, sal) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(pin).trim()), 'PBKDF2', false, ['deriveBits']);
+  return new Uint8Array(await crypto.subtle.deriveBits({ name:'PBKDF2', hash:'SHA-256', salt:sal, iterations:100000 }, k, 256));
+}
+// Formato nuevo: p2$<sal>$<hash> (PBKDF2-SHA256, sal aleatoria por usuario).
 async function rfHashPin(pin) {
   if (!pin) return null;
-  const enc = new TextEncoder().encode(String(pin).trim());
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  const sal = crypto.getRandomValues(new Uint8Array(16));
+  return 'p2$' + _rfHex(sal) + '$' + _rfHex(await _rfPbkdf2(pin, sal));
 }
+// Formato viejo (SHA-256 sin sal): solo para verificar PINs ya guardados y migrarlos al entrar.
+async function _rfHashPinLegacy(pin) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(pin).trim()));
+  return _rfHex(new Uint8Array(buf));
+}
+async function rfVerificarPin(pin, almacenado) {
+  if (!almacenado) return { ok: true };
+  if (String(almacenado).startsWith('p2$')) {
+    const [, salHex, hashHex] = String(almacenado).split('$');
+    return { ok: _rfHex(await _rfPbkdf2(pin, _rfFromHex(salHex || ''))) === hashHex };
+  }
+  const ok = (await _rfHashPinLegacy(pin)) === almacenado;
+  return { ok, migrar: ok };
+}
+
+// ── Límite de intentos por dispositivo (el límite real por usuario/IP va en el servidor: functions-trial.js) ──
+function rfBloqueadoMin(clave) {
+  const b = parseInt(localStorage.getItem('rf_blq_' + clave) || '0') || 0;
+  return Date.now() < b ? Math.ceil((b - Date.now()) / 60000) : 0;
+}
+function rfRegistrarFallo(clave, max = 5, bloqueoMs = 15 * 60000) {
+  const k = 'rf_fal_' + clave, n = (parseInt(localStorage.getItem(k) || '0') || 0) + 1;
+  if (n >= max) { localStorage.setItem('rf_blq_' + clave, String(Date.now() + bloqueoMs)); localStorage.setItem(k, '0'); return true; }
+  localStorage.setItem(k, String(n)); return false;
+}
+function rfLimpiarFallos(clave) { localStorage.removeItem('rf_fal_' + clave); localStorage.removeItem('rf_blq_' + clave); }
+const _rfVentanas = {};
+function rfLimiteVentana(clave, max, ms) { // true = puede seguir; false = excedió el máximo en la ventana
+  const ahora = Date.now(), a = (_rfVentanas[clave] = (_rfVentanas[clave] || []).filter(x => ahora - x < ms));
+  if (a.length >= max) return false; a.push(ahora); return true;
+}
+
+// ── Sesión: se cierra sola por inactividad y por antigüedad (evita quedar conectado sin querer) ──
+const RF_IDLE_MS = 60 * 60 * 1000;          // 60 min sin tocar la app
+const RF_SESION_MAX_MS = 12 * 60 * 60 * 1000; // 12 h desde que entró
+function rfMarcarActividad() {
+  try { const n = String(Date.now()); sessionStorage.setItem('rf_last_act', n); if (!sessionStorage.getItem('rf_login_ts')) sessionStorage.setItem('rf_login_ts', n); } catch(e) {}
+}
+function rfSesionExpirada() {
+  const ahora = Date.now(), ult = parseInt(sessionStorage.getItem('rf_last_act') || '0') || 0, ini = parseInt(sessionStorage.getItem('rf_login_ts') || '0') || 0;
+  return !!((ult && ahora - ult > RF_IDLE_MS) || (ini && ahora - ini > RF_SESION_MAX_MS));
+}
+function rfLimpiarSesion() { ['rf_logged','rf_role','rf_user_name','rf_login_ts','rf_last_act'].forEach(k => sessionStorage.removeItem(k)); }
+(function () {
+  let ultMarca = 0;
+  const marca = () => { const n = Date.now(); if (n - ultMarca > 15000) { ultMarca = n; if (sessionStorage.getItem('rf_logged')) sessionStorage.setItem('rf_last_act', String(n)); } };
+  ['click','keydown','touchstart','scroll'].forEach(ev => window.addEventListener(ev, marca, { passive:true, capture:true }));
+  const chequear = () => {
+    if (!sessionStorage.getItem('rf_logged')) return;
+    const tel = ((typeof DB !== 'undefined' && DB.settings && DB.settings.phones) || []).filter(p => p.num);
+    if (!tel.length) return; // modo un solo usuario: no hay login
+    if (rfSesionExpirada()) { try { saveToStorage(); } catch(e) {} rfLimpiarSesion(); location.reload(); }
+  };
+  setInterval(chequear, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) chequear(); });
+})();
 
 async function checkAuth() {
   // Cargar desde IndexedDB (con migración automática desde localStorage)
@@ -4372,14 +4437,21 @@ async function checkAuth() {
 
   // ── Mostrar login de teléfono ────────────────────────
   const phones = (DB.settings.phones || []).filter(p => p.num);
+  // Sesión ya iniciada (recarga de página): se conserva con el rol con el que entró y solo si no venció.
+  // Antes, recargar asignaba siempre el rol Dueño.
+  if(phones.length > 0 && sessionStorage.getItem('rf_logged') && (!sessionStorage.getItem('rf_role') || rfSesionExpirada())) {
+    rfLimpiarSesion();
+  }
   if(phones.length > 0 && !sessionStorage.getItem('rf_logged')) {
     showLoginScreen();
     return false;
   }
-
-  sessionStorage.setItem('rf_logged', '1');
-  sessionStorage.setItem('rf_role', 'Dueño');
-  sessionStorage.setItem('rf_user_name', 'Titular');
+  if(phones.length === 0) { // modo un solo usuario (sin teléfonos configurados)
+    sessionStorage.setItem('rf_logged', '1');
+    sessionStorage.setItem('rf_role', 'Dueño');
+    sessionStorage.setItem('rf_user_name', 'Titular');
+  }
+  rfMarcarActividad();
   document.getElementById('trial-screen').style.display = 'none';
   document.getElementById('app').style.display = 'grid';
   document.getElementById('estab-name').value = DB.settings.establecimiento || '';
@@ -4426,22 +4498,29 @@ async function doLogin() {
   const exactIdx = phones.indexOf(clean);
   const partialIdx = phones.findIndex(p => p.slice(-8) === clean.slice(-8) && clean.length >= 8);
   const idx = exactIdx!==-1 ? exactIdx : partialIdx;
+  const _bn = rfBloqueadoMin('login_num');
+  if(_bn) { toast(`Demasiados intentos. Probá en ${_bn} min ⛔`,'err'); return; }
   if(!clean || idx===-1) {
-    toast('Número no autorizado ⛔','err'); return;
+    toast(rfRegistrarFallo('login_num') ? 'Demasiados intentos: acceso bloqueado 15 min ⛔' : 'Número no autorizado ⛔','err'); return;
   }
+  rfLimpiarFallos('login_num');
 
   // Si este usuario tiene PIN configurado, es obligatorio para tomar su rol
   // (evita que cualquiera con el dispositivo a mano entre como Dueño con solo
   // tocar/adivinar el número, sin más verificación).
   const usuarioCandidato = phoneObjs[idx] || {};
   if (usuarioCandidato.pinHash) {
+    const _bp = rfBloqueadoMin('pin_' + idx);
+    if (_bp) { toast(`Demasiados intentos. Probá en ${_bp} min ⛔`, 'err'); return; }
     const pinIngresado = prompt(`Ingresá el PIN de ${usuarioCandidato.name || 'este usuario'}:`);
     if (!pinIngresado) return;
-    const hashIngresado = await rfHashPin(pinIngresado);
-    if (hashIngresado !== usuarioCandidato.pinHash) {
-      toast('PIN incorrecto ⛔', 'err');
+    const _vp = await rfVerificarPin(pinIngresado, usuarioCandidato.pinHash);
+    if (!_vp.ok) {
+      toast(rfRegistrarFallo('pin_' + idx) ? 'PIN incorrecto: acceso bloqueado 15 min ⛔' : 'PIN incorrecto ⛔', 'err');
       return;
     }
+    rfLimpiarFallos('pin_' + idx);
+    if (_vp.migrar) { usuarioCandidato.pinHash = await rfHashPin(pinIngresado); saveToStorage(); } // actualiza el PIN viejo al formato seguro
   }
 
   // Validar que la suscripción/trial sigan vigentes (anti-manipulación)
@@ -4456,6 +4535,8 @@ async function doLogin() {
 
   const usuario=phoneObjs[idx]||{};
   sessionStorage.setItem('rf_logged','1');
+  sessionStorage.setItem('rf_login_ts', String(Date.now()));
+  rfMarcarActividad();
   sessionStorage.setItem('rf_role', usuario.rol||'Dueño');
   sessionStorage.setItem('rf_user_name', usuario.name||'Usuario');
   document.getElementById('login-screen').classList.remove('show');
@@ -4597,6 +4678,7 @@ async function checkActivation() {
   const code = prompt('Ingresá el código de activación recibido por WhatsApp:');
   if(!code) return;
   const c = code.toUpperCase().trim();
+  if(!rfLimiteVentana('act',5,60000)){ toast('Demasiados intentos: esperá un minuto','err'); return; }
 
   const estabId = window.ESTAB_ID_ACTIVO;
   if (!estabId) { toast('No hay establecimiento activo', 'err'); return; }
@@ -4875,6 +4957,7 @@ function cerrarSesionUsuario(){
   sessionStorage.removeItem('rf_logged');
   sessionStorage.removeItem('rf_role');
   sessionStorage.removeItem('rf_user_name');
+  rfLimpiarSesion();
   location.reload();
 }
 
@@ -5108,6 +5191,7 @@ async function eliminarNotaVoz(id) {
 async function transcribirNotasPendientes() {
   if(!_notasVozCache.length) { toast('No hay notas pendientes', 'info'); return; }
   if(!navigator.onLine) { toast('Sin conexión — probá de nuevo cuando tengas señal', 'err'); return; }
+  if(!rfLimiteVentana('ia',8,60000)){ toast('Muchas consultas seguidas: esperá un minuto','info'); return; }
 
   toast(`Transcribiendo ${_notasVozCache.length} nota(s)...`, 'info');
   const fn = firebase.app().functions('us-central1').httpsCallable('transcribirAudioIA');
@@ -7547,7 +7631,32 @@ function renderRentabilidad(){
 // ─── GUARDAR FUNCIONES ───
 // RP/caravana: se quitan caracteres que permiten inyectar HTML/JS (< > " ' ` & \ $ { })
 function rpLimpio(s){return String(s??'').replace(/[<>"'`&$\\{}]/g,'').trim();}
-function $v(id){const r=document.getElementById(id)?.value?.trim()||''; return (/(^|-)rp$/.test(id)||id==='de-ternero')?rpLimpio(r):r;}
+const RF_MAX_TXT = 300, RF_MAX_AREA = 5000;
+function $v(id){
+  const el = document.getElementById(id); if(!el) return '';
+  let r = String(el.value == null ? '' : el.value).trim();
+  r = r.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ''); // caracteres de control
+  if(el.type === 'number'){ const n = Number(r); return (r !== '' && (!isFinite(n) || Math.abs(n) > 1e9)) ? '' : r; }
+  if(el.tagName !== 'SELECT'){
+    const max = el.maxLength > 0 ? el.maxLength : (el.tagName === 'TEXTAREA' ? RF_MAX_AREA : RF_MAX_TXT);
+    if(r.length > max) r = r.slice(0, max);
+  }
+  return (/(^|-)rp$/.test(id) || id === 'de-ternero') ? rpLimpio(r) : r;
+}
+// Largo máximo por defecto en todos los campos de texto (también los que se crean después)
+function rfAplicarMaxLength(n){
+  const sel = 'input:not([type]),input[type=text],input[type=search],input[type=tel],textarea', lista = [];
+  if(n.matches && n.matches(sel)) lista.push(n);
+  if(n.querySelectorAll) lista.push(...n.querySelectorAll(sel));
+  lista.forEach(el => { if(el.maxLength < 0) el.maxLength = (el.tagName === 'TEXTAREA' ? RF_MAX_AREA : RF_MAX_TXT); });
+}
+(function(){
+  const iniciar = () => {
+    rfAplicarMaxLength(document);
+    new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if(n.nodeType === 1) rfAplicarMaxLength(n); }))).observe(document.body, { childList:true, subtree:true });
+  };
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
 
 // ── Rangos de peso plausibles por categoría (kg) para detectar lecturas atípicas ──
 const RANGOS_PESO_CATEGORIA = {
@@ -12999,6 +13108,7 @@ async function iaPreguntar(texto){
     inp.value=''; window._iaChat.push({rol:'u',texto:q},{rol:'a',error:true,texto:'Esta pregunta necesita conexión a internet. Sin señal puedo responder las preguntas de la lista (cantidad de animales, tactos, pesos, ventas, stock, lluvia, etc.).'}); iaPintarChat(); return;
   }
   const estabId=window.ESTAB_ID_ACTIVO; if(!estabId){toast('No hay establecimiento activo','err');return;}
+  if(!rfLimiteVentana('ia',8,60000)){ toast('Muchas consultas seguidas: esperá un minuto','info'); return; }
   _iaOcupado=true; inp.value=''; document.getElementById('ia-enviar').disabled=true;
   window._iaChat.push({rol:'u',texto:q}); const resp={rol:'a',cargando:true}; window._iaChat.push(resp); iaPintarChat();
   try{
@@ -13645,6 +13755,7 @@ async function procesarMensajeWA() {
 }
 
 async function interpretarTextoConIA(texto) {
+  if(!rfLimiteVentana('ia',8,60000)){ toast('Muchas consultas seguidas: esperá un minuto','info'); return; }
   toast('Interpretando con IA...','info');
   try {
     const fn = firebase.app().functions('us-central1').httpsCallable('interpretarTextoIA');
@@ -15486,6 +15597,16 @@ async function guardarBackupEnIDB(tipo = 'auto') {
 }
 
 // ── Restaurar desde archivo JSON ──────────────
+function rfLimpiarObjeto(o, prof = 0){
+  if(prof > 15) return null;
+  if(Array.isArray(o)) return o.map(x => rfLimpiarObjeto(x, prof + 1));
+  if(o && typeof o === 'object'){
+    const r = {};
+    for(const k of Object.keys(o)){ if(k === '__proto__' || k === 'constructor' || k === 'prototype') continue; r[k] = rfLimpiarObjeto(o[k], prof + 1); }
+    return r;
+  }
+  return o;
+}
 function restaurarBackup(input) {
   const file = input.files[0];
   if (!file) return;
@@ -15494,12 +15615,16 @@ function restaurarBackup(input) {
     try {
       const payload = JSON.parse(e.target.result);
       const data    = payload.data || payload; // soportar formato viejo y nuevo
-      if (!data.animales || !data.settings) {
+      if (!Array.isArray(data.animales) || !data.settings || typeof data.settings !== 'object') {
         toast('Archivo inválido: no parece un backup de RodeoFlow', 'err');
         return;
       }
       if (!confirm(`¿Restaurar backup del ${payload.fecha ? new Date(payload.fecha).toLocaleString('es-AR') : 'archivo'}?\n\nEsto reemplazará TODOS los datos actuales.`)) return;
-      DB = data;
+      // El archivo no es de confianza: se quitan claves peligrosas y el estado de suscripción/prueba lo manda el servidor, no el backup
+      const _subLocal = {}; ['subscribed','activationDate','activationCode','trialStart','trialEpoch'].forEach(k => { if (DB.settings && DB.settings[k] !== undefined) _subLocal[k] = DB.settings[k]; });
+      DB = rfLimpiarObjeto(data);
+      ['subscribed','activationDate','activationCode','trialStart','trialEpoch'].forEach(k => delete DB.settings[k]); // lo que diga el archivo se descarta
+      Object.assign(DB.settings, _subLocal);
       if (!DB.encierres)   DB.encierres   = [];
       if (!DB.nacimientos) DB.nacimientos = [];
       saveToStorage();
