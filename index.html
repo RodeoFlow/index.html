@@ -2347,6 +2347,7 @@
         <div class="tab" onclick="switchTab('movimientos','resultado')">📊 Resultado</div>
         <div class="tab" onclick="switchTab('movimientos','cobros')">💰 Cobros y pagos</div>
         <div class="tab" onclick="switchTab('movimientos','romaneo')">🥩 Romaneo</div>
+      <div class="tab" onclick="switchTab('movimientos','resumen');renderResumenSemanal()">📅 Resumen semanal</div>
       </div>
       <!-- Compras -->
       <div class="tab-content active">
@@ -2475,6 +2476,33 @@
         <div id="rm-kpis" style="margin-bottom:12px"></div>
         <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Frigorífico</th><th>Venta</th><th>Cab.</th><th>Kg vivo</th><th>Kg res</th><th>Rinde</th><th>$/kg res</th><th>Neto</th><th>Acciones</th></tr></thead>
         <tbody id="romaneos-tbody"></tbody></table></div>
+      </div>
+      <!-- ── Resumen semanal de movimientos ── -->
+      <div class="tab-content">
+        <div class="card" style="margin-bottom:16px;border-left:3px solid var(--blue)">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+            <button class="btn-secondary" onclick="rsMover(-1)">◀ Semana anterior</button>
+            <div id="rs-titulo" style="font-weight:700;font-size:16px;text-align:center"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn-secondary" id="rs-sig" onclick="rsMover(1)">Semana siguiente ▶</button>
+              <button class="btn-secondary" onclick="rsHoy()">Esta semana</button>
+            </div>
+          </div>
+          <div id="rs-kpis"></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">🚛 Traslados entre potreros</div>
+          <div id="rs-traslados" style="font-size:14px"></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">📋 Detalle de la semana</div>
+          <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Movimiento</th><th>Detalle</th></tr></thead>
+          <tbody id="rs-detalle"></tbody></table></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn-secondary" onclick="rsCopiar()">📋 Copiar resumen</button>
+          <button class="btn-primary" onclick="rsWhatsApp()">📲 Compartir por WhatsApp</button>
+        </div>
       </div>
     </div>
 
@@ -4978,7 +5006,7 @@ function showPage(id) {
   if(id === 'sanidad') { renderVacunas(); renderTratamientos(); renderEnfermedades(); renderRaspaje(); renderSangrado(); renderCalendarioSanitario(); }
   if(id === 'tratamientos') { renderTratamientos(); renderEnfermedades(); }
   if(id === 'nutricion') { renderNutricion(); renderIngredientesTabla(); actualizarRequerimientosUI(); poblarCategoriasRodeo(); renderHistorialRaciones(); poblarPotrerosSuplementacion(); renderVentanasCriticas(); }
-  if(id === 'movimientos') { renderCompras(); renderVentas(); renderTraslados(); renderResultadoEconomico(); renderValuacionHacienda(); renderCobrosPagos(); renderRomaneos(); }
+  if(id === 'movimientos') { renderCompras(); renderVentas(); renderTraslados(); renderResultadoEconomico(); renderValuacionHacienda(); renderCobrosPagos(); renderRomaneos(); renderResumenSemanal(); }
   if(id === 'reportes') renderResumen();
   if(id === 'mortalidad') renderMuertes();
   if(id === 'insumos') { renderInsumosCatalogo(); renderInsumosMovForm(); renderAlertasInsumos(); }
@@ -13126,6 +13154,88 @@ async function iaPreguntar(texto){
   }
   _iaOcupado=false; document.getElementById('ia-enviar').disabled=false; iaPintarChat();
 }
+
+// ─── RESUMEN SEMANAL DE MOVIMIENTOS (lunes a domingo) ───
+let _rsOffset = 0; // 0 = esta semana, -1 = la anterior, etc.
+function _rsFmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _rsDM(f){ const x=String(f||'').slice(0,10).split('-'); return x.length===3 ? x[2]+'/'+x[1] : '--'; }
+function _rsRango(){
+  const hoy=new Date(); hoy.setHours(12,0,0,0);
+  const lunes=new Date(hoy); lunes.setDate(hoy.getDate()-((hoy.getDay()+6)%7)+_rsOffset*7);
+  const domingo=new Date(lunes); domingo.setDate(lunes.getDate()+6);
+  return { desde:_rsFmt(lunes), hasta:_rsFmt(domingo) };
+}
+function rsMover(n){ _rsOffset=Math.min(0,_rsOffset+n); renderResumenSemanal(); }
+function rsHoy(){ _rsOffset=0; renderResumenSemanal(); }
+function _rsDatos(){
+  const r=_rsRango(), en=f=>typeof f==='string' && f.slice(0,10)>=r.desde && f.slice(0,10)<=r.hasta;
+  const num=x=>parseFloat(x)||0, cab=x=>parseInt(x.cant)||0;
+  const compras=(DB.compras||[]).filter(c=>en(c.fecha)), ventas=(DB.ventas||[]).filter(v=>en(v.fecha));
+  const traslados=(DB.traslados||[]).filter(x=>en(x.fecha)), muertes=(DB.muertes||[]).filter(m=>en(m.fecha));
+  const nacimientos=(DB.nacimientos||[]).filter(n=>en(n.fecha)), destetes=(DB.destetes||[]).filter(d=>en(d.fecha));
+  const rutas={};
+  traslados.forEach(x=>{ const k=(x.origen||'Sin potrero')+' → '+(x.destino||'--'); rutas[k]=(rutas[k]||0)+(parseInt(x.cant)||1); });
+  const cabCompra=compras.reduce((s,c)=>s+cab(c),0), cabVenta=ventas.reduce((s,v)=>s+cab(v),0);
+  return {
+    r, compras, ventas, traslados, muertes, nacimientos, destetes, rutas,
+    cabCompra, cabVenta, kgCompra:compras.reduce((s,c)=>s+cab(c)*num(c.peso),0), kgVenta:ventas.reduce((s,v)=>s+num(v.peso),0),
+    totCompra:compras.reduce((s,c)=>s+num(c.total),0), totVenta:ventas.reduce((s,v)=>s+num(v.total),0),
+    movidos:Object.values(rutas).reduce((s,n)=>s+n,0),
+    entradas:cabCompra+nacimientos.length, salidas:cabVenta+muertes.length,
+    stock:(DB.animales||[]).filter(a=>a.activo).length,
+  };
+}
+function _rsFilas(d){
+  const f=[];
+  d.compras.forEach(c=>f.push({f:c.fecha,t:'🛒 Compra',d:`${parseInt(c.cant)||0} ${c.cat||''} · ${c.prov||'--'} · $${fmtN0(c.total||0)}`}));
+  d.ventas.forEach(v=>f.push({f:v.fecha,t:'💰 Venta',d:`${parseInt(v.cant)||0} ${v.cat||''} → ${v.comp||'--'} · $${fmtN0(v.total||0)}`}));
+  d.traslados.forEach(x=>f.push({f:x.fecha,t:'🚛 Traslado',d:`${parseInt(x.cant)||1} animal(es): ${x.origen||'Sin potrero'} → ${x.destino||'--'}${x.motivo?' · '+x.motivo:''}`}));
+  d.muertes.forEach(m=>f.push({f:m.fecha,t:'☠️ Muerte',d:`RP ${m.rp||'--'}${m.causa?' · '+m.causa:''}`}));
+  d.nacimientos.forEach(n=>f.push({f:n.fecha,t:'🍼 Nacimiento',d:`Cría ${n.rp||'--'}${n.madre?' · madre '+n.madre:''}${n.sexo?' · '+n.sexo:''}`}));
+  d.destetes.forEach(x=>f.push({f:x.fecha,t:'🐄 Destete',d:`Ternero ${x.ternero||'--'}${x.peso?' · '+x.peso+' kg':''}`}));
+  return f.sort((a,b)=>String(a.f).localeCompare(String(b.f)));
+}
+function renderResumenSemanal(){
+  const k=document.getElementById('rs-kpis'); if(!k) return;
+  const d=_rsDatos();
+  document.getElementById('rs-titulo').textContent=`Semana del ${_rsDM(d.r.desde)} al ${_rsDM(d.r.hasta)}`+(_rsOffset===0?' (actual)':'');
+  const sig=document.getElementById('rs-sig'); if(sig) sig.disabled=_rsOffset>=0;
+  const neto=d.entradas-d.salidas, saldo=d.totVenta-d.totCompra;
+  k.innerHTML=`<div class="grid-4">
+    <div class="kpi green"><div class="kpi-label">Compras</div><div class="kpi-val">${fmtN0(d.cabCompra)}</div><div class="kpi-sub">cabezas · $${fmtN0(d.totCompra)}</div></div>
+    <div class="kpi amber"><div class="kpi-label">Ventas</div><div class="kpi-val">${fmtN0(d.cabVenta)}</div><div class="kpi-sub">cabezas · $${fmtN0(d.totVenta)}</div></div>
+    <div class="kpi blue"><div class="kpi-label">Traslados</div><div class="kpi-val">${fmtN0(d.movidos)}</div><div class="kpi-sub">animales movidos · ${d.traslados.length} registros</div></div>
+    <div class="kpi purple"><div class="kpi-label">Stock actual</div><div class="kpi-val">${fmtN0(d.stock)}</div><div class="kpi-sub">${neto>=0?'+':''}${neto} cabezas en la semana</div></div></div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:14px;color:var(--text2)">
+      <span>🍼 Nacimientos: <b>${d.nacimientos.length}</b></span><span>🐄 Destetes: <b>${d.destetes.length}</b></span><span>☠️ Muertes: <b>${d.muertes.length}</b></span>
+      <span>⚖️ Kg comprados: <b>${fmtN0(d.kgCompra)}</b></span><span>⚖️ Kg vendidos: <b>${fmtN0(d.kgVenta)}</b></span>
+      <span>💵 Ventas − compras: <b>${saldo<0?'-':''}$${fmtN0(Math.abs(saldo))}</b></span></div>`;
+  const rutas=Object.entries(d.rutas).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('rs-traslados').innerHTML=rutas.length
+    ? rutas.map(([r,n])=>`<div style="padding:4px 0;border-bottom:1px solid var(--border)">${esc(r)} <b style="float:right">${n} animal(es)</b></div>`).join('')
+    : '<span style="color:var(--text3)">Sin traslados esta semana.</span>';
+  const filas=_rsFilas(d);
+  document.getElementById('rs-detalle').innerHTML=filas.length
+    ? filas.map(x=>`<tr><td>${_rsDM(x.f)}</td><td>${x.t}</td><td>${esc(x.d)}</td></tr>`).join('')
+    : '<tr><td colspan="3" style="text-align:center;color:var(--text3)">Sin movimientos esta semana.</td></tr>';
+}
+function _rsTexto(){
+  const d=_rsDatos(), neto=d.entradas-d.salidas, L=[];
+  const est=(document.getElementById('estab-name')?.textContent||'').trim();
+  L.push('📅 *Resumen semanal'+(est?' – '+est:'')+'*', `Semana del ${_rsDM(d.r.desde)} al ${_rsDM(d.r.hasta)}`, '');
+  L.push(`🛒 Compras: ${d.cabCompra} cabezas · $${fmtN0(d.totCompra)}`, `💰 Ventas: ${d.cabVenta} cabezas · $${fmtN0(d.totVenta)}`);
+  L.push(`🚛 Traslados: ${d.movidos} animales`);
+  Object.entries(d.rutas).forEach(([r,n])=>L.push(`   • ${r}: ${n}`));
+  L.push(`🍼 Nacimientos: ${d.nacimientos.length} · 🐄 Destetes: ${d.destetes.length} · ☠️ Muertes: ${d.muertes.length}`);
+  L.push(`📊 Neto: ${neto>=0?'+':''}${neto} cabezas · Stock actual: ${d.stock}`);
+  return L.join('\n');
+}
+function rsCopiar(){
+  const txt=_rsTexto();
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(()=>toast('Resumen copiado','ok'),()=>prompt('Copiá el resumen:',txt));
+  else prompt('Copiá el resumen:',txt);
+}
+function rsWhatsApp(){ window.open('https://wa.me/?text='+encodeURIComponent(_rsTexto()),'_blank'); }
 
 function renderCompras(){
   const tbody=document.getElementById('compras-tbody');if(!tbody)return;
