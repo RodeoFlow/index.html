@@ -145,6 +145,7 @@
           trialEpoch:      _tr.trialEpoch,
           subscribed:      prev.subscribed,
           activationDate:  prev.activationDate,
+          activationDays:  prev.activationDays,
           activationCode:  prev.activationCode,
           hasBeenSetup:    parsed.hasBeenSetup || prev.hasBeenSetup || false
         };
@@ -206,7 +207,7 @@
         // podría hacer DB.settings.subscribed=true desde la consola del navegador y
         // ese valor se subiría a Firebase y se propagaría a todos los dispositivos.
         if (key === 'settings') {
-          const { subscribed, activationDate, activationCode, ...resto } = window.DB[key] || {};
+          const { subscribed, activationDate, activationDays, activationCode, ...resto } = window.DB[key] || {};
           if (window._rfTrialServidor) { delete resto.trialStart; delete resto.trialEpoch; } // el inicio de prueba es solo-lectura para el cliente
           json = JSON.stringify(resto);
         } else {
@@ -362,6 +363,7 @@
       if (!s || !window.DB || !window.DB.settings) return;
       window.DB.settings.subscribed     = !!s.subscribed;
       window.DB.settings.activationDate = s.activationDate || null;
+      window.DB.settings.activationDays = (Number(s.activationDays) > 0) ? Number(s.activationDays) : 30; // duración del período (30, 365, etc.)
       window.DB.settings.activationCode = s.activationCode || null;
       if (typeof s.trialStart === 'number' && s.trialStart > 0) {
         window._rfTrialServidor = true;
@@ -4722,7 +4724,8 @@ async function checkActivation() {
     // Function usa Admin SDK, que no pasa por las reglas, así que igual puede
     // escribir). Sin esto, el estado optimista de abajo es sólo local a este
     // dispositivo hasta que llegue el valor autoritativo por el listener.
-    await fn({ estabId, code: c });
+    const _resAct = await fn({ estabId, code: c });
+    var _diasAct = Number(_resAct && _resAct.data && _resAct.data.dias) || 30;
   } catch (e) {
     const msg = e?.message === 'Este código ya fue utilizado.'
       ? 'Este código ya fue utilizado'
@@ -4737,13 +4740,14 @@ async function checkActivation() {
   DB.settings.subscribed = true;
   DB.settings.activationCode = c;
   DB.settings.activationDate = Date.now();
+  DB.settings.activationDays = _diasAct;
   DB.settings.schemaVersion = DB_SCHEMA_VERSION;
   await anclarTiempo();
   saveToStorage();
   document.getElementById('paywall-screen').classList.remove('show');
   document.getElementById('app').style.display = 'grid';
   init();
-  toast('¡Suscripción activada! 30 días activos ✅','ok');
+  toast(`¡Suscripción activada! ${_diasAct >= 365 ? 'Plan anual' : _diasAct + ' días activos'} ✅`,'ok');
 }
 
 // ─── INIT ───
@@ -6386,7 +6390,7 @@ function generarDemoDB(){
   let seq=1; const nid=()=>Date.now()+(seq++);
   const db=dbVacia('Estancia La Aurora (demo)');
   // La demo hereda el estado de suscripción del establecimiento actual: no da una prueba nueva
-  ['trialStart','subscribed','activationDate','activationCode'].forEach(k=>{ if(DB&&DB.settings&&DB.settings[k]!==undefined) db.settings[k]=DB.settings[k]; });
+  ['trialStart','subscribed','activationDate','activationDays','activationCode'].forEach(k=>{ if(DB&&DB.settings&&DB.settings[k]!==undefined) db.settings[k]=DB.settings[k]; });
   db.settings.clima={lat:-36.78,lon:-59.86,nombre:'Azul, Buenos Aires, Argentina'};
   db.settings.valuacion={vaca:'',toro:'',manual:{'Ternero M':5200,'Ternera H':4800}};
   if(DB&&DB.precios&&Object.keys(DB.precios).length) db.precios=JSON.parse(JSON.stringify(DB.precios));
@@ -15149,10 +15153,11 @@ async function calcularEstadoSuscripcion() {
   const SUB_GRACE_DAYS = 3; // días de gracia después del vencimiento antes de cortar acceso (ver Reglas de pago)
   let subDaysLeft = 0, subActive = false, subEnGracia = false;
   if (DB.settings.subscribed && DB.settings.activationDate) {
+    const SUB_DIAS = Math.max(1, parseInt(DB.settings.activationDays) || 30); // 30 = mensual, 365 = anual
     const diasTranscurridos = Math.floor((now - DB.settings.activationDate) / 86400000);
-    subDaysLeft  = Math.max(0, 30 - diasTranscurridos);
-    subEnGracia  = diasTranscurridos >= 30 && diasTranscurridos < 30 + SUB_GRACE_DAYS;
-    subActive    = diasTranscurridos < 30 + SUB_GRACE_DAYS;
+    subDaysLeft  = Math.max(0, SUB_DIAS - diasTranscurridos);
+    subEnGracia  = diasTranscurridos >= SUB_DIAS && diasTranscurridos < SUB_DIAS + SUB_GRACE_DAYS;
+    subActive    = diasTranscurridos < SUB_DIAS + SUB_GRACE_DAYS;
   }
 
   return { inTrial, trialDaysLeft, subActive, subDaysLeft, subEnGracia, manipulado };
@@ -15476,7 +15481,7 @@ async function crearNuevoEstablecimiento(nombre) {
   const dbNueva = dbVacia(nombre.trim());
   // El nuevo establecimiento hereda la prueba y la suscripción del dispositivo: no inicia otra prueba
   dbNueva.settings.trialStart = (await rfAnchorTrial()) || Date.now();
-  ['subscribed','activationDate','activationCode'].forEach(k=>{ if(DB&&DB.settings&&DB.settings[k]!==undefined) dbNueva.settings[k]=DB.settings[k]; });
+  ['subscribed','activationDate','activationDays','activationCode'].forEach(k=>{ if(DB&&DB.settings&&DB.settings[k]!==undefined) dbNueva.settings[k]=DB.settings[k]; });
   await idbSet('rf_estab_' + id, JSON.stringify(dbNueva));
   await cambiarEstablecimiento(id);
   await renderSelectorEstab();
@@ -15731,9 +15736,9 @@ function restaurarBackup(input) {
       }
       if (!confirm(`¿Restaurar backup del ${payload.fecha ? new Date(payload.fecha).toLocaleString('es-AR') : 'archivo'}?\n\nEsto reemplazará TODOS los datos actuales.`)) return;
       // El archivo no es de confianza: se quitan claves peligrosas y el estado de suscripción/prueba lo manda el servidor, no el backup
-      const _subLocal = {}; ['subscribed','activationDate','activationCode','trialStart','trialEpoch'].forEach(k => { if (DB.settings && DB.settings[k] !== undefined) _subLocal[k] = DB.settings[k]; });
+      const _subLocal = {}; ['subscribed','activationDate','activationDays','activationCode','trialStart','trialEpoch'].forEach(k => { if (DB.settings && DB.settings[k] !== undefined) _subLocal[k] = DB.settings[k]; });
       DB = rfLimpiarObjeto(data);
-      ['subscribed','activationDate','activationCode','trialStart','trialEpoch'].forEach(k => delete DB.settings[k]); // lo que diga el archivo se descarta
+      ['subscribed','activationDate','activationDays','activationCode','trialStart','trialEpoch'].forEach(k => delete DB.settings[k]); // lo que diga el archivo se descarta
       Object.assign(DB.settings, _subLocal);
       if (!DB.encierres)   DB.encierres   = [];
       if (!DB.nacimientos) DB.nacimientos = [];
