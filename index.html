@@ -295,7 +295,7 @@
     // No soy miembro todavía: pido acceso y espero que otro dispositivo autorizado
     // que esté online lo apruebe.
     setSyncStatus('error');
-    toast('Esperando aprobación de otro dispositivo ya autorizado de este establecimiento…', 'err');
+    toast('Esperando que el Dueño autorice este dispositivo (tiene que tener la app abierta e iniciada)…', 'err');
     await estabRef.child('solicitudes/' + uid).set({
       ts: firebase.database.ServerValue.TIMESTAMP,
       dispositivo: window._rfDeviceId
@@ -310,16 +310,48 @@
 
   // Corre en cada dispositivo que YA es miembro: aprueba automáticamente
   // solicitudes de acceso pendientes de otros dispositivos del mismo establecimiento.
-  function procesarSolicitudesPendientes(estabId) {
-    if (_refSolicitudes) { _refSolicitudes.off(); }
-    _refSolicitudes = rtdb.ref(`establecimientos/${estabId}/solicitudes`);
-    _refSolicitudes.on('child_added', snap => {
-      const uidSolicitante = snap.key;
-      rtdb.ref(`establecimientos/${estabId}/members/${uidSolicitante}`).set(true)
-        .then(() => snap.ref.remove())
-        .catch(e => console.warn('No se pudo aprobar solicitud:', e));
-    });
-  }
+  // ── Solicitudes de acceso: YA NO se aprueban solas ─────────────────────────
+// Solo un dispositivo con sesión de Dueño iniciada puede autorizar a otro,
+// y lo hace de forma explícita. (Importante: esto es una barrera de la app; la
+// barrera real tiene que reforzarse en las reglas de Firebase, ver roles en members.)
+const _rfSolicitudesPend = new Map();
+let _rfDialogoSolicitud = false;
+function _rfEsDuenoActivo() {
+  return sessionStorage.getItem('rf_logged') === '1' && sessionStorage.getItem('rf_role') === 'Dueño';
+}
+function _rfDrenarSolicitudes() {
+  if (_rfDialogoSolicitud || !_refSolicitudes || !_rfEsDuenoActivo() || document.hidden) return;
+  const it = _rfSolicitudesPend.entries().next();
+  if (it.done) return;
+  const [uid, info] = it.value;
+  _rfSolicitudesPend.delete(uid);
+  const refSol = _refSolicitudes.child(uid);
+  const refMiembro = _refSolicitudes.parent.child('members/' + uid);
+  const disp = String((info && info.dispositivo) || 'desconocido').replace(/[^\w .\-]/g, '').slice(0, 40);
+  const cuando = info && info.ts ? new Date(info.ts).toLocaleString('es-AR') : 'recién';
+  let ok = false;
+  _rfDialogoSolicitud = true;
+  try {
+    ok = confirm('🔐 Un dispositivo pide acceso a este establecimiento.\n\nDispositivo: ' + disp +
+      '\nPedido: ' + cuando + '\n\n¿Autorizarlo? Aceptá solo si es tuyo o de alguien de tu equipo.');
+  } finally { _rfDialogoSolicitud = false; }
+  const op = ok ? refMiembro.set(true).then(() => refSol.remove()) : refSol.remove();
+  Promise.resolve(op)
+    .then(() => toast(ok ? 'Dispositivo autorizado' : 'Solicitud rechazada', ok ? 'ok' : 'info'))
+    .catch(e => console.warn('No se pudo procesar la solicitud:', e))
+    .then(() => setTimeout(_rfDrenarSolicitudes, 300));
+}
+function procesarSolicitudesPendientes(estabId) {
+  if (_refSolicitudes) { _refSolicitudes.off(); }
+  _rfSolicitudesPend.clear();
+  _refSolicitudes = rtdb.ref(`establecimientos/${estabId}/solicitudes`);
+  _refSolicitudes.on('child_added', snap => {
+    _rfSolicitudesPend.set(snap.key, snap.val() || {});
+    _rfDrenarSolicitudes();
+  });
+  // Si la solicitud llega antes de que el Dueño inicie sesión (PIN), se atiende apenas lo haga.
+  if (!window._rfSolInt) window._rfSolInt = setInterval(_rfDrenarSolicitudes, 4000);
+}
 
   window.iniciarSync = async function(estabId) {
     if (String(estabId).startsWith('demo-')) { // la demo es local: nada de Firebase
