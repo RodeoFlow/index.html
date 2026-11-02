@@ -827,6 +827,25 @@ function procesarSolicitudesPendientes(estabId) {
     50%  { box-shadow:0 0 70px rgba(255,40,40,0.85); }
     100% { box-shadow:0 0 30px rgba(255,40,40,0.4); }
   }
+
+/* ── Pantallas de inicio (registro / login / paywall): que se puedan deslizar en tablets ──
+   Antes estaban centradas con justify-content:center y sin scroll, así que si el contenido era
+   más alto que la pantalla se cortaban arriba y abajo. Ahora scrollean; y si entran, siguen centradas. */
+#trial-screen, #login-screen, #paywall-screen {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  justify-content: flex-start;
+  padding-top: max(24px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(40px, env(safe-area-inset-bottom, 0px));
+}
+#trial-screen > .trial-box,
+#login-screen > .login-box,
+#paywall-screen > .paywall-box {
+  margin-top: auto;
+  margin-bottom: auto;
+  flex-shrink: 0;
+}
 </style>
 </head>
 <body>
