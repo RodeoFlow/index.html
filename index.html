@@ -883,8 +883,9 @@
     <div class="paywall-price">USD 46 <span>/ mes</span></div>
     <p style="font-size:14px;color:var(--text3);margin-bottom:8px">≈ ARS <span id="paywall-ars-equiv">calculando...</span> al dólar oficial BNA</p>
     <p style="font-size:14px;color:var(--text3);margin-bottom:16px">Acceso completo · Sin límites · Soporte incluido</p>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:16px">📅 <strong>Plan anual:</strong> pagás 11 meses y el mes 12 va sin cargo (365 días de acceso).</p>
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:20px;text-align:left;font-size:12px;color:var(--text3)">
-      🔄 <strong style="color:var(--text2)">Renovación automática:</strong> tu suscripción se renueva y se cobra automáticamente cada 30 días hasta que la canceles. Podés cancelar cuando quieras desde Configuración → "❌ Cancelar suscripción" — la baja se procesa en hasta 2 días hábiles.
+      🔄 <strong style="color:var(--text2)">Renovación:</strong> al vencer tu período (30 días en el plan mensual, 365 en el anual) pagás de nuevo y enviás el comprobante por WhatsApp para recibir tu nuevo código; no hay cobro automático. Podés dar de baja cuando quieras desde Configuración → "❌ Cancelar suscripción" — la baja se procesa en hasta 2 días hábiles.
     </div>
     <button class="btn-pay" onclick="mostrarDatosPago()">💳 Ver datos de transferencia</button>
     <button class="btn-activate" onclick="checkActivation()">🔑 Ya pagué – ingresar código</button>
@@ -2826,7 +2827,7 @@
             <button class="btn-secondary" style="padding:10px 20px;font-size:13px;color:var(--red)" onclick="abrirModalCancelacion()">❌ Cancelar suscripción</button>
             <button class="btn-secondary" style="padding:10px 20px;font-size:13px" onclick="openModal('modal-reglas-pago')">📋 Reglas de pago</button>
           </div>
-          <p style="font-size:11px;color:var(--text3);margin-top:10px">🔄 La suscripción se renueva y cobra automáticamente cada 30 días hasta que la canceles. La baja se procesa en hasta 2 días hábiles.</p>
+          <p style="font-size:11px;color:var(--text3);margin-top:10px">🔄 Al vencer tu período pagás de nuevo y enviás el comprobante para recibir el nuevo código; no hay cobro automático. La baja se procesa en hasta 2 días hábiles.</p>
         </div>
       </div>
       <div class="card">
@@ -2976,11 +2977,11 @@
       <button class="modal-close" onclick="closeModal('modal-reglas-pago')">✕</button>
     </div>
     <div style="font-size:13px;color:var(--text2);line-height:1.7">
-      <p><strong style="color:var(--text)">💵 Precio:</strong> USD 46 por mes, cobrado en su equivalente en pesos argentinos al tipo de cambio oficial BNA del día del pago.</p>
+      <p><strong style="color:var(--text)">💵 Precio:</strong> Plan mensual: USD 46 por mes. Plan anual: USD 506 (11 meses; el mes 12 va sin cargo) por 365 días de acceso. Ambos planes se suman a la prueba gratuita de 30 días y se cobran en su equivalente en pesos argentinos al tipo de cambio oficial BNA del día del pago.</p>
       <p><strong style="color:var(--text)">💳 Medio de pago:</strong> transferencia bancaria al alias <code>CMORENO.agromp2</code> (CVU universal, cualquier banco/billetera).</p>
-      <p><strong style="color:var(--text)">🔄 Renovación automática:</strong> cada activación habilita 30 días de acceso. Al vencer, se renueva pagando de nuevo y enviando el comprobante — no hay cobro automático a tarjeta, es un proceso manual por WhatsApp.</p>
+      <p><strong style="color:var(--text)">🔄 Renovación:</strong> cada activación habilita 30 días de acceso (plan mensual) o 365 días (plan anual). Al vencer, se renueva pagando de nuevo y enviando el comprobante — no hay cobro automático a tarjeta, es un proceso manual por WhatsApp.</p>
       <p><strong style="color:var(--text)">⏳ Días de gracia:</strong> 3 días después del vencimiento antes de cortar el acceso, para dar tiempo a renovar.</p>
-      <p><strong style="color:var(--text)">💸 Reembolsos:</strong> no se hacen reembolsos parciales ni totales una vez pagado el período — el acceso queda habilitado igual hasta el final de los 30 días aunque se cancele antes.</p>
+      <p><strong style="color:var(--text)">💸 Reembolsos:</strong> no se hacen reembolsos parciales ni totales una vez pagado el período — el acceso queda habilitado igual hasta el final del período pagado (30 o 365 días) aunque se cancele antes.</p>
       <p><strong style="color:var(--text)">❌ Cancelación:</strong> en cualquier momento desde Configuración → "Cancelar suscripción". Se procesa en hasta 2 días hábiles y evita el próximo cobro; no reembolsa el período ya pagado.</p>
     </div>
   </div>
@@ -4577,7 +4578,15 @@ async function doLogin() {
   init();
 }
 
+// Plan activo y fecha de vencimiento (según la duración que fijó el servidor: 30 = mensual, 365 = anual)
+function _rfPlanInfo() {
+  const dias = Math.max(1, parseInt(DB.settings.activationDays) || 30);
+  const v = new Date((DB.settings.activationDate || Date.now()) + dias * 86400000);
+  const f = String(v.getDate()).padStart(2,'0') + '/' + String(v.getMonth()+1).padStart(2,'0') + '/' + v.getFullYear();
+  return { nombre: dias >= 365 ? 'ANUAL' : (dias === 30 ? 'MENSUAL' : dias + ' DÍAS'), venc: f };
+}
 function updateTrialTag(trialDaysLeft, subActive, subDaysLeft, subEnGracia) {
+  const _p = _rfPlanInfo();
   const tag = document.getElementById('trial-tag');
   if(!tag) return;
   if(subEnGracia) {
@@ -4585,10 +4594,10 @@ function updateTrialTag(trialDaysLeft, subActive, subDaysLeft, subEnGracia) {
     tag.className = 'tag-trial warn';
   } else if(subActive) {
     if(subDaysLeft > 7) {
-      tag.textContent = `✅ ACTIVO ${subDaysLeft}d`;
+      tag.textContent = `✅ ACTIVO ${_p.nombre} · vence ${_p.venc}`;
       tag.className = 'tag-trial ok';
     } else {
-      tag.textContent = `⚠ VENCE en ${subDaysLeft}d`;
+      tag.textContent = `⚠ VENCE en ${subDaysLeft}d · ${_p.nombre} · ${_p.venc}`;
       tag.className = 'tag-trial warn';
     }
   } else if(trialDaysLeft > 5) {
@@ -4648,7 +4657,7 @@ function mostrarDatosPago() {
       • Alias: <b>${esc(CVU_ALIAS)}</b><br>
       • Banco / Billetera: cualquiera (CVU universal)<br><br>
       Una vez transferido, enviá el comprobante por WhatsApp para recibir tu código de activación.<br><br>
-      <span style="font-size:12px;color:var(--text3)">🔄 Renovación automática: se cobra cada 30 días hasta que canceles. Cancelación en cualquier momento desde Configuración, se procesa en hasta 2 días hábiles.</span>
+      <span style="font-size:12px;color:var(--text3)">🔄 Renovación: al vencer pagás de nuevo y enviás el comprobante para recibir el nuevo código (no hay cobro automático). Cancelación en cualquier momento desde Configuración, se procesa en hasta 2 días hábiles.</span>
     </div>
     <button type="button" data-act="copiar" class="btn-secondary" style="width:100%;margin-top:14px">📋 Copiar alias</button>
     <button type="button" data-act="wa" class="btn-primary" style="width:100%;justify-content:center;margin-top:8px;padding:12px">📲 Abrir WhatsApp para enviar comprobante</button>
