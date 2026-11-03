@@ -601,7 +601,9 @@
   @media(max-width:700px){ .dash-grid { grid-template-columns:1fr; } }
 
   /* ── TABS ── */
-  .tabs { display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:0; }
+  .tabs { display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
+  .tabs .tab { flex:0 0 auto; white-space:nowrap; }
+  .main { min-width:0; }
   .tab {
     padding:8px 16px; cursor:pointer; color:var(--text2); font-size:15px; border-bottom:2px solid transparent;
     margin-bottom:-1px; border-radius:6px 6px 0 0; transition:all 0.15s, transform 0.12s ease;
@@ -768,6 +770,14 @@
     .form-row.three { grid-template-columns:1fr; }
     .search-input { width:140px; }
     .topbar-estab { display:none; }
+    /* La barra superior y las pestañas no pueden hacer más ancha la pantalla del celular */
+    html, body { overflow-x:hidden; }
+    #app, .main { min-width:0; }
+    .topbar { gap:8px; padding:0 10px; min-width:0; overflow:hidden; }
+    .topbar-logo span { display:none; }
+    #current-date { display:none; }
+    .tag-trial { font-size:12px; white-space:nowrap; max-width:46vw; overflow:hidden; text-overflow:ellipsis; }
+    canvas { max-width:100%; }
   }  .mappot-label {
     background:rgba(14,17,23,0.75); border:none; color:#fff; font-weight:700; font-size:12px;
     padding:2px 6px; border-radius:4px; box-shadow:none;
@@ -3139,7 +3149,6 @@
     <button style="width:100%;background:var(--red);color:#fff;font-size:17px;font-weight:800;padding:14px;border:none;border-radius:8px;cursor:pointer" onclick="confirmarAlertaSanitaria()">✅ Entendido — Confirmar lectura</button>
   </div>
 </div>
-════════════════════════════════════════════════════ -->
 
 <!-- Modal: Alta Animal -->
 <!-- Modal: Importar animales desde otra app (Excel / CSV) -->
@@ -4592,7 +4601,7 @@ function _rfPlanInfo() {
   const dias = Math.max(1, parseInt(DB.settings.activationDays) || 30);
   const v = new Date((DB.settings.activationDate || Date.now()) + dias * 86400000);
   const f = String(v.getDate()).padStart(2,'0') + '/' + String(v.getMonth()+1).padStart(2,'0') + '/' + v.getFullYear();
-  return { nombre: dias >= 365 ? 'ANUAL' : (dias === 30 ? 'MENSUAL' : dias + ' DÍAS'), venc: f };
+  return { nombre: dias >= 365 ? 'ANUAL' : (dias === 30 ? 'MENSUAL' : dias + ' DÍAS'), venc: f, corto: f.slice(0, 6) + String(v.getFullYear()).slice(2) };
 }
 function updateTrialTag(trialDaysLeft, subActive, subDaysLeft, subEnGracia) {
   const _p = _rfPlanInfo();
@@ -4603,10 +4612,12 @@ function updateTrialTag(trialDaysLeft, subActive, subDaysLeft, subEnGracia) {
     tag.className = 'tag-trial warn';
   } else if(subActive) {
     if(subDaysLeft > 7) {
-      tag.textContent = `✅ ACTIVO ${_p.nombre} · vence ${_p.venc}`;
+      tag.textContent = (window.innerWidth || 1024) <= 768 ? `✅ ${_p.nombre} ${_p.corto}` : `✅ ACTIVO ${_p.nombre} · vence ${_p.venc}`;
+      tag.title = `Plan ${_p.nombre.toLowerCase()} activo · vence ${_p.venc}`;
       tag.className = 'tag-trial ok';
     } else {
-      tag.textContent = `⚠ VENCE en ${subDaysLeft}d · ${_p.nombre} · ${_p.venc}`;
+      tag.textContent = (window.innerWidth || 1024) <= 768 ? `⚠ ${subDaysLeft}d ${_p.nombre}` : `⚠ VENCE en ${subDaysLeft}d · ${_p.nombre} · ${_p.venc}`;
+      tag.title = `Plan ${_p.nombre.toLowerCase()} · vence ${_p.venc}`;
       tag.className = 'tag-trial warn';
     }
   } else if(trialDaysLeft > 5) {
