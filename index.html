@@ -5050,6 +5050,7 @@ function showPage(id) {
   if(id === 'scanner') renderTropaPotreroSelect();
   if(id === 'campo') { renderTropaPotreroSelect(); renderDiario(); renderGDPResumen(); }
   if(id === 'clima') { renderLluvias(); actualizarClima(); }
+  if(id === 'potreros') { try{ renderPotrerosChart(); }catch(e){ console.warn('Gráfico:', e); } }
   if(id === 'administracion') { renderVencimientos(); prepararResumenWA(); renderSenasaResumen(); }
   if(id === 'rentabilidad') { renderRentabilidadPotreroSelect(); renderRentabilidad(); }
   if(id === 'ia') iaRender();
@@ -5591,10 +5592,25 @@ function updateKPIs() {
 const RF_PALETA = ['#2ecc71','#3498db','#e8a020','#9b59b6','#e74c3c','#1abc9c','#e67e22','#f1c40f'];
 const RF_COLOR_CAT = {'Novillo':'#e8a020','Novillito':'#f0c060','Vaca':'#3498db','Vaquillona':'#9b59b6','Toro':'#e74c3c','Ternero M':'#2ecc71','Ternera H':'#1abc9c','Torito':'#e67e22','Destete Macho':'#27ae60','Destete Hembra':'#16a085','Recría':'#f39c12'};
 const RF_TXT = '#e8eaf0', RF_TXT2 = '#8a9ab0', RF_GRID = '#2a3347';
+// Los gráficos que están en una pantalla o pestaña oculta miden ancho 0: se dibujan recién cuando se muestran
+let _rfRO = null;
+function rfRegistrar(id, redibujar){
+  const c = document.getElementById(id); if(!c) return;
+  c._rfRedraw = redibujar;
+  if(typeof ResizeObserver === 'undefined' || c._rfObs) return;
+  c._rfObs = true;
+  if(!_rfRO) _rfRO = new ResizeObserver(es => es.forEach(e => {
+    const cv = e.target, ancho = Math.floor(e.contentRect.width);
+    if(ancho > 0 && cv._rfRedraw && Math.abs(ancho - (cv._rfW || 0)) > 1){ clearTimeout(cv._rfT); cv._rfT = setTimeout(() => { try{ cv._rfRedraw(); }catch(x){ console.warn('Gráfico:', x); } }, 60); }
+  }));
+  _rfRO.observe(c);
+}
 function rfCanvas(id, alto){
   const c = document.getElementById(id); if(!c) return null;
   c.style.width = '100%'; c.style.height = alto + 'px'; c.style.display = 'block';
-  const w = Math.max(240, Math.floor(c.getBoundingClientRect().width) || 320);
+  const real = Math.floor(c.getBoundingClientRect().width); c._rfW = real;
+  if(!real) return null;
+  const w = Math.max(240, real);
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
   c.width = Math.floor(w * dpr); c.height = Math.floor(alto * dpr);
   const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -5636,6 +5652,7 @@ function rfRectH(ctx, x, y, w, h, r){ // barra horizontal redondeada
 
 // Dona con leyenda: items = [{l:'Norte', v:12, c:'#2ecc71'}]
 function rfDonut(id, items, opt){
+  rfRegistrar(id, () => rfDonut(id, items, opt));
   opt = opt || {}; const k = rfCanvas(id, opt.alto || 190); if(!k) return; const { c, ctx, w, h } = k;
   let data = (items || []).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
   if(data.length > 7){ const resto = data.slice(6).reduce((s, x) => s + x.v, 0); data = data.slice(0, 6).concat([{ l: 'Otros', v: resto, c: '#8a9ab0' }]); }
@@ -5667,6 +5684,7 @@ function rfDonut(id, items, opt){
 
 // Barras horizontales: items = [{l, v, c?, ref?}]  (ref = marca de mínimo o de capacidad)
 function rfBarrasH(id, items, opt){
+  rfRegistrar(id, () => rfBarrasH(id, items, opt));
   opt = opt || {}; items = items || []; const fila = 30, alto = Math.max(70, items.length * fila + 16 + (opt.leyendaRef ? 18 : 0));
   const k = rfCanvas(id, alto); if(!k) return; const { c, ctx, w, h } = k;
   if(!items.length || !items.some(x => x.v > 0 || x.ref > 0)){ rfVacio(k, opt.vacio); return; }
@@ -5692,6 +5710,7 @@ function rfBarrasH(id, items, opt){
 
 // Barras verticales (una o varias series): series = [[...],[...]], labels = ['E','F',...]
 function rfBarrasV(id, labels, series, opt){
+  rfRegistrar(id, () => rfBarrasV(id, labels, series, opt));
   opt = opt || {}; const k = rfCanvas(id, opt.alto || 210); if(!k) return; const { c, ctx, w, h } = k;
   const S = series.length, todos = series.reduce((a, s) => a.concat(s), []);
   if(!todos.some(v => v > 0)){ rfVacio(k, opt.vacio); return; }
@@ -5770,7 +5789,7 @@ function rsGrafico(d){
 }
 // Si se achica o agranda la ventana, se redibuja la página abierta
 let _rfRz = null;
-window.addEventListener('resize', () => {
+if(typeof ResizeObserver === 'undefined') window.addEventListener('resize', () => {
   clearTimeout(_rfRz);
   _rfRz = setTimeout(() => {
     try {
