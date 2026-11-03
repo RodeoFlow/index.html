@@ -12821,7 +12821,7 @@ function exportarRomaneosExcel(){
 }
 
 // ═══ IA: PREGUNTALE A RODEOFLOW ═══
-const IA_EJEMPLOS=['¿Cuántos terneros tengo?','¿Cuál fue la ganancia diaria del lote 4?','¿Cuántas vacas están sin tactar?','¿Qué animales bajaron de peso?','¿Cuál fue el rendimiento promedio del último romaneo?','¿Cuánto gasté en alimentación este mes?',
+const IA_EJEMPLOS=['¿Cuántos terneros tengo?','¿Cuál fue la ganancia diaria de cada lote?','¿Cuántas vacas están sin tactar?','¿Qué animales bajaron de peso?','¿Cuál fue el rendimiento promedio del último romaneo?','¿Cuánto gasté en alimentación este mes?',
  '¿Cuántos animales tengo por categoría y por potrero?','¿Cuál es el peso promedio de los novillos?','¿Cuáles son los animales con mejor y peor ganancia diaria?','¿Cuántos animales nacieron este año?',
  '¿Cuántas vacas están preñadas y cuántas vacías?','¿Cuál es el porcentaje de preñez del último tacto?','¿Qué vacas tienen parto estimado en los próximos 30 días?','¿Cuántos terneros se destetaron este año?','¿Cuántos abortos registré?',
  '¿Qué animales tienen tratamiento en curso?','¿Cuáles tienen la vacuna vencida o pendiente?','¿Qué animales están en período de espera para vender?','¿Cuántas muertes registré y de qué categoría?',
@@ -12968,9 +12968,9 @@ function iaPotreroEn(qn){
   const toks=pots.map(n=>({n,t:iaNorm(n).split(' ').filter(w=>w.length>=3&&!['potrero','lote','campo','el','la'].includes(w))}));
   const cand=toks.filter(x=>x.t.some(w=>(' '+qn+' ').includes(' '+w+' ')));
   if(cand.length===1) return {nombre:cand[0].n};
-  if(/\b(potrero|lote)\s+\w+/.test(qn)){
-    const m=qn.match(/\b(potrero|lote)\s+(\w+)/);
-    return {noEncontrado:true,mencion:m[1]+' '+m[2],potreros:pots,lotes};
+  const mm=qn.match(/\b(potrero|lote)\s+(\w+)/);
+  if(mm && !['cada','del','de','por','y','con','en','que','mas','menos','tiene','tienen','esta','estan','este','mejor','peor','sin','o','a','al'].includes(mm[2])){
+    return {noEncontrado:true,mencion:mm[1]+' '+mm[2],potreros:pots,lotes};
   }
   return null;
 }
@@ -13056,6 +13056,12 @@ function iaLocal(pregunta){
     const l=activos.map(a=>({a,i:info(a)})).filter(({a,i})=>filtro(a)&&i.gdp!==null);
     if(!l.length) return `No hay animales${donde} con 2 o más pesadas para calcular la ganancia diaria.`;
     const prom=l.reduce((s,x)=>s+x.i.gdp,0)/l.length;
+    if(!pot&&has(/\b(cada|por|los) (lote|lotes|potrero|potreros)\b/)){
+      const por={}; l.forEach(({a,i})=>{const k=a.potrero||'Sin potrero';const o=por[k]||(por[k]={s:0,n:0});o.s+=i.gdp;o.n++;});
+      const etiqueta=k=>{const pa=(DB.pastoreos||[]).filter(x=>x.potrero===k&&x.lote).sort((x,y)=>(y.entrada||'').localeCompare(x.entrada||''))[0];return pa?`${pa.lote} (${k})`:k;};
+      const filas=Object.entries(por).map(([k,o])=>({k,g:o.s/o.n,n:o.n})).sort((x,y)=>y.g-x.g);
+      return `**Ganancia diaria por lote / potrero** (promedio de los animales con 2+ pesadas):\n${filas.map(f=>`• ${etiqueta(f.k)}: **${f.g.toFixed(2)} kg/día** (${f.n} animal${f.n===1?'':'es'})`).join('\n')}\n\nPromedio general: **${prom.toFixed(2)} kg/día**.`;
+    }
     let extra='';
     if(!pot){const por={};l.forEach(({a,i})=>{const o=por[a.potrero||'--']||(por[a.potrero||'--']={s:0,n:0});o.s+=i.gdp;o.n++;});extra='\nPor potrero: '+Object.entries(por).map(([k,o])=>`${k} ${(o.s/o.n).toFixed(2)}`).join(' · ');}
     return `La ganancia diaria promedio${donde}${cats.length?' ('+cats.join(', ')+')':''} es de **${prom.toFixed(2)} kg/día** (${l.length} animales con 2+ pesadas, primera a última pesada).${extra}`;
