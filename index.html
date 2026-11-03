@@ -181,7 +181,6 @@
   // ── Push a Firebase: SOLO manda las colecciones que cambiaron ─
   window.pushSyncFirebase = function(forzar) {
     if (!_authListo) return; // sin sesión de auth, no intentar escribir
-    if (window._rfBloquearPush) return; // esperando aprobación / hidratando: no subir una base vacía
     if (_aplicandoRemoto) return; // no pushear mientras se procesa un cambio remoto
     if (!window.ESTAB_ID_ACTIVO) return;
     if (String(window.ESTAB_ID_ACTIVO).startsWith('demo-')) return; // la demo no se sube
@@ -275,18 +274,6 @@
   //    en el momento exacto — cualquier dispositivo ya autorizado sirve.
   let _refSolicitudes = null;
 
-  function rfMostrarEspera(estabId) {
-    const el = document.getElementById('espera-aprobacion');
-    if (!el) return;
-    const c = document.getElementById('espera-codigo');
-    if (c) c.textContent = String(estabId || '');
-    el.classList.add('show');
-  }
-  function rfOcultarEspera() {
-    const el = document.getElementById('espera-aprobacion');
-    if (el) el.classList.remove('show');
-  }
-
   async function asegurarMembresia(estabId) {
     const uid = firebase.auth().currentUser && firebase.auth().currentUser.uid;
     if (!uid) throw new Error('Sin sesión de Firebase Auth');
@@ -305,79 +292,34 @@
       return; // ya soy miembro
     }
 
-    // No soy miembro todavía: pido acceso y espero la decisión del Dueño.
-    // Se muestra una pantalla de espera (con botón Cancelar). Mientras tanto este dispositivo
-    // NO sube datos: tiene la base vacía y no debe pisar los datos reales del establecimiento.
+    // No soy miembro todavía: pido acceso y espero que otro dispositivo autorizado
+    // que esté online lo apruebe.
     setSyncStatus('error');
-    window._rfBloquearPush = true;
-    const refSol     = estabRef.child('solicitudes/' + uid);
-    const refMiembro = estabRef.child('members/' + uid);
-    try {
-      await refSol.set({
-        ts: firebase.database.ServerValue.TIMESTAMP,
-        dispositivo: window._rfDeviceId
-      });
-    } catch (e) { window._rfBloquearPush = false; throw e; }
-    await new Promise((resolve, reject) => {
-      const terminar = () => { refMiembro.off(); window._rfCancelarEspera = null; rfOcultarEspera(); };
-      window._rfCancelarEspera = () => {
-        terminar();
-        window._rfBloquearPush = false;
-        refSol.remove().catch(() => {});
-        reject(new Error('RF_ESPERA_CANCELADA'));
-      };
-      rfMostrarEspera(estabId);
-      refMiembro.on('value', s => {
-        const v = s.val();
-        if (v !== null && v !== undefined && v !== false) { terminar(); resolve(); }
+    toast('Esperando aprobación de otro dispositivo ya autorizado de este establecimiento…', 'err');
+    await estabRef.child('solicitudes/' + uid).set({
+      ts: firebase.database.ServerValue.TIMESTAMP,
+      dispositivo: window._rfDeviceId
+    });
+    await new Promise(resolve => {
+      const refMiMembresia = estabRef.child('members/' + uid);
+      refMiMembresia.on('value', s => {
+        if (s.val() === true) { refMiMembresia.off(); resolve(); }
       });
     });
   }
 
   // Corre en cada dispositivo que YA es miembro: aprueba automáticamente
   // solicitudes de acceso pendientes de otros dispositivos del mismo establecimiento.
-  // ── Solicitudes de acceso: YA NO se aprueban solas ─────────────────────────
-// Solo un dispositivo con sesión de Dueño iniciada puede autorizar a otro,
-// y lo hace de forma explícita. (Importante: esto es una barrera de la app; la
-// barrera real tiene que reforzarse en las reglas de Firebase, ver roles en members.)
-const _rfSolicitudesPend = new Map();
-let _rfDialogoSolicitud = false;
-function _rfEsDuenoActivo() {
-  return sessionStorage.getItem('rf_logged') === '1' && sessionStorage.getItem('rf_role') === 'Dueño';
-}
-function _rfDrenarSolicitudes() {
-  if (_rfDialogoSolicitud || !_refSolicitudes || !_rfEsDuenoActivo() || document.hidden) return;
-  const it = _rfSolicitudesPend.entries().next();
-  if (it.done) return;
-  const [uid, info] = it.value;
-  _rfSolicitudesPend.delete(uid);
-  const refSol = _refSolicitudes.child(uid);
-  const refMiembro = _refSolicitudes.parent.child('members/' + uid);
-  const disp = String((info && info.dispositivo) || 'desconocido').replace(/[^\w .\-]/g, '').slice(0, 40);
-  const cuando = info && info.ts ? new Date(info.ts).toLocaleString('es-AR') : 'recién';
-  let ok = false;
-  _rfDialogoSolicitud = true;
-  try {
-    ok = confirm('🔐 Un dispositivo pide acceso a este establecimiento.\n\nDispositivo: ' + disp +
-      '\nPedido: ' + cuando + '\n\n¿Autorizarlo? Aceptá solo si es tuyo o de alguien de tu equipo.');
-  } finally { _rfDialogoSolicitud = false; }
-  const op = ok ? refMiembro.set(true).then(() => refSol.remove()) : refSol.remove();
-  Promise.resolve(op)
-    .then(() => toast(ok ? 'Dispositivo autorizado' : 'Solicitud rechazada', ok ? 'ok' : 'info'))
-    .catch(e => console.warn('No se pudo procesar la solicitud:', e))
-    .then(() => setTimeout(_rfDrenarSolicitudes, 300));
-}
-function procesarSolicitudesPendientes(estabId) {
-  if (_refSolicitudes) { _refSolicitudes.off(); }
-  _rfSolicitudesPend.clear();
-  _refSolicitudes = rtdb.ref(`establecimientos/${estabId}/solicitudes`);
-  _refSolicitudes.on('child_added', snap => {
-    _rfSolicitudesPend.set(snap.key, snap.val() || {});
-    _rfDrenarSolicitudes();
-  });
-  // Si la solicitud llega antes de que el Dueño inicie sesión (PIN), se atiende apenas lo haga.
-  if (!window._rfSolInt) window._rfSolInt = setInterval(_rfDrenarSolicitudes, 4000);
-}
+  function procesarSolicitudesPendientes(estabId) {
+    if (_refSolicitudes) { _refSolicitudes.off(); }
+    _refSolicitudes = rtdb.ref(`establecimientos/${estabId}/solicitudes`);
+    _refSolicitudes.on('child_added', snap => {
+      const uidSolicitante = snap.key;
+      rtdb.ref(`establecimientos/${estabId}/members/${uidSolicitante}`).set(true)
+        .then(() => snap.ref.remove())
+        .catch(e => console.warn('No se pudo aprobar solicitud:', e));
+    });
+  }
 
   window.iniciarSync = async function(estabId) {
     if (String(estabId).startsWith('demo-')) { // la demo es local: nada de Firebase
@@ -444,8 +386,8 @@ function procesarSolicitudesPendientes(estabId) {
         console.log('🔥 Firebase RTDB Sync (por colecciones) listo. Device:', window._rfDeviceId);
         // Pequeña espera para que terminen de llegar los child_added iniciales antes de
         // considerar "lista" la carga (y recién ahí avisar sobre cambios de otros dispositivos)
-        setTimeout(() => { _cargaInicialLista = true; window._rfBloquearPush = false; resolve(); }, 1200);
-      }).catch(e => { console.warn('RTDB init error:', e); window._rfBloquearPush = false; setSyncStatus('offline'); resolve(); });
+        setTimeout(() => { _cargaInicialLista = true; resolve(); }, 1200);
+      }).catch(e => { console.warn('RTDB init error:', e); setSyncStatus('offline'); resolve(); });
     });
   };
 
@@ -462,14 +404,7 @@ function procesarSolicitudesPendientes(estabId) {
     if (window.ESTAB_ID_ACTIVO && window.DB && Array.isArray(window.DB.animales)) {
       clearInterval(_waitSync);
       // Delay extra para asegurar que IDB terminó de cargar
-      setTimeout(() => {
-        const id = window.ESTAB_ID_ACTIVO;
-        Promise.resolve(window.iniciarSync(id)).catch(e => {
-          // Cancelaron la espera de aprobación al abrir la app: sacar el establecimiento pendiente
-          if (e && e.message === 'RF_ESPERA_CANCELADA' && typeof rfDeshacerUnion === 'function') rfDeshacerUnion(id, null);
-          else console.warn('iniciarSync falló:', e);
-        });
-      }, 1500);
+      setTimeout(() => window.iniciarSync(window.ESTAB_ID_ACTIVO), 1500);
     }
   }, 300);
 
@@ -860,30 +795,6 @@ function procesarSolicitudesPendientes(estabId) {
     50%  { box-shadow:0 0 70px rgba(255,40,40,0.85); }
     100% { box-shadow:0 0 30px rgba(255,40,40,0.4); }
   }
-
-/* ── Pantallas de inicio (registro / login / paywall): que se puedan deslizar en tablets ──
-   Antes estaban centradas con justify-content:center y sin scroll, así que si el contenido era
-   más alto que la pantalla se cortaban arriba y abajo. Ahora scrollean; y si entran, siguen centradas. */
-#trial-screen, #login-screen, #paywall-screen {
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  justify-content: flex-start;
-  padding-top: max(24px, env(safe-area-inset-top, 0px));
-  padding-bottom: max(40px, env(safe-area-inset-bottom, 0px));
-}
-#trial-screen > .trial-box,
-#login-screen > .login-box,
-#paywall-screen > .paywall-box {
-  margin-top: auto;
-  margin-bottom: auto;
-  flex-shrink: 0;
-}
-
-/* ── Pantalla "Esperando autorización" (unirse a un establecimiento existente) ── */
-#espera-aprobacion { display:none; position:fixed; inset:0; background:var(--bg); z-index:2000; flex-direction:column; align-items:center; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:24px; }
-#espera-aprobacion.show { display:flex; }
-#espera-aprobacion .espera-box { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:32px; max-width:440px; width:100%; text-align:center; margin:auto 0; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -15530,30 +15441,7 @@ async function saveEstabActivo() {
 }
 
 // ── Cambiar al establecimiento con ese ID ─────────────
-// Si el usuario cancela la espera de aprobación: sacar el establecimiento pendiente y volver al anterior.
-async function rfDeshacerUnion(id, previoId) {
-  try {
-    if (window.detenerSync) window.detenerSync();
-    const lista = (await getEstablecimientos()).filter(e => !(e.id === id && e.compartido));
-    await saveEstablecimientos(lista);
-    if (previoId && previoId !== id && lista.some(e => e.id === previoId)) {
-      await cambiarEstablecimiento(previoId);
-    } else if (lista.length) {
-      await cambiarEstablecimiento(lista[0].id);
-    } else {
-      location.reload();
-      return;
-    }
-  } catch (e) {
-    console.warn('No se pudo deshacer la unión:', e);
-    location.reload();
-    return;
-  }
-  toast('Solicitud cancelada', 'info');
-}
-
 async function cambiarEstablecimiento(id) {
-  const previoId = ESTAB_ID_ACTIVO;
   // Guardar estado actual antes de cambiar
   await saveEstabActivo();
   await idbSet(RF_ACTIVO_KEY, id);
@@ -15576,20 +15464,11 @@ async function cambiarEstablecimiento(id) {
   // Sincronizar PRIMERO (trae los datos reales de Firebase si los hay),
   // recién después renderizar — así init() no pushea datos a medio cargar
   if (window.iniciarSync) {
-    try {
-      await window.iniciarSync(id);
-    } catch (e) {
-      if (e && e.message === 'RF_ESPERA_CANCELADA') {
-        await rfDeshacerUnion(id, previoId);
-        return 'cancelado';
-      }
-      throw e;
-    }
+    await window.iniciarSync(id);
     await new Promise(r => setTimeout(r, 600)); // dar tiempo a que aplique datos remotos
   }
   init();
   toast('Establecimiento cambiado ✅', 'ok');
-  return 'ok';
 }
 
 // ── Crear nuevo establecimiento ───────────────────────
@@ -15708,15 +15587,6 @@ async function unirseDesdeSetup() {
   const ok = await unirseAEstablecimiento(codigo);
   if (ok) {
     document.getElementById('trial-screen').style.display = 'none';
-    // Antes se ocultaba el registro y no se mostraba nada más (pantalla azul): hay que decidir
-    // qué corresponde ahora (login con PIN, la app, o el registro si faltan datos), igual que al arrancar.
-    try {
-      const pasa = await checkAuth();
-      if (pasa) { try { healthCheckDB(); } catch(e) {} init(true); }
-    } catch (e) {
-      console.warn('Error al abrir el establecimiento unido:', e);
-      mostrarErrorBoundary('No se pudo abrir el establecimiento: ' + (e && e.message || e), e);
-    }
   }
 }
 
@@ -15749,9 +15619,8 @@ async function unirseAEstablecimiento(codigo) {
       lista.push({ id: codigo, nombre: 'Establecimiento compartido', creadoEn: Date.now(), compartido: true });
       await saveEstablecimientos(lista);
     }
-    const resultado = await cambiarEstablecimiento(codigo);
-    if (resultado === 'cancelado') return false;
-    toast('Dispositivo autorizado y sincronizado ✅', 'ok');
+    await cambiarEstablecimiento(codigo);
+    toast('Solicitud enviada. Sincronizando apenas se apruebe…', 'ok');
     return true;
   } catch(e) {
     toast('Error al unirse: ' + e.message, 'err');
@@ -16007,18 +15876,5 @@ async function startBackupSystem() {
   </div>
 </div>
 
-
-<!-- Pantalla de espera mientras el Dueño autoriza este dispositivo -->
-<div id="espera-aprobacion">
-  <div class="espera-box">
-    <div style="font-size:52px;margin-bottom:8px">🔐</div>
-    <h2 style="font-size:23px;font-weight:700;margin-bottom:8px">Esperando autorización</h2>
-    <p style="color:var(--text2);font-size:15px;margin-bottom:16px">Pedimos acceso a este establecimiento. El Dueño tiene que abrir RodeoFlow en su dispositivo, <b>iniciar sesión</b> y aprobar el pedido. Apenas lo haga, esta pantalla se cierra sola.</p>
-    <div style="font-size:13px;color:var(--text3);margin-bottom:4px">Código del establecimiento</div>
-    <div id="espera-codigo" style="font-family:var(--font-mono);font-size:14px;word-break:break-all;margin-bottom:20px"></div>
-    <div style="color:var(--text2);font-size:14px;margin-bottom:20px">⏳ Esperando…</div>
-    <button type="button" class="btn-secondary" style="width:100%" onclick="window._rfCancelarEspera && window._rfCancelarEspera()">Cancelar y volver</button>
-  </div>
-</div>
 </body>
 </html>
