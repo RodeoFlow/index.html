@@ -181,6 +181,7 @@
   // ── Push a Firebase: SOLO manda las colecciones que cambiaron ─
   window.pushSyncFirebase = function(forzar) {
     if (!_authListo) return; // sin sesión de auth, no intentar escribir
+    if (window._rfBloquearPush) return; // esperando aprobación / hidratando: no subir una base vacía
     if (_aplicandoRemoto) return; // no pushear mientras se procesa un cambio remoto
     if (!window.ESTAB_ID_ACTIVO) return;
     if (String(window.ESTAB_ID_ACTIVO).startsWith('demo-')) return; // la demo no se sube
@@ -274,6 +275,18 @@
   //    en el momento exacto — cualquier dispositivo ya autorizado sirve.
   let _refSolicitudes = null;
 
+  function rfMostrarEspera(estabId) {
+    const el = document.getElementById('espera-aprobacion');
+    if (!el) return;
+    const c = document.getElementById('espera-codigo');
+    if (c) c.textContent = String(estabId || '');
+    el.classList.add('show');
+  }
+  function rfOcultarEspera() {
+    const el = document.getElementById('espera-aprobacion');
+    if (el) el.classList.remove('show');
+  }
+
   async function asegurarMembresia(estabId) {
     const uid = firebase.auth().currentUser && firebase.auth().currentUser.uid;
     if (!uid) throw new Error('Sin sesión de Firebase Auth');
@@ -292,18 +305,31 @@
       return; // ya soy miembro
     }
 
-    // No soy miembro todavía: pido acceso y espero que otro dispositivo autorizado
-    // que esté online lo apruebe.
+    // No soy miembro todavía: pido acceso y espero la decisión del Dueño.
+    // Se muestra una pantalla de espera (con botón Cancelar). Mientras tanto este dispositivo
+    // NO sube datos: tiene la base vacía y no debe pisar los datos reales del establecimiento.
     setSyncStatus('error');
-    toast('Esperando que el Dueño autorice este dispositivo (tiene que tener la app abierta e iniciada)…', 'err');
-    await estabRef.child('solicitudes/' + uid).set({
-      ts: firebase.database.ServerValue.TIMESTAMP,
-      dispositivo: window._rfDeviceId
-    });
-    await new Promise(resolve => {
-      const refMiMembresia = estabRef.child('members/' + uid);
-      refMiMembresia.on('value', s => {
-        if (s.val() === true) { refMiMembresia.off(); resolve(); }
+    window._rfBloquearPush = true;
+    const refSol     = estabRef.child('solicitudes/' + uid);
+    const refMiembro = estabRef.child('members/' + uid);
+    try {
+      await refSol.set({
+        ts: firebase.database.ServerValue.TIMESTAMP,
+        dispositivo: window._rfDeviceId
+      });
+    } catch (e) { window._rfBloquearPush = false; throw e; }
+    await new Promise((resolve, reject) => {
+      const terminar = () => { refMiembro.off(); window._rfCancelarEspera = null; rfOcultarEspera(); };
+      window._rfCancelarEspera = () => {
+        terminar();
+        window._rfBloquearPush = false;
+        refSol.remove().catch(() => {});
+        reject(new Error('RF_ESPERA_CANCELADA'));
+      };
+      rfMostrarEspera(estabId);
+      refMiembro.on('value', s => {
+        const v = s.val();
+        if (v !== null && v !== undefined && v !== false) { terminar(); resolve(); }
       });
     });
   }
@@ -418,8 +444,8 @@ function procesarSolicitudesPendientes(estabId) {
         console.log('🔥 Firebase RTDB Sync (por colecciones) listo. Device:', window._rfDeviceId);
         // Pequeña espera para que terminen de llegar los child_added iniciales antes de
         // considerar "lista" la carga (y recién ahí avisar sobre cambios de otros dispositivos)
-        setTimeout(() => { _cargaInicialLista = true; resolve(); }, 1200);
-      }).catch(e => { console.warn('RTDB init error:', e); setSyncStatus('offline'); resolve(); });
+        setTimeout(() => { _cargaInicialLista = true; window._rfBloquearPush = false; resolve(); }, 1200);
+      }).catch(e => { console.warn('RTDB init error:', e); window._rfBloquearPush = false; setSyncStatus('offline'); resolve(); });
     });
   };
 
@@ -436,7 +462,14 @@ function procesarSolicitudesPendientes(estabId) {
     if (window.ESTAB_ID_ACTIVO && window.DB && Array.isArray(window.DB.animales)) {
       clearInterval(_waitSync);
       // Delay extra para asegurar que IDB terminó de cargar
-      setTimeout(() => window.iniciarSync(window.ESTAB_ID_ACTIVO), 1500);
+      setTimeout(() => {
+        const id = window.ESTAB_ID_ACTIVO;
+        Promise.resolve(window.iniciarSync(id)).catch(e => {
+          // Cancelaron la espera de aprobación al abrir la app: sacar el establecimiento pendiente
+          if (e && e.message === 'RF_ESPERA_CANCELADA' && typeof rfDeshacerUnion === 'function') rfDeshacerUnion(id, null);
+          else console.warn('iniciarSync falló:', e);
+        });
+      }, 1500);
     }
   }, 300);
 
@@ -846,6 +879,11 @@ function procesarSolicitudesPendientes(estabId) {
   margin-bottom: auto;
   flex-shrink: 0;
 }
+
+/* ── Pantalla "Esperando autorización" (unirse a un establecimiento existente) ── */
+#espera-aprobacion { display:none; position:fixed; inset:0; background:var(--bg); z-index:2000; flex-direction:column; align-items:center; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:24px; }
+#espera-aprobacion.show { display:flex; }
+#espera-aprobacion .espera-box { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:32px; max-width:440px; width:100%; text-align:center; margin:auto 0; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -15492,7 +15530,30 @@ async function saveEstabActivo() {
 }
 
 // ── Cambiar al establecimiento con ese ID ─────────────
+// Si el usuario cancela la espera de aprobación: sacar el establecimiento pendiente y volver al anterior.
+async function rfDeshacerUnion(id, previoId) {
+  try {
+    if (window.detenerSync) window.detenerSync();
+    const lista = (await getEstablecimientos()).filter(e => !(e.id === id && e.compartido));
+    await saveEstablecimientos(lista);
+    if (previoId && previoId !== id && lista.some(e => e.id === previoId)) {
+      await cambiarEstablecimiento(previoId);
+    } else if (lista.length) {
+      await cambiarEstablecimiento(lista[0].id);
+    } else {
+      location.reload();
+      return;
+    }
+  } catch (e) {
+    console.warn('No se pudo deshacer la unión:', e);
+    location.reload();
+    return;
+  }
+  toast('Solicitud cancelada', 'info');
+}
+
 async function cambiarEstablecimiento(id) {
+  const previoId = ESTAB_ID_ACTIVO;
   // Guardar estado actual antes de cambiar
   await saveEstabActivo();
   await idbSet(RF_ACTIVO_KEY, id);
@@ -15515,11 +15576,20 @@ async function cambiarEstablecimiento(id) {
   // Sincronizar PRIMERO (trae los datos reales de Firebase si los hay),
   // recién después renderizar — así init() no pushea datos a medio cargar
   if (window.iniciarSync) {
-    await window.iniciarSync(id);
+    try {
+      await window.iniciarSync(id);
+    } catch (e) {
+      if (e && e.message === 'RF_ESPERA_CANCELADA') {
+        await rfDeshacerUnion(id, previoId);
+        return 'cancelado';
+      }
+      throw e;
+    }
     await new Promise(r => setTimeout(r, 600)); // dar tiempo a que aplique datos remotos
   }
   init();
   toast('Establecimiento cambiado ✅', 'ok');
+  return 'ok';
 }
 
 // ── Crear nuevo establecimiento ───────────────────────
@@ -15638,6 +15708,15 @@ async function unirseDesdeSetup() {
   const ok = await unirseAEstablecimiento(codigo);
   if (ok) {
     document.getElementById('trial-screen').style.display = 'none';
+    // Antes se ocultaba el registro y no se mostraba nada más (pantalla azul): hay que decidir
+    // qué corresponde ahora (login con PIN, la app, o el registro si faltan datos), igual que al arrancar.
+    try {
+      const pasa = await checkAuth();
+      if (pasa) { try { healthCheckDB(); } catch(e) {} init(true); }
+    } catch (e) {
+      console.warn('Error al abrir el establecimiento unido:', e);
+      mostrarErrorBoundary('No se pudo abrir el establecimiento: ' + (e && e.message || e), e);
+    }
   }
 }
 
@@ -15670,8 +15749,9 @@ async function unirseAEstablecimiento(codigo) {
       lista.push({ id: codigo, nombre: 'Establecimiento compartido', creadoEn: Date.now(), compartido: true });
       await saveEstablecimientos(lista);
     }
-    await cambiarEstablecimiento(codigo);
-    toast('Solicitud enviada. Sincronizando apenas se apruebe…', 'ok');
+    const resultado = await cambiarEstablecimiento(codigo);
+    if (resultado === 'cancelado') return false;
+    toast('Dispositivo autorizado y sincronizado ✅', 'ok');
     return true;
   } catch(e) {
     toast('Error al unirse: ' + e.message, 'err');
@@ -15927,5 +16007,18 @@ async function startBackupSystem() {
   </div>
 </div>
 
+
+<!-- Pantalla de espera mientras el Dueño autoriza este dispositivo -->
+<div id="espera-aprobacion">
+  <div class="espera-box">
+    <div style="font-size:52px;margin-bottom:8px">🔐</div>
+    <h2 style="font-size:23px;font-weight:700;margin-bottom:8px">Esperando autorización</h2>
+    <p style="color:var(--text2);font-size:15px;margin-bottom:16px">Pedimos acceso a este establecimiento. El Dueño tiene que abrir RodeoFlow en su dispositivo, <b>iniciar sesión</b> y aprobar el pedido. Apenas lo haga, esta pantalla se cierra sola.</p>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:4px">Código del establecimiento</div>
+    <div id="espera-codigo" style="font-family:var(--font-mono);font-size:14px;word-break:break-all;margin-bottom:20px"></div>
+    <div style="color:var(--text2);font-size:14px;margin-bottom:20px">⏳ Esperando…</div>
+    <button type="button" class="btn-secondary" style="width:100%" onclick="window._rfCancelarEspera && window._rfCancelarEspera()">Cancelar y volver</button>
+  </div>
+</div>
 </body>
 </html>
