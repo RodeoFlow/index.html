@@ -999,6 +999,8 @@
         <div class="kpi green"><div class="kpi-label">Vacunación</div><div class="kpi-val" id="k-vacu">0%</div><div class="kpi-sub">del rodeo</div></div>
         <div class="kpi blue"><div class="kpi-label">GDP Promedio</div><div class="kpi-val" id="k-gdp">0</div><div class="kpi-sub">g/día</div></div>
       </div>
+      <!-- Gráficos del rodeo -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px"><div class="card"><div class="card-title">🗺️ Animales por potrero</div><canvas id="chart-dash-potreros"></canvas></div><div class="card"><div class="card-title">♂♀ Machos y hembras</div><canvas id="chart-dash-sexo"></canvas></div><div class="card"><div class="card-title">⚖️ Peso promedio por categoría</div><canvas id="chart-dash-peso"></canvas></div></div>
       <!-- Prices mini + category chart + activity -->
       <div class="dash-grid">
         <div class="card dash-wide">
@@ -1537,6 +1539,7 @@
         <button class="btn-secondary" id="lluvia-cancelar" style="width:100%;margin-top:8px;display:none" onclick="lluviaCancelarEdicion()">✖ Cancelar edición</button>
         <div id="lluvias-box" style="margin-top:14px"></div>
       </div>
+      <div class="card" style="margin-bottom:16px"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span>🌧️ Lluvia mensual</span><span id="chart-lluvia-total" style="font-size:13px;color:var(--text2)"></span></div><canvas id="chart-lluvia"></canvas></div>
     </div>
 
     <!-- ═══ CAMPO ═══ -->
@@ -1937,6 +1940,7 @@
         <div class="tab" onclick="switchTab('tratamientos','enflist')">Enfermedades</div>
       </div>
       <div class="tab-content active">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px"><div class="card"><div class="card-title">🩺 Diagnósticos más frecuentes</div><canvas id="chart-trat-diag"></canvas></div><div class="card"><div class="card-title">📊 Estado de los tratamientos</div><canvas id="chart-trat-estado"></canvas></div></div>
         <div class="toolbar">
           <div class="toolbar-right">
             <button class="btn-primary" onclick="openModal('modal-tratamiento')">＋ Tratamiento</button>
@@ -1965,6 +1969,7 @@
         <div class="kpi red"><div class="kpi-label">Abortos</div><div class="kpi-val" id="k-abortos2">0</div></div>
         <div class="kpi amber"><div class="kpi-label">Causa ppal.</div><div class="kpi-val" style="font-size:14px" id="k-causa-ppal2">--</div></div>
       </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px"><div class="card"><div class="card-title">☠️ Bajas por causa</div><canvas id="chart-muerte-causa"></canvas></div><div class="card"><div class="card-title">📅 Bajas por mes (últimos 12 meses)</div><canvas id="chart-muerte-mes"></canvas></div></div>
       <div class="toolbar">
         <div class="toolbar-right">
           <button class="btn-primary" onclick="openModal('modal-muerte')">＋ Registrar baja</button>
@@ -1982,6 +1987,8 @@
       </div>
 
       <div id="insumos-alertas-box" style="margin-bottom:16px"></div>
+
+      <div class="card" style="margin-bottom:16px"><div class="card-title">🚦 Estado del stock (100% = stock mínimo)</div><canvas id="chart-insumos"></canvas></div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
         <!-- ── ALTA DE INSUMO (CATÁLOGO) ── -->
@@ -2065,6 +2072,7 @@
         <div class="tab" onclick="switchTab('potreros','aguadastab'); renderAguadas();">💧 Aguadas</div>
       </div>
       <div class="tab-content active">
+        <div class="card" style="margin-bottom:16px"><div class="card-title">🗺️ Animales por potrero y capacidad</div><canvas id="chart-potreros"></canvas></div>
         <div class="toolbar">
           <div class="toolbar-right">
             <button class="btn-secondary" title="Si algún conteo de animales por potrero se ve raro, esto lo reconstruye desde cero" onclick="recalcularTodosLosSaldosPotreros();renderPotreros();toast('Saldos por potrero recalculados ✅','ok')">🔧 Recalcular saldos</button>
@@ -2495,6 +2503,7 @@
           </div>
           <div id="rs-kpis"></div>
         </div>
+        <div class="card" style="margin-bottom:16px"><div class="card-title">📆 Compras y ventas por día</div><canvas id="chart-rs"></canvas></div>
         <div class="card" style="margin-bottom:16px">
           <div class="card-title">🚛 Traslados entre potreros</div>
           <div id="rs-traslados" style="font-size:14px"></div>
@@ -5528,6 +5537,7 @@ function renderAll() {
 
 // ─── DASHBOARD ───
 function renderDashboard() {
+  setTimeout(function(){ try{ renderDashCharts(); }catch(e){ console.warn('Gráfico:',e); } },0);
   renderPrimerosPasos(); renderDemoPill();
   updateKPIs();
   renderCategoryChart();
@@ -5565,6 +5575,206 @@ function updateKPIs() {
   }).filter(g=>g>0&&g<3000);
   s('k-gdp', gdps.length?Math.round(gdps.reduce((a,b)=>a+b,0)/gdps.length):0);
 }
+
+// ═══ GRÁFICOS (canvas, sin librerías): mismo estilo en todos los módulos ═══
+const RF_PALETA = ['#2ecc71','#3498db','#e8a020','#9b59b6','#e74c3c','#1abc9c','#e67e22','#f1c40f'];
+const RF_COLOR_CAT = {'Novillo':'#e8a020','Novillito':'#f0c060','Vaca':'#3498db','Vaquillona':'#9b59b6','Toro':'#e74c3c','Ternero M':'#2ecc71','Ternera H':'#1abc9c','Torito':'#e67e22','Destete Macho':'#27ae60','Destete Hembra':'#16a085','Recría':'#f39c12'};
+const RF_TXT = '#e8eaf0', RF_TXT2 = '#8a9ab0', RF_GRID = '#2a3347';
+function rfCanvas(id, alto){
+  const c = document.getElementById(id); if(!c) return null;
+  c.style.width = '100%'; c.style.height = alto + 'px'; c.style.display = 'block';
+  const w = Math.max(240, Math.floor(c.getBoundingClientRect().width) || 320);
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  c.width = Math.floor(w * dpr); c.height = Math.floor(alto * dpr);
+  const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { c, ctx, w, h: alto };
+}
+function rfAnim(c, dibujar){ // animación suave de entrada; si se redibuja, la anterior se cancela
+  const tok = (c._rfTok = (c._rfTok || 0) + 1);
+  if(typeof requestAnimationFrame !== 'function'){ dibujar(1); return; }
+  const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const paso = n => {
+    if(c._rfTok !== tok) return;
+    const t = Math.min(1, (n - t0) / 650); dibujar(1 - Math.pow(1 - t, 3));
+    if(t < 1) requestAnimationFrame(paso);
+  };
+  requestAnimationFrame(paso);
+}
+function rfVacio(k, texto){
+  k.c._rfTok = (k.c._rfTok || 0) + 1;
+  k.ctx.clearRect(0, 0, k.w, k.h); k.ctx.fillStyle = RF_TXT2; k.ctx.font = '13px sans-serif';
+  k.ctx.textAlign = 'center'; k.ctx.textBaseline = 'middle'; k.ctx.fillText(texto || 'Sin datos todavía', k.w / 2, k.h / 2);
+}
+function rfTrunc(ctx, t, maxW){
+  t = String(t); if(ctx.measureText(t).width <= maxW) return t;
+  while(t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+  return t + '…';
+}
+function rfNice(m){ if(m <= 0) return 1; const e = Math.pow(10, Math.floor(Math.log10(m))), f = m / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e; }
+function rfFmt(v){ v = Number(v) || 0; if(Math.abs(v) >= 10000) return (v / 1000).toFixed(v % 1000 ? 1 : 0) + 'k'; return String(Math.round(v * 10) / 10); }
+function rfRectTop(ctx, x, y, w, h, r){ // barra con las esquinas de arriba redondeadas
+  if(h <= 0 || w <= 0) return; r = Math.min(r, h, w / 2);
+  ctx.beginPath(); ctx.moveTo(x, y + h); ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+  ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r); ctx.lineTo(x + w, y + h); ctx.closePath(); ctx.fill();
+}
+function rfRectH(ctx, x, y, w, h, r){ // barra horizontal redondeada
+  if(w <= 0) return; r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r); ctx.lineTo(x, y + h); ctx.closePath(); ctx.fill();
+}
+
+// Dona con leyenda: items = [{l:'Norte', v:12, c:'#2ecc71'}]
+function rfDonut(id, items, opt){
+  opt = opt || {}; const k = rfCanvas(id, opt.alto || 190); if(!k) return; const { c, ctx, w, h } = k;
+  let data = (items || []).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
+  if(data.length > 7){ const resto = data.slice(6).reduce((s, x) => s + x.v, 0); data = data.slice(0, 6).concat([{ l: 'Otros', v: resto, c: '#8a9ab0' }]); }
+  const total = data.reduce((s, x) => s + x.v, 0);
+  if(!total){ rfVacio(k, opt.vacio); return; }
+  data.forEach((x, i) => { x.c = x.c || RF_PALETA[i % RF_PALETA.length]; });
+  const R = Math.min(h / 2 - 8, w * 0.3), cx = R + 12, cy = h / 2, r0 = R * 0.62, lx = cx + R + 20;
+  rfAnim(c, p => {
+    ctx.clearRect(0, 0, w, h); let a = -Math.PI / 2; const gap = data.length > 1 ? 0.03 : 0;
+    data.forEach(x => {
+      const ang = x.v / total * Math.PI * 2 * p;
+      if(ang > gap){ ctx.beginPath(); ctx.arc(cx, cy, R, a + gap / 2, a + ang - gap / 2); ctx.arc(cx, cy, r0, a + ang - gap / 2, a + gap / 2, true); ctx.closePath(); ctx.fillStyle = x.c; ctx.fill(); }
+      a += ang;
+    });
+    ctx.fillStyle = RF_TXT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 22px Courier New, monospace'; ctx.fillText(rfFmt(p < 1 ? Math.round(total * p) : total), cx, cy - (opt.centro ? 6 : 0));
+    if(opt.centro){ ctx.font = '11px sans-serif'; ctx.fillStyle = RF_TXT2; ctx.fillText(opt.centro, cx, cy + 14); }
+    const fila = Math.min(26, (h - 16) / data.length); let y = h / 2 - (data.length * fila) / 2 + fila / 2;
+    ctx.font = '13px sans-serif'; ctx.textBaseline = 'middle';
+    data.forEach(x => {
+      ctx.fillStyle = x.c; ctx.beginPath(); ctx.arc(lx + 5, y, 5, 0, Math.PI * 2); ctx.fill();
+      const pc = x.v / total * 100, val = rfFmt(x.v) + '  ' + (pc < 1 ? '<1' : Math.round(pc)) + '%';
+      ctx.textAlign = 'right'; ctx.fillStyle = RF_TXT2; ctx.fillText(val, w - 6, y);
+      ctx.textAlign = 'left'; ctx.fillStyle = RF_TXT; ctx.fillText(rfTrunc(ctx, x.l, w - lx - 20 - ctx.measureText(val).width - 10), lx + 16, y);
+      y += fila;
+    });
+  });
+}
+
+// Barras horizontales: items = [{l, v, c?, ref?}]  (ref = marca de mínimo o de capacidad)
+function rfBarrasH(id, items, opt){
+  opt = opt || {}; items = items || []; const fila = 30, alto = Math.max(70, items.length * fila + 16 + (opt.leyendaRef ? 18 : 0));
+  const k = rfCanvas(id, alto); if(!k) return; const { c, ctx, w, h } = k;
+  if(!items.length || !items.some(x => x.v > 0 || x.ref > 0)){ rfVacio(k, opt.vacio); return; }
+  const labW = Math.min(124, Math.floor(w * 0.34)), x0 = labW + 10, right = items.some(x => x.t) ? 96 : 64, bw = w - x0 - right;
+  const max = rfNice(Math.max(...items.map(x => Math.max(x.v || 0, x.ref || 0)), 1));
+  rfAnim(c, p => {
+    ctx.clearRect(0, 0, w, h);
+    items.forEach((x, i) => {
+      const y = 8 + i * fila, bh = 12, by = y + (fila - bh) / 2 - 2;
+      ctx.font = '13px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = RF_TXT;
+      ctx.fillText(rfTrunc(ctx, x.l, labW), 4, y + fila / 2 - 2);
+      ctx.fillStyle = RF_GRID; rfRectH(ctx, x0, by, bw, bh, 6);
+      let col = x.c || RF_PALETA[i % RF_PALETA.length];
+      if(x.ref > 0 && !x.c) col = (opt.refTipo === 'max' ? x.v > x.ref : x.v < x.ref) ? '#e74c3c' : '#2ecc71';
+      ctx.fillStyle = col; rfRectH(ctx, x0, by, Math.max(0, bw * (x.v / max) * p), bh, 6);
+      if(x.ref > 0){ const rx = x0 + bw * x.ref / max; ctx.strokeStyle = '#e8a020'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(rx, by - 3); ctx.lineTo(rx, by + bh + 3); ctx.stroke(); }
+      ctx.fillStyle = RF_TXT; ctx.font = 'bold 12px Courier New, monospace'; ctx.textAlign = 'right';
+      ctx.fillText(x.t || (rfFmt(x.v) + (opt.unidad || '')), w - 4, y + fila / 2 - 2);
+    });
+    if(opt.leyendaRef){ ctx.strokeStyle = '#e8a020'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(8, h - 10); ctx.lineTo(8, h - 2); ctx.stroke(); ctx.fillStyle = RF_TXT2; ctx.font = '11px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(opt.leyendaRef, 16, h - 6); }
+  });
+}
+
+// Barras verticales (una o varias series): series = [[...],[...]], labels = ['E','F',...]
+function rfBarrasV(id, labels, series, opt){
+  opt = opt || {}; const k = rfCanvas(id, opt.alto || 210); if(!k) return; const { c, ctx, w, h } = k;
+  const S = series.length, todos = series.reduce((a, s) => a.concat(s), []);
+  if(!todos.some(v => v > 0)){ rfVacio(k, opt.vacio); return; }
+  const cols = opt.colores || [RF_PALETA[1], RF_PALETA[0]], nombres = opt.nombres || [];
+  const maxV = Math.max(...todos, 1), enteros = todos.every(v => Number.isInteger(v)) && maxV <= 40, max = enteros ? Math.max(4, Math.ceil(maxV / 4) * 4) : rfNice(maxV), top = nombres.length > 1 ? 30 : 14, left = 38, bottom = 26, right = 8, cw = w - left - right, ch = h - top - bottom;
+  rfAnim(c, p => {
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = '11px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for(let i = 0; i <= 4; i++){ const y = top + ch - ch * i / 4; ctx.strokeStyle = RF_GRID; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(w - right, y); ctx.stroke(); ctx.fillStyle = RF_TXT2; ctx.fillText(rfFmt(max * i / 4), left - 6, y); }
+    const n = labels.length, gw = cw / n, bw = Math.min(30, gw * 0.72 / S);
+    labels.forEach((lb, i) => {
+      const gx = left + gw * i + gw / 2 - bw * S / 2;
+      series.forEach((sr, j) => {
+        const v = sr[i] || 0, bh = ch * (v / max) * p, x = gx + j * bw, y = top + ch - bh;
+        ctx.fillStyle = cols[j % cols.length]; rfRectTop(ctx, x, y, bw - 2, bh, 4);
+        if(v > 0 && p === 1 && bw >= 14){ ctx.fillStyle = RF_TXT; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(rfFmt(v), x + (bw - 2) / 2, y - 2); }
+      });
+      ctx.fillStyle = RF_TXT2; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(lb, left + gw * i + gw / 2, top + ch + 7);
+    });
+    if(nombres.length > 1){ let x = left; ctx.font = '12px sans-serif'; ctx.textBaseline = 'middle'; nombres.forEach((nm, j) => { ctx.fillStyle = cols[j % cols.length]; ctx.beginPath(); ctx.arc(x + 5, 12, 5, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = RF_TXT; ctx.textAlign = 'left'; ctx.fillText(nm, x + 14, 12); x += 26 + ctx.measureText(nm).width; }); }
+  });
+}
+
+// ── Gráficos por módulo ──
+function renderDashCharts(){
+  const act = (DB.animales || []).filter(a => a.activo);
+  const por = (DB.potreros || []).map(p => ({ l: p.nombre, v: saldoPotrero(p.nombre) }));
+  const sin = act.filter(a => !a.potrero).length; if(sin) por.push({ l: 'Sin potrero', v: sin, c: '#8a9ab0' });
+  rfDonut('chart-dash-potreros', por, { centro: 'animales', vacio: 'Cargá potreros y animales para ver este gráfico' });
+  rfDonut('chart-dash-sexo', [
+    { l: 'Machos', v: act.filter(a => a.sexo === 'Macho').length, c: '#3498db' },
+    { l: 'Hembras', v: act.filter(a => a.sexo === 'Hembra').length, c: '#e84393' },
+    { l: 'Sin dato', v: act.filter(a => a.sexo !== 'Macho' && a.sexo !== 'Hembra').length, c: '#8a9ab0' }], { centro: 'animales', vacio: 'Sin animales cargados' });
+  const g = {}; act.forEach(a => { const p = parseFloat(a.peso) || 0; if(p > 0 && a.categoria){ const o = g[a.categoria] || (g[a.categoria] = { s: 0, n: 0 }); o.s += p; o.n++; } });
+  rfBarrasH('chart-dash-peso', Object.entries(g).map(([k, o]) => ({ l: k, v: Math.round(o.s / o.n), c: RF_COLOR_CAT[k] })).sort((a, b) => b.v - a.v).slice(0, 8), { unidad: ' kg', vacio: 'Sin pesos cargados' });
+}
+function renderClimaChart(){
+  const regs = (typeof precipDeCampo === 'function' ? precipDeCampo(_lluviaCampo) : []).filter(p => parseFloat(p.mm) > 0);
+  const A = (typeof _lluviaAnio !== 'undefined' && _lluviaAnio) || new Date().getFullYear();
+  const mes = an => { const m = Array(12).fill(0); regs.forEach(p => { const f = String(p.fecha || ''); if(parseInt(f.slice(0, 4)) === an){ const i = parseInt(f.slice(5, 7)) - 1; if(i >= 0 && i < 12) m[i] += parseFloat(p.mm) || 0; } }); return m.map(v => Math.round(v)); };
+  const actual = mes(A), previo = mes(A - 1), tot = actual.reduce((s, v) => s + v, 0);
+  const el = document.getElementById('chart-lluvia-total'); if(el) el.textContent = tot + ' mm en ' + A;
+  rfBarrasV('chart-lluvia', ['E','F','M','A','M','J','J','A','S','O','N','D'], [previo, actual], { colores: ['#4a5a75', '#3498db'], nombres: [String(A - 1), String(A)], vacio: 'Todavía no hay lluvias registradas' });
+}
+function renderTratCharts(){
+  const l = DB.tratamientos || [], dg = {}, es = {};
+  l.forEach(t => { const k = String(t.diag || '').trim() || 'Sin diagnóstico'; dg[k] = (dg[k] || 0) + 1; const e = t.estado || 'Sin estado'; es[e] = (es[e] || 0) + 1; });
+  rfBarrasH('chart-trat-diag', Object.entries(dg).map(([k, v]) => ({ l: k, v })).sort((a, b) => b.v - a.v).slice(0, 6), { vacio: 'Sin tratamientos registrados' });
+  rfDonut('chart-trat-estado', Object.entries(es).map(([k, v]) => ({ l: k, v, c: k === 'En Curso' ? '#e8a020' : (k === 'Finalizado' || k === 'Curado' || k === 'Terminado') ? '#2ecc71' : undefined })), { centro: 'tratamientos', vacio: 'Sin tratamientos registrados' });
+}
+function renderMuerteCharts(){
+  const m = DB.muertes || [], ca = {};
+  m.forEach(x => { const k = String(x.causa || x.tipo || '').trim() || 'Sin dato'; ca[k] = (ca[k] || 0) + 1; });
+  const rojos = ['#e74c3c', '#e8a020', '#9b59b6', '#3498db', '#8a9ab0', '#1abc9c'];
+  rfDonut('chart-muerte-causa', Object.entries(ca).sort((a, b) => b[1] - a[1]).map(([k, v], i) => ({ l: k, v, c: rojos[i % rojos.length] })), { centro: 'bajas', vacio: 'Sin bajas registradas 👍' });
+  const nombres = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'], labels = [], claves = [], hoy = new Date();
+  for(let i = 11; i >= 0; i--){ const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1); labels.push(nombres[d.getMonth()]); claves.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')); }
+  rfBarrasV('chart-muerte-mes', labels, [claves.map(k => m.filter(x => String(x.fecha || '').slice(0, 7) === k).length)], { colores: ['#e74c3c'], vacio: 'Sin bajas en los últimos 12 meses 👍' });
+}
+function renderInsumosChart(){
+  const it = (DB.insumos || []).filter(i => (parseFloat(i.stockMinimo) || 0) > 0).map(i => {
+    const st = Math.round((stockActualInsumo(i.id) || 0) * 10) / 10, mn = parseFloat(i.stockMinimo) || 0;
+    return { l: i.nombre + (i.unidad ? ' (' + i.unidad + ')' : ''), v: Math.min(200, Math.round(st / mn * 100)), ref: 100, t: st + ' / ' + mn };
+  }).sort((a, b) => a.v - b.v).slice(0, 8);
+  rfBarrasH('chart-insumos', it, { leyendaRef: 'stock mínimo (100%)', vacio: 'Cargá un stock mínimo en tus insumos para ver el semáforo' });
+}
+function renderPotrerosChart(){
+  const it = (DB.potreros || []).map(p => { const cap = (parseFloat(p.ha) || 0) * (parseFloat(p.cargaMax) || 0); return { l: p.nombre, v: saldoPotrero(p.nombre), ref: cap > 0 ? Math.round(cap) : 0 }; }).sort((a, b) => b.v - a.v).slice(0, 10);
+  rfBarrasH('chart-potreros', it, { refTipo: 'max', leyendaRef: 'capacidad (ha × carga máx.)', vacio: 'Sin potreros cargados' });
+}
+function rsGrafico(d){
+  const cp = Array(7).fill(0), vt = Array(7).fill(0), dia = f => { const x = new Date(String(f).slice(0, 10) + 'T12:00:00'); return isNaN(x) ? -1 : (x.getDay() + 6) % 7; };
+  d.compras.forEach(c => { const i = dia(c.fecha); if(i >= 0) cp[i] += parseInt(c.cant) || 0; });
+  d.ventas.forEach(v => { const i = dia(v.fecha); if(i >= 0) vt[i] += parseInt(v.cant) || 0; });
+  rfBarrasV('chart-rs', ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'], [cp, vt], { colores: ['#2ecc71', '#e8a020'], nombres: ['Compras (cabezas)', 'Ventas (cabezas)'], alto: 190, vacio: 'Sin compras ni ventas esta semana' });
+}
+// Si se achica o agranda la ventana, se redibuja la página abierta
+let _rfRz = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_rfRz);
+  _rfRz = setTimeout(() => {
+    try {
+      const act = id => { const e = document.getElementById(id); return e && e.classList.contains('active'); };
+      if(act('page-dashboard')) renderDashCharts();
+      if(act('page-clima')) renderClimaChart();
+      if(act('page-tratamientos')) renderTratCharts();
+      if(act('page-mortalidad')) renderMuerteCharts();
+      if(act('page-insumos')) renderInsumosChart();
+      if(act('page-potreros')) renderPotrerosChart();
+      if(act('page-movimientos')) renderResumenSemanal();
+    } catch(e) { console.warn('Gráficos:', e); }
+  }, 250);
+});
+// ═══ FIN GRÁFICOS ═══
 
 function renderCategoryChart() {
   const el=document.getElementById('chart-cat'); if(!el) return;
@@ -6810,6 +7020,7 @@ function lluviaPorMes(regs, anio){
   return {m,d};
 }
 function renderLluvias(){
+  setTimeout(function(){ try{ renderClimaChart(); }catch(e){ console.warn('Gráfico:',e); } },0);
   const box=document.getElementById('lluvias-box'); if(!box) return;
   renderSelectorCampos();
   const regs=precipDeCampo(_lluviaCampo).filter(p=>parseFloat(p.mm)>0);
@@ -9988,6 +10199,7 @@ function abrirModalVacunaDesdeCalendario(rp, nombreVacuna){
 }
 
 function renderTratamientos(){
+  setTimeout(function(){ try{ renderTratCharts(); }catch(e){ console.warn('Gráfico:',e); } },0);
   const tbody=document.getElementById('tratamientos-tbody');if(!tbody)return;
   tbody.innerHTML=[...DB.tratamientos].reverse().map(t=>`<tr><td>${t.fecha}</td><td class="td-mono">${esc(t.rp)}</td><td>${esc(t.diag||'--')}</td><td>${esc(t.med||'--')}</td><td class="td-mono">${t.dosis||'--'}</td><td class="td-mono">${t.dias||'--'}</td><td>${esc(t.vet||'--')}</td><td><span class="badge ${t.estado==='En Curso'?'badge-amber':t.estado==='Completado'?'badge-green':'badge-gray'}">${t.estado}</span></td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaTratamiento(${t.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
 }
@@ -11116,6 +11328,7 @@ function generarPlanRotacion(){
 }
 
 function renderPotreros(){
+  setTimeout(function(){ try{ renderPotrerosChart(); }catch(e){ console.warn('Gráfico:',e); } },0);
   const tbody=document.getElementById('potreros-tbody');if(!tbody)return;
   tbody.innerHTML=DB.potreros.map((p,i)=>{
     const animales=saldoPotrero(p.nombre);
@@ -13219,6 +13432,7 @@ function _rsFilas(d){
 function renderResumenSemanal(){
   const k=document.getElementById('rs-kpis'); if(!k) return;
   const d=_rsDatos();
+  setTimeout(function(){ try{ rsGrafico(d); }catch(e){ console.warn('Gráfico:',e); } },0);
   document.getElementById('rs-titulo').textContent=`Semana del ${_rsDM(d.r.desde)} al ${_rsDM(d.r.hasta)}`+(_rsOffset===0?' (actual)':'');
   const sig=document.getElementById('rs-sig'); if(sig) sig.disabled=_rsOffset>=0;
   const neto=d.entradas-d.salidas, saldo=d.totVenta-d.totCompra;
@@ -13288,6 +13502,7 @@ function filtrarHistorial(){
 }
 
 function renderMuertes(){
+  setTimeout(function(){ try{ renderMuerteCharts(); }catch(e){ console.warn('Gráfico:',e); } },0);
   const tbody=document.getElementById('muertes-tbody');if(!tbody)return;
   tbody.innerHTML=[...DB.muertes].reverse().map(m=>`<tr><td>${m.fecha}</td><td class="td-mono">${esc(m.rp)}</td><td>${DB.animales.find(a=>a.rp===m.rp)?.categoria||'--'}</td><td class="td-mono">${m.peso||'--'} kg</td><td><span class="badge badge-red">${esc(m.causa||'--')}</span></td><td>${m.potrero||'--'}</td><td>${esc(m.diag||'--')}</td><td>${esc(m.vet||'--')}</td><td><button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaMuerte(${m.id})">🗑 Baja</button></td></tr>`).join('')||emptyRow(9);
 }
@@ -13325,6 +13540,7 @@ function proximoVencimientoInsumo(insumoId){
 }
 
 function renderInsumosCatalogo(){
+  setTimeout(function(){ try{ renderInsumosChart(); }catch(e){ console.warn('Gráfico:',e); } },0);
   const sel=document.getElementById('insmov-insumo');
   const tbody=document.getElementById('insumos-stock-tbody');
   if(!sel||!tbody)return;
