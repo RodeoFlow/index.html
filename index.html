@@ -297,7 +297,7 @@
     // No soy miembro todavía: pido acceso y espero que otro dispositivo autorizado
     // que esté online lo apruebe.
     setSyncStatus('error');
-    toast('Esperando aprobación de otro dispositivo ya autorizado de este establecimiento…', 'err');
+    toast('Pedido enviado. Esperando que el Dueño lo apruebe desde un dispositivo ya autorizado…', 'err');
     await estabRef.child('solicitudes/' + uid).set({
       ts: firebase.database.ServerValue.TIMESTAMP,
       dispositivo: window._rfDeviceId
@@ -310,17 +310,13 @@
     });
   }
 
-  // Corre en cada dispositivo que YA es miembro: aprueba automáticamente
-  // solicitudes de acceso pendientes de otros dispositivos del mismo establecimiento.
+  // Corre en cada dispositivo que YA es miembro: cuando otro dispositivo pide acceso, se le pregunta al Dueño
+  // (aprobar o rechazar). Antes se aprobaba solo: cualquiera con el código entraba sin que nadie se enterara.
   function procesarSolicitudesPendientes(estabId) {
     if (_refSolicitudes) { _refSolicitudes.off(); }
     _refSolicitudes = rtdb.ref(`establecimientos/${estabId}/solicitudes`);
-    _refSolicitudes.on('child_added', snap => {
-      const uidSolicitante = snap.key;
-      rtdb.ref(`establecimientos/${estabId}/members/${uidSolicitante}`).set(true)
-        .then(() => snap.ref.remove())
-        .catch(e => console.warn('No se pudo aprobar solicitud:', e));
-    });
+    _refSolicitudes.on('child_added', snap => { try { rfOfrecerAprobacion(estabId, snap.key, snap.val() || {}); } catch(e) { console.warn('Solicitud de acceso:', e); } });
+    _refSolicitudes.on('child_removed', snap => { try { rfCerrarSolicitud(snap.key); } catch(e) {} });
   }
 
   window.iniciarSync = async function(estabId) {
@@ -2828,6 +2824,11 @@
     <!-- ═══ CONFIGURACIÓN ═══ -->
     <div id="page-configuracion" class="page">
       <div class="page-header"><div class="page-title">⚙️ Configuración</div></div>
+      <div class="card" style="margin-bottom:16px;border-left:3px solid var(--amber)">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>🔐 Dispositivos autorizados</span><button class="btn-secondary" style="padding:4px 12px;font-size:13px" onclick="renderDispositivos()">🔄 Actualizar</button></div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Quien tenga el código de tu establecimiento puede pedir acceso: acá lo aprobás o lo rechazás, y podés quitar el acceso a un dispositivo que no reconozcas.</div>
+        <div id="dispositivos-panel"></div>
+      </div>
       <div class="grid-2">
         <div class="card">
           <div class="card-title">Establecimiento</div>
@@ -5054,7 +5055,7 @@ function showPage(id) {
   if(id === 'administracion') { renderVencimientos(); prepararResumenWA(); renderSenasaResumen(); }
   if(id === 'rentabilidad') { renderRentabilidadPotreroSelect(); renderRentabilidad(); }
   if(id === 'ia') iaRender();
-  if(id === 'configuracion') { renderConfigPhones(); updateTrialStatus(); renderBackupHistorial(); actualizarEstadoBackup(); actualizarPanelSync(); renderConfigUbicacion(); renderNotifEstado(); renderPrefVoz(); }
+  if(id === 'configuracion') { renderDispositivos(); renderConfigPhones(); updateTrialStatus(); renderBackupHistorial(); actualizarEstadoBackup(); actualizarPanelSync(); renderConfigUbicacion(); renderNotifEstado(); renderPrefVoz(); }
   // Close sidebar on mobile
   document.getElementById('sidebar').classList.remove('mobile-open');
 }
@@ -5805,6 +5806,92 @@ if(typeof ResizeObserver === 'undefined') window.addEventListener('resize', () =
   }, 250);
 });
 // ═══ FIN GRÁFICOS ═══
+
+// ═══ DISPOSITIVOS AUTORIZADOS: los pedidos de acceso los aprueba el Dueño, no se aceptan solos ═══
+const _rfSolCola = []; let _rfSolAbierta = null;
+function rfEsDueno(){ const r = sessionStorage.getItem('rf_role'); return !r || r === 'Dueño'; }
+function rfOfrecerAprobacion(estabId, uid, sol){
+  if(!rfEsDueno()) return; // solo el Dueño decide
+  if(_rfSolCola.some(x => x.uid === uid)) return;
+  _rfSolCola.push({ estabId, uid, sol: sol || {} });
+  rfMostrarSiguienteSolicitud();
+}
+function rfCerrarSolicitud(uid){ // otro dispositivo ya resolvió ese pedido
+  const i = _rfSolCola.findIndex(x => x.uid === uid); if(i >= 0) _rfSolCola.splice(i, 1);
+  if(_rfSolAbierta && _rfSolAbierta.uid === uid){
+    const m = document.getElementById('rf-modal-solicitud'); if(m) m.remove();
+    _rfSolAbierta = null; rfMostrarSiguienteSolicitud();
+  }
+}
+function rfMostrarSiguienteSolicitud(){
+  if(_rfSolAbierta || !_rfSolCola.length) return;
+  const s = _rfSolCola[0]; _rfSolAbierta = s;
+  const ts = Number(s.sol.ts) || 0, hace = ts ? Math.max(0, Math.round((Date.now() - ts) / 60000)) : null;
+  const dev = String(s.sol.dispositivo || 'desconocido').slice(0, 80), mm = /dev_(\d{10,})_/.exec(dev);
+  const primer = mm ? new Date(parseInt(mm[1])).toLocaleDateString('es-AR') : '--';
+  const d = document.createElement('div'); d.id = 'rf-modal-solicitud';
+  d.style.cssText = 'position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;padding:16px';
+  d.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;max-width:420px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.6)">
+    <div style="font-size:18px;font-weight:800;margin-bottom:8px">🔐 Un dispositivo pide acceso</div>
+    <div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:14px">Alguien con el código de tu establecimiento quiere unirse. Si lo aprobás, podrá <b>ver y modificar todos tus datos</b>.<br><br>Dispositivo: <code>${esc(dev)}</code><br>Primer uso de la app: ${esc(primer)}<br>Pedido: ${hace === null ? '--' : (hace < 1 ? 'hace instantes' : 'hace ' + hace + ' min')}</div>
+    <div style="font-size:13px;color:var(--amber);margin-bottom:16px">¿Estás sumando un dispositivo tuyo o de alguien de confianza? Si no lo reconocés, rechazalo.</div>
+    <div style="display:flex;gap:10px"><button class="btn-secondary" style="flex:1" id="rf-sol-no">✖ Rechazar</button><button class="btn-primary" style="flex:1" id="rf-sol-si">✔ Aprobar</button></div></div>`;
+  document.body.appendChild(d);
+  document.getElementById('rf-sol-si').onclick = () => rfResolverSolicitud(true);
+  document.getElementById('rf-sol-no').onclick = () => rfResolverSolicitud(false);
+}
+async function rfResolverSolicitud(aprobar){
+  const s = _rfSolAbierta; if(!s) return;
+  await rfDecidirPedido(s.estabId, s.uid, aprobar, s.sol);
+  const m = document.getElementById('rf-modal-solicitud'); if(m) m.remove();
+  const i = _rfSolCola.findIndex(x => x.uid === s.uid); if(i >= 0) _rfSolCola.splice(i, 1);
+  _rfSolAbierta = null; rfMostrarSiguienteSolicitud();
+}
+async function rfDecidirPedido(estabId, uid, aprobar, sol){
+  const db = firebase.database(), base = `establecimientos/${estabId}`;
+  try{
+    if(aprobar){
+      await db.ref(`${base}/members/${uid}`).set(true);
+      try{ localStorage.setItem(`rf_disp_${estabId}_${uid}`, JSON.stringify({ dispositivo: String((sol && sol.dispositivo) || '').slice(0, 80), aprobado: Date.now() })); }catch(e){}
+    }
+    await db.ref(`${base}/solicitudes/${uid}`).remove();
+    toast(aprobar ? 'Dispositivo aprobado ✅' : 'Pedido rechazado', 'ok');
+  }catch(e){ toast('No se pudo completar: ' + (e.message || e), 'err'); }
+}
+async function renderDispositivos(){
+  const box = document.getElementById('dispositivos-panel'); if(!box) return;
+  const estabId = window.ESTAB_ID_ACTIVO, miUid = firebase.auth().currentUser && firebase.auth().currentUser.uid;
+  if(!estabId || String(estabId).startsWith('demo-')){ box.innerHTML = '<span style="color:var(--text3)">No aplica en el modo demo.</span>'; return; }
+  box.innerHTML = '<span style="color:var(--text3)">Cargando…</span>';
+  try{
+    const db = firebase.database(), base = `establecimientos/${estabId}`;
+    const [mS, sS] = await Promise.all([db.ref(base + '/members').once('value'), db.ref(base + '/solicitudes').once('value')]);
+    const miembros = Object.keys(mS.val() || {}), pend = sS.val() || {};
+    const fila = (txt, botones) => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap"><div style="font-size:14px">${txt}</div><div style="display:flex;gap:6px">${botones}</div></div>`;
+    let html = '';
+    const pu = Object.keys(pend);
+    if(pu.length) html += `<div style="font-weight:700;color:var(--amber);margin-bottom:4px">⏳ Pedidos de acceso pendientes</div>` + pu.map(u => {
+      const p = pend[u] || {}, mm = /dev_(\d{10,})_/.exec(String(p.dispositivo || ''));
+      return fila(`Dispositivo nuevo <code>${esc(String(p.dispositivo || '').slice(0, 40))}</code><br><span style="font-size:12px;color:var(--text3)">Pidió acceso el ${p.ts ? esc(new Date(p.ts).toLocaleString('es-AR')) : '--'}${mm ? ' · primer uso de la app: ' + esc(new Date(parseInt(mm[1])).toLocaleDateString('es-AR')) : ''}</span>`,
+        `<button class="btn-primary" style="padding:4px 10px;font-size:13px" data-act="aprobar" data-uid="${esc(u)}">Aprobar</button><button class="btn-secondary" style="padding:4px 10px;font-size:13px" data-act="rechazar" data-uid="${esc(u)}">Rechazar</button>`);
+    }).join('') + '<div style="height:10px"></div>';
+    html += `<div style="font-weight:700;margin-bottom:4px">✅ Dispositivos con acceso (${miembros.length})</div>` + miembros.map(u => {
+      let info = null; try{ info = JSON.parse(localStorage.getItem(`rf_disp_${estabId}_${u}`) || 'null'); }catch(e){}
+      const nombre = u === miUid ? '📱 <b>Este dispositivo</b>' : `Dispositivo ···${esc(u.slice(-6))}` + (info ? `<br><span style="font-size:12px;color:var(--text3)">Aprobado el ${esc(new Date(info.aprobado).toLocaleDateString('es-AR'))} desde este equipo</span>` : '');
+      return fila(nombre, u === miUid ? '' : `<button class="btn-secondary" style="padding:4px 10px;font-size:13px;color:var(--red)" data-act="quitar" data-uid="${esc(u)}">Quitar acceso</button>`);
+    }).join('');
+    box.innerHTML = html || '<span style="color:var(--text3)">Sin datos.</span>';
+    box.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
+      const u = b.getAttribute('data-uid'), act = b.getAttribute('data-act');
+      if(act === 'quitar'){
+        if(!confirm('¿Quitar el acceso de este dispositivo? Dejará de sincronizar con tu establecimiento y tendrá que pedir acceso de nuevo.')) return;
+        try{ await firebase.database().ref(`${base}/members/${u}`).remove(); toast('Acceso quitado', 'ok'); }catch(e){ toast('No se pudo quitar: ' + (e.message || e), 'err'); }
+      } else await rfDecidirPedido(estabId, u, act === 'aprobar', pend[u]);
+      renderDispositivos();
+    });
+  }catch(e){ box.innerHTML = '<span style="color:var(--red)">No se pudo cargar: ' + esc(e.message || e) + '</span>'; }
+}
+// ═══ FIN DISPOSITIVOS ═══
 
 function renderCategoryChart() {
   const el=document.getElementById('chart-cat'); if(!el) return;
