@@ -68,6 +68,7 @@
   let _ultimoGuardado   = 0;      // throttle general de push
   let _ultimoLegacyPush = 0;      // throttle del blob completo (modo compatibilidad)
   let _aplicandoRemoto  = false;  // bloquea pushes mientras se aplica un cambio remoto
+  const _enVuelo = {}, _reintentoTs = {}; let _avisoErrorTs = 0; // envíos en curso y reintentos tras un error
   let _pushHabilitado   = false;  // true recién cuando terminó de bajar los datos del establecimiento (antes un dispositivo nuevo vacío los pisaba)
   let _cargaInicialLista= false;  // true recién después de hidratar todas las colecciones al conectar
   let _renderPendiente  = null;   // debounce del re-render tras recibir cambios remotos
@@ -90,7 +91,7 @@
   const colNodo = key => (COLECCIONES_SOLO_DUENO.includes(key) ? 'collections_privadas' : 'collections');
 
   // ── Badge de estado ──────────────────────────────────
-  function setSyncStatus(estado) {
+  function setSyncStatus(estado, detalle) {
     const map = {
       ok:      { icon:'📡', color:'var(--green)', title:'Sincronizado' },
       error:   { icon:'⚠️', color:'var(--amber)', title:'Error de sync' },
@@ -98,7 +99,7 @@
       off:     { icon:'⭕', color:'var(--text3)', title:'Sync desactivado' },
     };
     const s   = map[estado] || map.off;
-    const html = `<span title="${s.title}" style="color:${s.color};font-size:16px;cursor:help">${s.icon}</span>`;
+    const html = `<span title="${s.title}${detalle ? ' — ' + String(detalle).replace(/["<>]/g, "'") : ''}" style="color:${s.color};font-size:16px;cursor:help">${s.icon}</span>`;
     const b1  = document.getElementById('sync-status-badge');
     const b2  = document.getElementById('sync-status-badge-config');
     if (b1) b1.innerHTML = html;
@@ -141,11 +142,18 @@
       // Red de seguridad: si este cambio deja vacía una lista que tenía datos, se guarda la versión anterior para poder recuperarla (Configuración → Recuperar datos borrados)
       try {
         const antes = window.DB[key];
-        if (Array.isArray(antes) && antes.length > 0 && Array.isArray(parsed) && parsed.length === 0 && window.idbSet) {
+        if (Array.isArray(antes) && antes.length > 0 && Array.isArray(parsed) && (parsed.length === 0 || (antes.length >= 10 && parsed.length < antes.length * 0.5)) && window.idbSet) {
           window.idbSet('rf_undo_' + (window.ESTAB_ID_ACTIVO || '') + '_' + key, JSON.stringify({ ts: Date.now(), data: antes }));
-          setTimeout(() => { try { window.rfVerificarDatosPerdidos && window.rfVerificarDatosPerdidos('vaciado-remoto'); } catch(e) {} }, 1500);
+          if (parsed.length === 0) setTimeout(() => { try { window.rfVerificarDatosPerdidos && window.rfVerificarDatosPerdidos('vaciado-remoto'); } catch(e) {} }, 1500);
         }
       } catch(e) {}
+      // Registros NUEVOS de este dispositivo (creados después de la última escritura de la nube) que la versión remota todavía no tiene:
+      // se conservan y se suben. Un registro creado después de esa escritura no puede haber sido borrado por otro dispositivo.
+      let _rescatados = 0;
+      if (Array.isArray(parsed) && Array.isArray(window.DB[key])) {
+        const ts = payload.updatedAt || 0, ids = new Set(parsed.map(x => x && x.id));
+        window.DB[key].forEach(x => { if (x && typeof x.id === 'number' && x.id > ts && !ids.has(x.id)) { parsed.push(x); ids.add(x.id); _rescatados++; } });
+      }
       if (key === 'settings') {
         // Preservar el estado de suscripción local: el payload remoto de 'settings'
         // ya no lo incluye (ver pushSyncFirebase). La fuente de verdad de subscribed/
@@ -171,7 +179,12 @@
         window.DB[key] = parsed;
       }
       _ultimoTsPorColeccion[key] = payload.updatedAt || Date.now();
-      _ultimoJSONPorColeccion[key] = payload.data; // evita reenviarlo de vuelta
+      _ultimoJSONPorColeccion[key] = payload.data; // evita reenviarlo de vuelta (si se rescataron registros, la lista local difiere y se sube sola)
+      if (_rescatados) {
+        setTimeout(() => { try { window.pushSyncFirebase(true); } catch(e) {} }, 4000);
+        if (window.toast) window.toast(`🛟 Se conservaron ${_rescatados} registros nuevos de "${key}" que todavía no estaban en la nube`, 'ok');
+        console.warn(`🛟 ${_rescatados} registros nuevos de "${key}" rescatados de la pisada por la nube`);
+      }
       window._ultimoSyncTs = Math.max(window._ultimoSyncTs, payload.updatedAt || 0);
       programarRenderTrasSync();
     } catch(e) {
@@ -239,11 +252,27 @@
         }
       } catch(e) { return; }
       if (json === undefined || json === _ultimoJSONPorColeccion[key]) return; // sin cambios → no se envía
+      if (_enVuelo[key] === json) return; // ya se está enviando
+      if (_reintentoTs[key] && ahora < _reintentoTs[key] && !forzar) return; // tras un error se espera antes de reintentar
       huboCambios = true;
-      _ultimoJSONPorColeccion[key] = json;
+      _enVuelo[key] = json;
+      // Solo se da por enviado cuando Firebase lo CONFIRMA. Antes se marcaba como enviado de entrada: si fallaba, no se reintentaba
+      // y al recargar la versión vieja de la nube pisaba el cambio.
       rtdb.ref(`establecimientos/${estabId}/${colNodo(key)}/${key}`).set({
         data: json, updatedAt: ahora, deviceId: window._rfDeviceId
-      }).catch(e => { console.warn('RTDB push error ('+key+'):', e); setSyncStatus('error'); });
+      }).then(() => {
+        if (_enVuelo[key] === json) delete _enVuelo[key];
+        _ultimoJSONPorColeccion[key] = json; delete _reintentoTs[key];
+        if (!Object.keys(_reintentoTs).length) setSyncStatus('ok');
+      }).catch(e => {
+        if (_enVuelo[key] === json) delete _enVuelo[key];
+        _reintentoTs[key] = Date.now() + 30000;
+        const motivo = (e && (e.code || e.message)) || 'error';
+        window._rfUltimoErrorSync = { key, motivo, ts: Date.now() };
+        console.warn('RTDB push error ('+key+'):', e);
+        setSyncStatus('error', 'No se pudo guardar "' + key + '" en la nube (' + motivo + '). Se reintenta solo');
+        if (Date.now() - _avisoErrorTs > 120000) { _avisoErrorTs = Date.now(); if (window.toast) window.toast('⚠️ No se pudo guardar en la nube (' + key + '). Tus datos siguen en este dispositivo y se reintenta solo.', 'err'); }
+      });
     });
 
     // Blob completo de respaldo/compatibilidad (para dispositivos con una versión vieja de la app
@@ -256,7 +285,7 @@
       }).catch(e => console.warn('RTDB legacy push error:', e));
     }
 
-    if (huboCambios || forzar) setSyncStatus('ok');
+    if (forzar && !huboCambios && !Object.keys(_reintentoTs).length) setSyncStatus('ok');
   };
 
   // ── Migrar establecimientos viejos (blob único) al modelo por colecciones ─
@@ -6108,7 +6137,7 @@ async function renderRecuperarBorrados(){
     }
   }catch(e){}
   box.innerHTML = items.length
-    ? items.map(i => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap"><div style="font-size:14px"><b>${esc(i.key)}</b>: ${i.n} registros<br><span style="font-size:12px;color:var(--text3)">Se vació el ${esc(new Date(i.ts).toLocaleString('es-AR'))}</span></div><button class="btn-primary" style="padding:4px 12px;font-size:13px" data-undo="${esc(i.key)}">Restaurar</button></div>`).join('')
+    ? items.map(i => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap"><div style="font-size:14px"><b>${esc(i.key)}</b>: ${i.n} registros<br><span style="font-size:12px;color:var(--text3)">Copia guardada el ${esc(new Date(i.ts).toLocaleString('es-AR'))}</span></div><button class="btn-primary" style="padding:4px 12px;font-size:13px" data-undo="${esc(i.key)}">Restaurar</button></div>`).join('')
     : '<span style="color:var(--text3)">No hay datos para recuperar en este dispositivo.</span>';
   box.querySelectorAll('[data-undo]').forEach(b => b.onclick = () => rfRestaurarBorrado(b.getAttribute('data-undo')));
 }
