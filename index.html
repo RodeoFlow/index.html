@@ -27,6 +27,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Firebase Compat (funciona sin bundler) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
@@ -51,6 +52,20 @@
   };
 
   firebase.initializeApp(firebaseConfig);
+
+  // ── App Check (reCAPTCHA v3): demuestra que las solicitudes salen de ESTA app y no de scripts ajenos.
+  //    Es invisible para el usuario. Mientras la clave esté vacía, queda desactivado (no cambia nada).
+  //    Se activa antes de usar cualquier servicio de Firebase. Clave de sitio = la PÚBLICA de reCAPTCHA (nunca la secreta).
+  const RF_APPCHECK_SITE_KEY = '6LcWxhAuAAAAAC-ywDlTL8U0AM2SbJZ_EHMxbz2r';
+  const RF_APPCHECK_PROVEEDOR = 'enterprise'; // 'enterprise' = reCAPTCHA Enterprise (clave creada en Google Cloud, sin clave secreta) · 'v3' = reCAPTCHA v3 clásico
+  try {
+    if (RF_APPCHECK_SITE_KEY && firebase.appCheck) {
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // pruebas en la PC
+      const _proveedorAC = RF_APPCHECK_PROVEEDOR === 'v3' ? RF_APPCHECK_SITE_KEY : new firebase.appCheck.ReCaptchaEnterpriseProvider(RF_APPCHECK_SITE_KEY);
+      firebase.appCheck().activate(_proveedorAC, true);
+      console.log('🛡️ App Check activado');
+    } else { console.log('App Check: sin configurar'); }
+  } catch(e) { console.warn('App Check no se pudo activar:', e); }
   const rtdb = firebase.database();
 
   // ── Auth anónima: requerida por las reglas (auth != null) para bloquear
