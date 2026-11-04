@@ -143,6 +143,7 @@
         const antes = window.DB[key];
         if (Array.isArray(antes) && antes.length > 0 && Array.isArray(parsed) && parsed.length === 0 && window.idbSet) {
           window.idbSet('rf_undo_' + (window.ESTAB_ID_ACTIVO || '') + '_' + key, JSON.stringify({ ts: Date.now(), data: antes }));
+          setTimeout(() => { try { window.rfVerificarDatosPerdidos && window.rfVerificarDatosPerdidos('vaciado-remoto'); } catch(e) {} }, 1500);
         }
       } catch(e) {}
       if (key === 'settings') {
@@ -457,7 +458,7 @@
         console.log('🔥 Firebase RTDB Sync (por colecciones) listo. Device:', window._rfDeviceId);
         // Pequeña espera para que terminen de llegar los child_added iniciales antes de
         // considerar "lista" la carga (y recién ahí avisar sobre cambios de otros dispositivos)
-        setTimeout(() => { _cargaInicialLista = true; _pushHabilitado = true; resolve(); }, 1200);
+        setTimeout(() => { _cargaInicialLista = true; _pushHabilitado = true; window._rfSyncCompleta = true; resolve(); setTimeout(() => { try { window.rfVerificarDatosPerdidos && window.rfVerificarDatosPerdidos('sync'); } catch(e) {} }, 2500); }, 1200);
       }).catch(e => { console.warn('RTDB init error:', e); setSyncStatus('offline'); resolve(); });
     });
   };
@@ -9643,6 +9644,8 @@ function confirmReset(){
   if(confirm('¿Estás seguro? Se borrarán TODOS los datos permanentemente.')){
     // Detener autosave para evitar que sobreescriba antes de persistir
     if(window._autoSaveInterval) clearInterval(window._autoSaveInterval);
+    try { localStorage.setItem('rf_reset_manual_' + (window.ESTAB_ID_ACTIVO || ''), String(Date.now())); } catch(e) {} // reseteo a propósito: no se auto-restaura
+    guardarBackupEnIDB('antes-de-resetear'); // backup de seguridad con los datos actuales (se arma antes de borrar)
 
     const phones  = DB.settings.phones;
     const ts      = DB.settings.trialStart;
@@ -15561,6 +15564,8 @@ window.addEventListener('load', async ()=>{
   if(ok) {
     healthCheckDB(); // reparar inconsistencias antes de renderizar
     init();
+    // Sin conexión no se espera a la sincronización: igual se verifica que los datos locales no hayan desaparecido
+    setTimeout(() => { if(!window._rfSyncCompleta && navigator.onLine === false) rfVerificarDatosPerdidos('sin-conexion'); }, 25000);
   }
 });
 
@@ -16235,8 +16240,11 @@ function compartirCodigoEstabWA() {
 
 const RF_BACKUP_KEY      = 'rf_backups_meta';   // IDB: metadatos de los últimos 5 backups
 const RF_BACKUP_DATA_PFX = 'rf_backup_data_';   // IDB: contenido de cada backup
-const MAX_AUTO_BACKUPS   = 5;
+const MAX_AUTO_BACKUPS   = 7;   // últimos backups que se conservan (además del más completo de cada establecimiento)
 const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // cada 24 horas
+// Cantidad de registros de una base: sirve para comparar backups y detectar si los datos desaparecieron
+const RF_LISTAS_VOLUMEN = ['animales','potreros','pesadas','vacunas','tratamientos','historial','insumos','muertes','nutricion','precipitaciones','traslados','tactos','destetes'];
+function rfVolumenDB(db){ let n = 0; RF_LISTAS_VOLUMEN.forEach(k => { if(db && Array.isArray(db[k])) n += db[k].length; }); return n; }
 
 // ── Generar nombre de archivo ──────────────────
 function backupFilename() {
@@ -16269,22 +16277,36 @@ function exportarBackupJSON() {
 async function guardarBackupEnIDB(tipo = 'auto') {
   try {
     const ahora    = Date.now();
-    const payload  = JSON.stringify({ version:'rf_backup_v1', fecha: new Date(ahora).toISOString(), data: DB });
+    const estabId  = window.ESTAB_ID_ACTIVO || '';
+    const vol      = rfVolumenDB(DB), animales = Array.isArray(DB.animales) ? DB.animales.length : 0;
+    const nombre   = String((DB.settings && DB.settings.establecimiento) || '').trim().toLowerCase();
+    const payload  = JSON.stringify({ version:'rf_backup_v1', fecha: new Date(ahora).toISOString(), estabId, establecimiento: (DB.settings && DB.settings.establecimiento) || '', data: DB });
     const metaRaw  = await idbGet(RF_BACKUP_KEY);
     const metas    = metaRaw ? JSON.parse(metaRaw) : [];
+    for (const m of metas) await rfCompletarMeta(m);
+
+    // Un backup AUTOMÁTICO no reemplaza a uno bueno si los datos de hoy están casi vacíos (así un vaciado no desplaza a las copias sanas)
+    if (tipo === 'auto') {
+      const mejor = metas.filter(m => m.estabId === estabId || (!m.estabId && m.nombre === nombre)).reduce((a, m) => Math.max(a, m.vol || 0), 0);
+      if (mejor >= RF_RESTAURAR_MIN_VOL && vol < mejor * 0.2) { console.warn('Backup automático omitido: los datos actuales están casi vacíos'); return; }
+    }
 
     // Guardar el dato en su propia key
     const id = 'rf_backup_data_' + ahora;
     await idbSet(id, payload);
 
     // Agregar meta
-    metas.unshift({ id, fecha: ahora, tipo, size: payload.length });
+    metas.unshift({ id, fecha: ahora, tipo, size: payload.length, estabId, vol, animales, nombre });
 
-    // Mantener solo los últimos MAX_AUTO_BACKUPS
-    const excedentes = metas.splice(MAX_AUTO_BACKUPS);
-    for (const ex of excedentes) {
+    // Se conservan los últimos MAX_AUTO_BACKUPS y, además, el backup más completo de cada establecimiento (nunca se descarta por antigüedad)
+    const mejorPorEstab = {};
+    metas.forEach(m => { const k = m.estabId || m.nombre || ''; if (!mejorPorEstab[k] || (m.vol || 0) > (mejorPorEstab[k].vol || 0)) mejorPorEstab[k] = m; });
+    const protegidos = new Set(Object.values(mejorPorEstab).filter(m => (m.vol || 0) >= RF_RESTAURAR_MIN_VOL).map(m => m.id));
+    const conservar = metas.filter((m, i) => i < MAX_AUTO_BACKUPS || protegidos.has(m.id));
+    for (const ex of metas.filter(m => !conservar.includes(m))) {
       idbSet(ex.id, null).catch(()=>{});
     }
+    metas.length = 0; conservar.forEach(m => metas.push(m));
 
     await idbSet(RF_BACKUP_KEY, JSON.stringify(metas));
     renderBackupHistorial();
@@ -16293,6 +16315,79 @@ async function guardarBackupEnIDB(tipo = 'auto') {
     console.warn('Error guardando backup IDB:', e);
   }
 }
+
+// ═══ AUTO-RESTAURACIÓN: si los datos desaparecen, la app los recupera sola (y los backups siguen guardándose) ═══
+const RF_RESTAURAR_MIN_VOL = 20; // solo se restaura si el backup tiene al menos esta cantidad de registros
+async function rfCompletarMeta(m){ // completa los datos de backups viejos (sin volumen ni establecimiento)
+  if(m.vol !== undefined && m.nombre !== undefined) return m;
+  try{
+    const p = JSON.parse(await idbGet(m.id)), d = p.data || p;
+    m.vol = rfVolumenDB(d); m.animales = Array.isArray(d.animales) ? d.animales.length : 0;
+    m.nombre = String(p.establecimiento || (d.settings && d.settings.establecimiento) || '').trim().toLowerCase(); m.estabId = m.estabId || p.estabId || '';
+  }catch(e){ m.vol = m.vol || 0; m.animales = m.animales || 0; m.nombre = m.nombre || ''; }
+  return m;
+}
+// A) Listas que acaban de vaciarse desde otro dispositivo: se recuperan de la copia exacta que guardó la sincronización
+async function rfRestaurarListasVaciadas(estab){
+  const pref = 'rf_undo_' + estab + '_', hechas = [];
+  let claves = []; try{ claves = await idbKeysConPrefijo(pref); }catch(e){ return hechas; }
+  for(const k of claves){
+    try{
+      const key = k.slice(pref.length), o = JSON.parse(await idbGet(k));
+      if(!o || !Array.isArray(o.data) || o.data.length < 5 || Date.now() - o.ts > 20 * 60000) continue;
+      if(Array.isArray(DB[key]) && DB[key].length === 0){ DB[key] = o.data; hechas.push(key); await idbSet(k, null); }
+    }catch(e){}
+  }
+  return hechas;
+}
+async function rfVerificarDatosPerdidos(motivo){
+  if(window._rfRestaurando) return;
+  const estab = window.ESTAB_ID_ACTIVO;
+  if(!estab || String(estab).startsWith('demo-') || !window.DB || !Array.isArray(DB.animales)) return;
+  window._rfRestaurando = true;
+  try{
+    // Si se reseteó a propósito en las últimas 24 h, no se toca nada
+    if(Number(localStorage.getItem('rf_reset_manual_' + estab) || 0) > Date.now() - 864e5) return;
+    // Freno: máximo 3 restauraciones por día y una cada 30 minutos (evita bucles si otro dispositivo sigue vaciando)
+    const clave = 'rf_autorest_' + estab; let hist = [];
+    try{ hist = JSON.parse(localStorage.getItem(clave) || '[]').filter(t => t > Date.now() - 864e5); }catch(e){}
+    const bloqueado = hist.length >= 3 || (hist.length && Date.now() - hist[hist.length - 1] < 30 * 60000);
+    // A) listas recién vaciadas
+    let listas = [];
+    if(!bloqueado) listas = await rfRestaurarListasVaciadas(estab);
+    // B) si igual queda (casi) vacío, el backup más reciente y completo del mismo establecimiento
+    const metas = JSON.parse(await idbGet(RF_BACKUP_KEY) || '[]'), nombre = String((DB.settings && DB.settings.establecimiento) || '').trim().toLowerCase();
+    for(const m of metas) await rfCompletarMeta(m);
+    const cands = metas.filter(m => m.tipo !== 'antes-de-restaurar' && m.vol >= RF_RESTAURAR_MIN_VOL && (m.estabId ? m.estabId === estab : (m.nombre && m.nombre === nombre)));
+    let desdeBackup = null;
+    if(cands.length){
+      const mejor = Math.max(...cands.map(m => m.vol));
+      const perdido = rfVolumenDB(DB) <= mejor * 0.1 || (DB.animales.length === 0 && cands.some(m => m.animales >= 10));
+      if(perdido){
+        if(bloqueado){ if(!window._rfAvisoBloqueo){ window._rfAvisoBloqueo = true; toast('⚠️ Tus datos volvieron a vaciarse. No los restauré de nuevo para no entrar en un ciclo: revisá Configuración → Backups', 'err'); } return; }
+        desdeBackup = cands.filter(m => m.vol >= mejor * 0.5).sort((a, b) => b.fecha - a.fecha)[0];
+      }
+    }
+    if(desdeBackup){
+      await guardarBackupEnIDB('antes-de-restaurar'); // el estado vacío queda guardado por si el vaciado era a propósito
+      const p = JSON.parse(await idbGet(desdeBackup.id)), data = p.data || p, s = DB.settings || {};
+      data.settings = data.settings || {};
+      ['subscribed', 'activationDate', 'activationDays', 'activationCode', 'trialStart', 'trialEpoch'].forEach(k => { if(s[k] !== undefined) data.settings[k] = s[k]; }); // la suscripción manda el servidor
+      DB = data; if(!DB.encierres) DB.encierres = []; if(!DB.nacimientos) DB.nacimientos = [];
+    }
+    if(listas.length || desdeBackup){
+      hist.push(Date.now()); localStorage.setItem(clave, JSON.stringify(hist));
+      saveToStorage(); if(window.pushSyncFirebase) window.pushSyncFirebase(true); init(true);
+      toast(desdeBackup
+        ? `🛟 Tus datos habían desaparecido: se restauraron solos desde el backup del ${new Date(desdeBackup.fecha).toLocaleString('es-AR')}`
+        : `🛟 Otro dispositivo vació ${listas.join(', ')}: se recuperaron solos`, 'ok');
+      console.warn('🛟 Auto-restauración (' + (motivo || '') + '):', desdeBackup ? 'backup ' + desdeBackup.id : 'listas ' + listas.join(','));
+    }
+  }catch(e){ console.warn('Auto-restauración falló:', e); }
+  finally{ window._rfRestaurando = false; }
+}
+window.rfVerificarDatosPerdidos = rfVerificarDatosPerdidos;
+// ═══ FIN AUTO-RESTAURACIÓN ═══
 
 // ── Restaurar desde archivo JSON ──────────────
 function rfLimpiarObjeto(o, prof = 0){
@@ -16371,14 +16466,14 @@ async function renderBackupHistorial() {
     }
     const rows = metas.map(m => {
       const fecha = new Date(m.fecha).toLocaleString('es-AR');
-      const tipo  = m.tipo === 'manual' ? '👤 Manual' : '🤖 Auto';
+      const tipo  = m.tipo === 'manual' ? '👤 Manual' : m.tipo === 'auto' ? '🤖 Auto' : '🛡️ Seguridad';
       const kb    = (m.size / 1024).toFixed(1);
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-        <div><span style="color:var(--text3)">${tipo}</span> · ${fecha} · <span style="color:var(--text3)">${kb} KB</span></div>
+        <div><span style="color:var(--text3)">${tipo}</span> · ${fecha} · <span style="color:var(--text3)">${m.animales !== undefined ? '🐄 ' + m.animales + ' · ' : ''}${kb} KB</span></div>
         <button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="restaurarBackupIDB('${m.id}')">↩ Restaurar</button>
       </div>`;
     }).join('');
-    el.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px">📋 Últimos backups (${metas.length}/${MAX_AUTO_BACKUPS})</div>${rows}`;
+    el.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px">📋 Backups guardados (${metas.length})</div>${rows}`;
   } catch(e) {
     el.innerHTML = '<p style="font-size:13px;color:var(--text3)">Error leyendo historial.</p>';
   }
