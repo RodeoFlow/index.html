@@ -1890,8 +1890,8 @@
 
         <!-- 3) Recategorización sugerida -->
         <div class="card" style="margin-bottom:16px;border-left:3px solid var(--blue)">
-          <div class="card-title">🔄 Recategorización sugerida</div>
-          <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Animales que por edad y peso ya deberían pasar a la categoría siguiente.</div>
+          <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>🔄 Recategorización sugerida</span><button class="btn-primary" id="recat-aplicar-peso" style="display:none;padding:4px 12px;font-size:13px" onclick="rfAplicarRecatPeso()"></button></div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Animales que por edad y peso ya deberían pasar a la categoría siguiente. Destete y Recría se sugieren por rango de peso (se configuran en Configuración → ⚖️ Rangos de peso).</div>
           <div class="tbl-wrap"><table><thead><tr><th>RP</th><th>Categoría actual</th><th>Edad</th><th>Peso</th><th>Sugerida</th><th></th></tr></thead>
           <tbody id="recat-sugerida-tbody"></tbody></table></div>
         </div>
@@ -2949,6 +2949,17 @@
         <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Si un cambio de otro dispositivo vacía una lista (animales, tratamientos, etc.), este dispositivo guarda la versión anterior. Acá la podés restaurar. La copia queda solo en este dispositivo.</div>
         <div id="recuperar-borrados"></div>
       </div>
+      <div class="card" style="margin-bottom:16px;border-left:3px solid var(--amber)">
+        <div class="card-title">⚖️ Rangos de peso: Destete y Recría</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Define qué categoría corresponde según el peso. <b>Destete</b>: hasta el peso indicado. <b>Recría</b>: desde ahí hasta el peso de Recría; a partir de ese peso pasa a Novillito (machos) o Vaquillona (hembras). Se usa al importar animales sin categoría y en la recategorización sugerida.</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px">
+          <div class="form-group" style="margin:0"><label class="form-label">♂ Destete hasta (kg)</label><input type="number" id="rp-destete-m" class="form-control" min="1"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">♂ Recría hasta (kg)</label><input type="number" id="rp-recria-m" class="form-control" min="1"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">♀ Destete hasta (kg)</label><input type="number" id="rp-destete-h" class="form-control" min="1"></div>
+          <div class="form-group" style="margin:0"><label class="form-label">♀ Recría hasta (kg)</label><input type="number" id="rp-recria-h" class="form-control" min="1"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-primary" onclick="guardarRangosPeso()">💾 Guardar rangos</button><button class="btn-secondary" onclick="restaurarRangosPeso()">↩ Valores por defecto</button></div>
+      </div>
       <div class="grid-2">
         <div class="card">
           <div class="card-title">Establecimiento</div>
@@ -3294,7 +3305,8 @@
           <div class="form-group"><label class="form-label">Si no se reconoce la categoría (hembras)</label>
             <select id="imp-cat-h" class="form-control" onchange="impPreview()"><option>Vaca</option><option>Vaquillona</option><option>Ternera H</option><option>Destete Hembra</option><option>Recría</option><option>Invernada Hembras</option><option>Invernada Vientres</option></select></div>
         </div>
-        <div class="form-group" style="margin-top:6px"><label class="form-label">Potrero para los animales que no traen potrero en el archivo</label>
+        <div class="form-group" style="margin-top:6px"><label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="imp-cat-peso" checked onchange="impPreview()" style="margin-top:3px"><span>Si el archivo no trae categoría, asignar <b>Destete o Recría según el peso</b> (los pesos se configuran en Configuración)</span></label></div>
+<div class="form-group" style="margin-top:6px"><label class="form-label">Potrero para los animales que no traen potrero en el archivo</label>
           <select id="imp-potrero" class="form-control" onchange="impPreview()"><option value="">Sin asignar</option></select></div>
         <div style="font-weight:700;font-size:13px;margin:10px 0 6px">2. Resultado</div>
         <div id="imp-resumen"></div>
@@ -5185,7 +5197,7 @@ function showPage(id) {
   if(id === 'administracion') { renderVencimientos(); prepararResumenWA(); renderSenasaResumen(); }
   if(id === 'rentabilidad') { renderRentabilidadPotreroSelect(); renderRentabilidad(); }
   if(id === 'ia') iaRender();
-  if(id === 'configuracion') { renderDispositivos(); renderClaveRecuperacion(); renderRecuperarBorrados(); renderConfigPhones(); updateTrialStatus(); renderBackupHistorial(); actualizarEstadoBackup(); actualizarPanelSync(); renderConfigUbicacion(); renderNotifEstado(); renderPrefVoz(); }
+  if(id === 'configuracion') { renderDispositivos(); renderClaveRecuperacion(); renderRecuperarBorrados(); renderRangosPeso(); renderConfigPhones(); updateTrialStatus(); renderBackupHistorial(); actualizarEstadoBackup(); actualizarPanelSync(); renderConfigUbicacion(); renderNotifEstado(); renderPrefVoz(); }
   // Close sidebar on mobile
   document.getElementById('sidebar').classList.remove('mobile-open');
 }
@@ -8528,10 +8540,11 @@ function impRaza(t){
 function impProcesar(){
   const m=_imp.map, g=(r,k)=>m[k]===undefined?'':r[m[k]];
   const catM=(document.getElementById('imp-cat-m')||{}).value||'Novillo', catH=(document.getElementById('imp-cat-h')||{}).value||'Vaca';
+  const usarPeso=!!(document.getElementById('imp-cat-peso')||{}).checked;
   const rpEx=new Set((DB.animales||[]).map(a=>String(a.rp).trim()));
   const rfEx=new Set((DB.animales||[]).map(a=>String(a.rfid||'').trim()).filter(Boolean));
   const rpVis=new Set(), rfVis=new Set();
-  const res={ok:[],sinRp:0,rpDeRfid:0,dupDB:0,dupArch:0,catDef:0,sexoSup:0,potNo:new Set(),potNoN:0,rfidDup:0,fechaMala:0};
+  const res={ok:[],sinRp:0,rpDeRfid:0,dupDB:0,dupArch:0,catDef:0,catPeso:0,sexoSup:0,potNo:new Set(),potNoN:0,rfidDup:0,fechaMala:0};
   _imp.data.forEach(r=>{
     let rp=rpLimpio(impTxt(g(r,'rp')));
     if(!rp){ const eid=rpLimpio(impTxt(g(r,'rfid'))); if(eid){ rp=eid; res.rpDeRfid++; } } // sin RP visual: se usa el EID como RP
@@ -8544,7 +8557,12 @@ function impProcesar(){
     let cat=impCategoria(catOrig), sexo='';
     if(sexoTxt){ if(sexoTxt[0]==='m') sexo='Macho'; else if(sexoTxt[0]==='h'||sexoTxt[0]==='f') sexo='Hembra'; }
     if(!sexo){ if(cat) sexo=IMP_CAT_HEMBRA.includes(cat)?'Hembra':'Macho'; else { sexo='Macho'; res.sexoSup++; } }
-    if(!cat){ cat=sexo==='Hembra'?catH:catM; res.catDef++; if(catOrig) notas.push('Categoría original: '+catOrig); }
+    const peso=impPeso(g(r,'peso'));
+  if(!cat){
+    const cp=usarPeso?rfCatPorPeso(sexo,peso):null; // Destete / Recría según el peso
+    if(cp){ cat=cp; res.catPeso++; } else { cat=sexo==='Hembra'?catH:catM; res.catDef++; }
+    if(catOrig) notas.push('Categoría original: '+catOrig);
+  }
     let rfid=impTxt(g(r,'rfid'));
     if(rfid&&(rfEx.has(rfid)||rfVis.has(rfid))){ notas.push('RFID repetido en origen: '+rfid); rfid=''; res.rfidDup++; }
     if(rfid) rfVis.add(rfid);
@@ -8557,7 +8575,7 @@ function impProcesar(){
     }
     if(!potrero) potrero=document.getElementById('imp-potrero')?.value||''; // potrero elegido para todo el lote
     const obs=[impTxt(g(r,'obs')),...notas].filter(Boolean).join(' · ');
-    const peso=impPeso(g(r,'peso')), fpeso=impFecha(g(r,'fpeso'))||'';
+    const fpeso=impFecha(g(r,'fpeso'))||'';
     res.ok.push({id:0,rp,nombre:impTxt(g(r,'nombre')),rfid,categoria:cat,sexo,raza:impRaza(impTxt(g(r,'raza'))),color:impTxt(g(r,'color')),fnac,peso,potrero,procedencia:impTxt(g(r,'proc'))||'Importado',prenada:'No',obs,activo:true,pesoHistorico:(peso>0&&fpeso)?[{fecha:fpeso,kg:peso}]:[],foto:''});
   });
   return res;
@@ -8571,6 +8589,7 @@ function impPreview(){
   if(res.rpDeRfid) h+=li('ℹ️',`${res.rpDeRfid} sin RP visual: se usa el EID como RP`);
   if(res.dupDB) h+=li('⚠️',`${res.dupDB} ya existen en tu rodeo (se omiten)`);
   if(res.dupArch) h+=li('⚠️',`${res.dupArch} RP repetidos dentro del archivo (se omiten)`);
+  if(res.catPeso) h+=li('⚖️',`${res.catPeso} con categoría asignada según el peso (Destete / Recría)`);
   if(res.catDef) h+=li('ℹ️',`${res.catDef} sin categoría reconocida: se cargan con la categoría por defecto y se anota la original en Observaciones`);
   if(res.sexoSup) h+=li('ℹ️',`${res.sexoSup} sin sexo ni categoría: se cargan como machos`);
   if(res.potNoN) h+=li('ℹ️',`${res.potNoN} con potrero que no existe en tu campo (${[...res.potNo].slice(0,4).map(esc).join(', ')}${res.potNo.size>4?'…':''}): se cargan sin potrero`);
@@ -11080,11 +11099,74 @@ const REGLAS_RECATEGORIZACION = [
   {desde:'Vaquillona',hacia:'Vaca',       mesesMin:30, pesoMin:380}
 ];
 
+// ═══ RANGOS DE PESO: Destete y Recría ═══
+// Destete: hasta X kg · Recría: hasta Y kg (desde Y pasa a Novillito / Vaquillona). Por defecto, los mismos pesos que usa la recategorización por edad.
+const RF_RANGOS_PESO_DEF = { desteteM: 180, desteteH: 170, recriaM: 300, recriaH: 270 };
+function rfRangosPeso(){
+  const r = (window.DB && DB.settings && DB.settings.rangosPeso) || {};
+  const n = (v, d) => { v = parseFloat(v); return v > 0 ? v : d; };
+  return { desteteM: n(r.desteteM, RF_RANGOS_PESO_DEF.desteteM), desteteH: n(r.desteteH, RF_RANGOS_PESO_DEF.desteteH), recriaM: n(r.recriaM, RF_RANGOS_PESO_DEF.recriaM), recriaH: n(r.recriaH, RF_RANGOS_PESO_DEF.recriaH) };
+}
+function rfSexoDe(a){
+  if(a && (a.sexo === 'Hembra' || a.sexo === 'Macho')) return a.sexo;
+  return ['Vaca', 'Vaquillona', 'Ternera H', 'Destete Hembra'].includes(a && a.categoria) ? 'Hembra' : 'Macho';
+}
+// Categoría que corresponde a un peso (solo Destete o Recría; si el peso es mayor devuelve null)
+function rfCatPorPeso(sexo, peso){
+  const p = parseFloat(peso) || 0; if(p <= 0) return null;
+  const r = rfRangosPeso(), h = sexo === 'Hembra';
+  if(p <= (h ? r.desteteH : r.desteteM)) return h ? 'Destete Hembra' : 'Destete Macho';
+  if(p < (h ? r.recriaH : r.recriaM)) return 'Recría';
+  return null;
+}
+// A qué categoría debería pasar un animal que hoy está en Destete o Recría, según su peso (null si no corresponde cambiar)
+function rfSugerenciaPorPeso(a){
+  if(!a || !['Destete Macho', 'Destete Hembra', 'Recría'].includes(a.categoria)) return null;
+  const peso = parseFloat(a.peso) || 0; if(peso <= 0) return null;
+  const h = rfSexoDe(a) === 'Hembra', r = rfRangosPeso();
+  let hacia;
+  if(peso >= (h ? r.recriaH : r.recriaM)) hacia = h ? 'Vaquillona' : 'Novillito';
+  else if(peso > (h ? r.desteteH : r.desteteM)) hacia = 'Recría';
+  else return null;
+  return hacia === a.categoria ? null : hacia;
+}
+function rfAplicarRecatPeso(){
+  const lista = (DB.animales || []).filter(a => a.activo).map(a => ({ a, hacia: rfSugerenciaPorPeso(a) })).filter(x => x.hacia);
+  if(!lista.length){ toast('No hay sugerencias por rango de peso', 'ok'); return; }
+  const resumen = lista.reduce((o, x) => { const k = x.a.categoria + ' → ' + x.hacia; o[k] = (o[k] || 0) + 1; return o; }, {});
+  if(!confirm('¿Aplicar ' + lista.length + ' recategorizaciones por rango de peso?\n\n' + Object.entries(resumen).map(([k, n]) => '• ' + k + ': ' + n).join('\n'))) return;
+  if(!DB.recategorizaciones) DB.recategorizaciones = [];
+  const hoy = new Date().toISOString().split('T')[0]; let id = Date.now();
+  lista.forEach(({ a, hacia }) => { DB.recategorizaciones.push({ id: id++, rp: a.rp, fecha: hoy, catAnt: a.categoria, catNueva: hacia, motivo: 'Rango de peso', peso: a.peso, obs: '' }); a.categoria = hacia; });
+  addHistorial('Animal', 'Recategorización por rango de peso: ' + lista.length + ' animales', '', '');
+  saveToStorage(); renderRecats(); renderRecatSugerida(); renderAnimales();
+  toast('Recategorizados por peso: ' + lista.length + ' animales ✅', 'ok');
+}
+function renderRangosPeso(){
+  const r = rfRangosPeso(), set = (id, v) => { const e = document.getElementById(id); if(e) e.value = v; };
+  set('rp-destete-m', r.desteteM); set('rp-destete-h', r.desteteH); set('rp-recria-m', r.recriaM); set('rp-recria-h', r.recriaH);
+}
+function guardarRangosPeso(){
+  const v = id => parseFloat((document.getElementById(id) || {}).value);
+  const n = { desteteM: v('rp-destete-m'), desteteH: v('rp-destete-h'), recriaM: v('rp-recria-m'), recriaH: v('rp-recria-h') };
+  if(Object.values(n).some(x => !(x > 0 && x < 1500))){ toast('Completá los 4 pesos (en kg)', 'err'); return; }
+  if(n.recriaM <= n.desteteM || n.recriaH <= n.desteteH){ toast('El peso de Recría tiene que ser mayor que el de Destete', 'err'); return; }
+  DB.settings.rangosPeso = n; saveToStorage(); renderRecatSugerida();
+  toast('Rangos de peso guardados ✅', 'ok');
+}
+function restaurarRangosPeso(){
+  if(DB.settings) delete DB.settings.rangosPeso;
+  saveToStorage(); renderRangosPeso(); renderRecatSugerida(); toast('Rangos de peso restablecidos', 'ok');
+}
+// ═══ FIN RANGOS DE PESO ═══
+
 function renderRecatSugerida(){
   const tbody = document.getElementById('recat-sugerida-tbody');
   if(!tbody) return;
   const filas = [];
   DB.animales.filter(a=>a.activo).forEach(a=>{
+    const haciaPeso = rfSugerenciaPorPeso(a); // Destete / Recría: por rango de peso (no necesita la edad)
+    if(haciaPeso){ filas.push({a, meses:edadMesesDe(a.fnac), peso:parseFloat(a.peso)||0, regla:{hacia:haciaPeso}, porPeso:true}); return; }
     const regla = REGLAS_RECATEGORIZACION.find(r=>r.desde===a.categoria);
     if(!regla) return;
     const meses = edadMesesDe(a.fnac);
@@ -11094,18 +11176,20 @@ function renderRecatSugerida(){
       filas.push({a, meses, peso, regla});
     }
   });
+  const nPeso = filas.filter(f=>f.porPeso).length, btPeso = document.getElementById('recat-aplicar-peso');
+  if(btPeso){ btPeso.style.display = nPeso ? '' : 'none'; btPeso.textContent = `✅ Aplicar las ${nPeso} sugerencias por rango de peso`; }
   if(!filas.length){ tbody.innerHTML = emptyRow(6); return; }
-  tbody.innerHTML = filas.sort((x,y)=>y.meses-x.meses).map(f=>`<tr>
+  tbody.innerHTML = filas.sort((x,y)=>(y.meses||0)-(x.meses||0)).map(f=>`<tr>
     <td class="td-mono">${esc(f.a.rp)}</td>
     <td><span class="badge badge-white">${f.a.categoria}</span></td>
-    <td class="td-mono">${f.meses.toFixed(1)}m</td>
+    <td class="td-mono">${f.meses!==null && f.meses!==undefined ? f.meses.toFixed(1)+'m' : '--'}</td>
     <td class="td-mono">${f.peso} kg</td>
     <td><span class="badge badge-green">${f.regla.hacia}</span></td>
-    <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirRecatDesdeAlerta('${esc(f.a.rp)}','${f.a.categoria}','${f.regla.hacia}',${f.peso})">🔄 Recategorizar</button></td>
+    <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirRecatDesdeAlerta('${esc(f.a.rp)}','${f.a.categoria}','${f.regla.hacia}',${f.peso}${f.porPeso?",'Rango de peso'":''})">🔄 Recategorizar</button></td>
   </tr>`).join('');
 }
 
-function abrirRecatDesdeAlerta(rp, catActual, catNueva, peso){
+function abrirRecatDesdeAlerta(rp, catActual, catNueva, peso, motivo){
   openModal('modal-recat');
   const e=id=>document.getElementById(id);
   if(e('rc-rp')) e('rc-rp').value = rp;
@@ -11113,7 +11197,7 @@ function abrirRecatDesdeAlerta(rp, catActual, catNueva, peso){
   if(e('rc-ant')) e('rc-ant').value = catActual;
   if(e('rc-peso') && peso>0) e('rc-peso').value = peso;
   if(e('rc-fecha')) e('rc-fecha').value = new Date().toISOString().split('T')[0];
-  if(e('rc-motivo')) e('rc-motivo').value = 'Desarrollo (edad y peso alcanzados)';
+  if(e('rc-motivo')) e('rc-motivo').value = motivo || 'Desarrollo (edad y peso alcanzados)';
 }
 
 // 4) Curva de crecimiento real del lote de recría vs. curva objetivo.
