@@ -13726,7 +13726,7 @@ async function iaPreguntar(texto){
   _iaOcupado=false; document.getElementById('ia-enviar').disabled=false; iaPintarChat();
 }
 
-// ─── RESUMEN SEMANAL DE MOVIMIENTOS (lunes a domingo) ───
+// ─── RESUMEN SEMANAL DE MOVIMIENTOS (semana de lunes a domingo; el aviso automático sale los sábados) ───
 let _rsOffset = 0; // 0 = esta semana, -1 = la anterior, etc.
 function _rsFmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function _rsDM(f){ const x=String(f||'').slice(0,10).split('-'); return x.length===3 ? x[2]+'/'+x[1] : '--'; }
@@ -13808,6 +13808,55 @@ function rsCopiar(){
   else prompt('Copiá el resumen:',txt);
 }
 function rsWhatsApp(){ window.open('https://wa.me/?text='+encodeURIComponent(_rsTexto()),'_blank'); }
+
+// ═══ AVISO SEMANAL: el resumen de la semana aparece solo los sábados ═══
+const RF_RESUMEN_DIA = 6;         // día del aviso: 0 = domingo … 6 = sábado
+const RF_RESUMEN_RECUPERO = true; // si no se abrió la app ese día, se muestra el día siguiente (una sola vez por semana)
+function rsAvisoSemanal(forzar){
+  try{
+    const estab = window.ESTAB_ID_ACTIVO || '';
+    if(!estab || String(estab).startsWith('demo-') || !window.DB) return;
+    if(!tienePermisoPagina('movimientos')) return; // solo lo ve quien puede ver Movimientos
+    const app = document.getElementById('app');
+    if(!app || getComputedStyle(app).display === 'none') return; // nada de avisos arriba del ingreso, la espera o el pago
+    if(document.getElementById('rf-modal-resumen')) return;
+    const dia = new Date().getDay();
+    if(!forzar && dia !== RF_RESUMEN_DIA && !(RF_RESUMEN_RECUPERO && dia === (RF_RESUMEN_DIA + 1) % 7)) return;
+    _rsOffset = 0; // siempre la semana actual
+    const d = _rsDatos(), clave = 'rf_resumen_visto_' + estab;
+    if(!forzar){
+      if(localStorage.getItem(clave) === d.r.desde) return; // ya se mostró esta semana
+      localStorage.setItem(clave, d.r.desde);
+      if(!(d.compras.length || d.ventas.length || d.traslados.length || d.muertes.length || d.nacimientos.length || d.destetes.length)) return; // semana sin movimientos: no molesta
+    }
+    const neto = d.entradas - d.salidas, rutas = Object.entries(d.rutas).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const celda = (t, v, s) => `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--text3)">${t}</div><div style="font-size:22px;font-weight:800">${v}</div><div style="font-size:12px;color:var(--text2)">${s}</div></div>`;
+    const m = document.createElement('div'); m.id = 'rf-modal-resumen';
+    m.style.cssText = 'position:fixed;inset:0;z-index:9400;background:rgba(0,0,0,0.75);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto';
+    m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;max-width:460px;width:100%;margin:auto;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.6)">
+      <div style="font-size:18px;font-weight:800;margin-bottom:2px">📅 Resumen de la semana</div>
+      <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Del ${esc(_rsDM(d.r.desde))} al ${esc(_rsDM(d.r.hasta))}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        ${celda('🛒 Compras', fmtN0(d.cabCompra), 'cabezas · $' + fmtN0(d.totCompra))}
+        ${celda('💰 Ventas', fmtN0(d.cabVenta), 'cabezas · $' + fmtN0(d.totVenta))}
+        ${celda('🚛 Traslados', fmtN0(d.movidos), 'animales movidos')}
+        ${celda('🐄 Stock actual', fmtN0(d.stock), (neto >= 0 ? '+' : '') + neto + ' en la semana')}
+      </div>
+      <div style="font-size:14px;color:var(--text2);margin-bottom:10px">🍼 Nacimientos: <b>${d.nacimientos.length}</b> · 🐄 Destetes: <b>${d.destetes.length}</b> · ☠️ Muertes: <b>${d.muertes.length}</b></div>
+      ${rutas.length ? '<div style="font-size:13px;margin-bottom:12px">' + rutas.map(([r, n]) => `<div style="padding:3px 0;border-bottom:1px solid var(--border)">${esc(r)} <b style="float:right">${n}</b></div>`).join('') + '</div>' : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-primary" style="flex:1" id="rf-res-ver">Ver detalle</button>
+        <button class="btn-secondary" style="flex:1" id="rf-res-wa">📲 WhatsApp</button>
+        <button class="btn-secondary" style="flex:1" id="rf-res-cerrar">Cerrar</button>
+      </div></div>`;
+    document.body.appendChild(m);
+    const cerrar = () => { const e = document.getElementById('rf-modal-resumen'); if(e) e.remove(); };
+    document.getElementById('rf-res-cerrar').onclick = cerrar;
+    document.getElementById('rf-res-wa').onclick = () => rsWhatsApp();
+    document.getElementById('rf-res-ver').onclick = () => { cerrar(); showPage('movimientos'); switchTab('movimientos', 'resumen'); renderResumenSemanal(); };
+  }catch(e){ console.warn('Aviso semanal:', e); }
+}
+// ═══ FIN AVISO SEMANAL ═══
 
 function renderCompras(){
   const tbody=document.getElementById('compras-tbody');if(!tbody)return;
@@ -15566,6 +15615,7 @@ window.addEventListener('load', async ()=>{
     init();
     // Sin conexión no se espera a la sincronización: igual se verifica que los datos locales no hayan desaparecido
     setTimeout(() => { if(!window._rfSyncCompleta && navigator.onLine === false) rfVerificarDatosPerdidos('sin-conexion'); }, 25000);
+    setTimeout(() => rsAvisoSemanal(), 7000); // los sábados: resumen de la semana (cuando ya bajaron los datos)
   }
 });
 
