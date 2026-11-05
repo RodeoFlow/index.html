@@ -2089,6 +2089,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
         <div class="tab" onclick="switchTab('sanidad','san-calendario')">📅 Calendario Preventivo</div>
         <div class="tab" onclick="switchTab('sanidad','san-raspaje')">🔬 Raspaje</div>
         <div class="tab" onclick="switchTab('sanidad','san-sangrado')">🩸 Sangrado</div>
+  <div class="tab" onclick="switchTab('sanidad','san-genomica')">🧬 Genómica</div>
       </div>
 
       <!-- Tab: Vacunas -->
@@ -2154,7 +2155,20 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
         </div>
         <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>RP</th><th>Enfermedad buscada</th><th>Lab.</th><th>Resultado</th><th>Veterinario</th><th>Obs.</th><th>Acciones</th></tr></thead>
         <tbody id="sangrado-tbody"></tbody></table></div>
-      </div>
+  </div>
+
+  <!-- Tab: Genómica -->
+  <div id="san-genomica" class="tab-content">
+  <div class="toolbar">
+  <div class="toolbar-right">
+  <button class="btn-secondary" onclick="document.getElementById('gen-pdf-input').click()">📄 Leer PDF</button>
+  <button class="btn-primary" onclick="genAbrir()">＋ Genómica</button>
+  <input type="file" id="gen-pdf-input" accept="application/pdf,.pdf" style="display:none" onchange="genLeerPDF(this)">
+  </div>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>RP</th><th>Registro</th><th>DEP / EPD e índices</th><th>Enfermedades genéticas</th><th>Origen</th><th>Acciones</th></tr></thead>
+  <tbody id="genomica-tbody"></tbody></table></div>
+  </div>
     </div>
 
     <!-- ═══ TRATAMIENTOS ═══ -->
@@ -3604,6 +3618,50 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
   </div>
 </div>
 
+<!-- Modal: Genómica (carga manual) -->
+<div id="modal-genomica" class="modal-overlay">
+  <div class="modal" style="max-width:720px">
+  <div class="modal-header"><div class="modal-title" id="gen-titulo">🧬 Datos genómicos</div><button class="modal-close" onclick="closeModal('modal-genomica')">✕</button></div>
+  <div class="modal-body">
+  <input type="hidden" id="gen-id">
+  <div class="form-row">
+  <div class="form-group"><label class="form-label">RP Animal *</label><input type="text" id="gen-rp" class="form-control" list="gen-rp-list" autocomplete="off"><datalist id="gen-rp-list"></datalist></div>
+  <div class="form-group"><label class="form-label">Fecha del informe</label><input type="date" id="gen-fecha" class="form-control"></div>
+  </div>
+  <div class="form-row">
+  <div class="form-group"><label class="form-label">Registro / HBA</label><input type="text" id="gen-registro" class="form-control"></div>
+  <div class="form-group"><label class="form-label">Laboratorio o asociación</label><input type="text" id="gen-lab" class="form-control"></div>
+  </div>
+  <div class="form-row">
+  <div class="form-group"><label class="form-label">Padre</label><input type="text" id="gen-padre" class="form-control"></div>
+  <div class="form-group"><label class="form-label">Madre</label><input type="text" id="gen-madre" class="form-control"></div>
+  </div>
+  <h4 style="margin:12px 0 6px;font-size:14px">DEP / EPD e índices</h4>
+  <div id="gen-valores"></div>
+  <div id="gen-chips-v" style="margin:4px 0"></div>
+  <button type="button" class="btn-secondary" style="font-size:12px" onclick="genAddValor('','','')">＋ Otra característica</button>
+  <h4 style="margin:14px 0 6px;font-size:14px">Enfermedades genéticas</h4>
+  <div id="gen-enfs"></div>
+  <div id="gen-chips-e" style="margin:4px 0"></div>
+  <button type="button" class="btn-secondary" style="font-size:12px" onclick="genAddEnf('','Libre')">＋ Otra enfermedad</button>
+  <div class="form-group" style="margin-top:12px"><label class="form-label">Observaciones</label><textarea id="gen-obs" class="form-control" rows="2"></textarea></div>
+  </div>
+  <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-genomica')">Cancelar</button><button class="btn-primary" onclick="guardarGenomica()">💾 Guardar</button></div>
+  </div>
+</div>
+
+<!-- Modal: Genómica (revisión de lo leído del PDF) -->
+<div id="modal-genomica-pdf" class="modal-overlay">
+  <div class="modal" style="max-width:720px">
+  <div class="modal-header"><div class="modal-title">📄 Datos leídos del PDF</div><button class="modal-close" onclick="closeModal('modal-genomica-pdf')">✕</button></div>
+  <div class="modal-body">
+  <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Revisá antes de guardar, sobre todo el <b>RP</b> de cada animal. La IA puede equivocarse al leer.</div>
+  <div id="gen-pdf-lista"></div>
+  </div>
+  <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-genomica-pdf')">Cancelar</button><button class="btn-primary" onclick="genConfirmarPDF()">💾 Guardar seleccionados</button></div>
+  </div>
+</div>
+
 <!-- Modal: Sangrado masivo -->
 <div id="modal-sangrado-lote" class="modal-overlay">
   <div class="modal">
@@ -4526,7 +4584,7 @@ window.DB = {
   objetivosGDP: {},
   saldosPotreros:{},
   aguadas:[], precipitaciones:[],
-  raspajes:[], sangrados:[],
+  raspajes:[], sangrados:[], genomica:[],
   settings: {
     establecimiento:'La Pampa Brava – Campo El Ombú',
     phones:[{num:'',name:'Titular'},{num:'',name:'Operario'},{num:'',name:'Administrador'},{num:'',name:'Veterinario'}],
@@ -5295,7 +5353,7 @@ function showPage(id) {
   if(id === 'dashboard') renderDashboard();
   if(id === 'animales') { renderSelectorCampos(); renderAnimales(); }
   if(id === 'reproduccion') { renderNacimientos(); renderCelos(); renderServicios(); actualizarKpisServicio(); poblarPotrerosIATF(); iatfCambiarModo(); renderTareasIATF(); renderProtocolosIATF(); renderPrenadas(); renderDestetes(); renderAbortos(); renderRecats(); renderRecria(); renderListosDestetar(); renderProyeccionEntore(); renderRecatSugerida(); poblarPotrerosCurva(); renderCurvaCrecimiento(); renderCalendarioReproductivoPotreroSelect(); renderCalendarioReproductivo(); }
-  if(id === 'sanidad') { renderVacunas(); renderTratamientos(); renderEnfermedades(); renderRaspaje(); renderSangrado(); renderCalendarioSanitario(); }
+  if(id === 'sanidad') { renderVacunas(); renderTratamientos(); renderEnfermedades(); renderRaspaje(); renderSangrado(); renderGenomica(); renderCalendarioSanitario(); }
   if(id === 'tratamientos') { renderTratamientos(); renderEnfermedades(); }
   if(id === 'nutricion') { renderNutricion(); renderIngredientesTabla(); actualizarRequerimientosUI(); poblarCategoriasRodeo(); renderHistorialRaciones(); poblarPotrerosSuplementacion(); renderVentanasCriticas(); }
   if(id === 'movimientos') { renderCompras(); renderVentas(); renderTraslados(); renderResultadoEconomico(); renderValuacionHacienda(); renderCobrosPagos(); renderRomaneos(); renderResumenSemanal(); }
@@ -8841,6 +8899,155 @@ function guardarSangrado(){
   hablar(`Sangrado guardado. RP ${rp}.`);
 }
 
+// ═══ GENÓMICA: DEP/EPD, índices y enfermedades genéticas (carga manual o leída desde un PDF) ═══
+const GEN_VALORES_COMUNES=['Peso al nacer (PN)','Peso al destete (PD)','Peso final (PF)','Leche (L)','Circunferencia escrotal (CE)','Facilidad de parto','Área de ojo de bife (AOB)','Grasa dorsal (EGD)','Grasa intramuscular','Índice de selección'];
+const GEN_ENFS_COMUNES=['Artrogriposis múltiple (AM)','Hidrocefalia neuropática (NH)','Aracnodactilia contractural (CA)','Osteopetrosis (OS)'];
+const GEN_ESTADOS=['Libre','Portador','Afectado'];
+function genBadgeEstado(e){ return e==='Libre'?'badge-green':e==='Portador'?'badge-amber':e==='Afectado'?'badge-red':'badge-gray'; }
+function genFilaValor(c,v,p){
+  const d=document.createElement('div'); d.className='gen-fila'; d.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
+  const mk=(cls,ph,val,fl)=>{const i=document.createElement('input'); i.type='text'; i.className='form-control '+cls; i.placeholder=ph; i.value=val==null?'':String(val); i.style.flex=fl; return i;};
+  d.appendChild(mk('gen-v-c','Característica',c,'3')); d.appendChild(mk('gen-v-v','Valor',v,'1')); d.appendChild(mk('gen-v-p','Prec. %',p,'1'));
+  const b=document.createElement('button'); b.type='button'; b.className='btn-danger'; b.textContent='✕'; b.style.cssText='padding:2px 8px'; b.onclick=()=>d.remove(); d.appendChild(b);
+  return d;
+}
+function genFilaEnf(c,e){
+  const d=document.createElement('div'); d.className='gen-fila'; d.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
+  const i=document.createElement('input'); i.type='text'; i.className='form-control gen-e-c'; i.placeholder='Enfermedad genética'; i.value=c==null?'':String(c); i.style.flex='3'; d.appendChild(i);
+  const s=document.createElement('select'); s.className='form-control gen-e-e'; s.style.flex='1';
+  const estados=GEN_ESTADOS.includes(e)||!e?GEN_ESTADOS:[...GEN_ESTADOS,e];
+  estados.forEach(x=>{const o=document.createElement('option'); o.value=x; o.textContent=x; s.appendChild(o);}); s.value=e||'Libre'; d.appendChild(s);
+  const b=document.createElement('button'); b.type='button'; b.className='btn-danger'; b.textContent='✕'; b.style.cssText='padding:2px 8px'; b.onclick=()=>d.remove(); d.appendChild(b);
+  return d;
+}
+function genAddValor(c,v,p){ document.getElementById('gen-valores').appendChild(genFilaValor(c,v,p)); }
+function genAddEnf(c,e){ document.getElementById('gen-enfs').appendChild(genFilaEnf(c,e)); }
+function genChips(){
+  const mk=(id,lista,fn)=>{const c=document.getElementById(id); if(!c) return; c.innerHTML=''; lista.forEach(n=>{const b=document.createElement('button'); b.type='button'; b.className='btn-secondary'; b.style.cssText='padding:2px 8px;font-size:12px;margin:2px'; b.textContent='＋ '+n; b.onclick=()=>fn(n); c.appendChild(b);});};
+  mk('gen-chips-v',GEN_VALORES_COMUNES,n=>genAddValor(n,'',''));
+  mk('gen-chips-e',GEN_ENFS_COMUNES,n=>genAddEnf(n,'Libre'));
+}
+function genAbrir(id){
+  const g=id?(DB.genomica||[]).find(x=>x.id===id):null;
+  const set=(k,v)=>{const el=document.getElementById(k); if(el) el.value=v==null?'':v;};
+  set('gen-id',g?g.id:''); set('gen-rp',g?g.rp:''); set('gen-fecha',g?g.fecha:new Date().toISOString().split('T')[0]);
+  set('gen-registro',g?g.registro:''); set('gen-lab',g?g.lab:''); set('gen-padre',g?g.padre:''); set('gen-madre',g?g.madre:''); set('gen-obs',g?g.obs:'');
+  const dl=document.getElementById('gen-rp-list'); if(dl){ dl.innerHTML=''; (DB.animales||[]).slice(0,5000).forEach(a=>{const o=document.createElement('option'); o.value=a.rp; dl.appendChild(o);}); }
+  document.getElementById('gen-valores').innerHTML=''; document.getElementById('gen-enfs').innerHTML='';
+  ((g&&g.valores)||[]).forEach(x=>genAddValor(x.c,x.v,x.p)); ((g&&g.enfermedades)||[]).forEach(x=>genAddEnf(x.c,x.e));
+  genChips();
+  const tit=document.getElementById('gen-titulo'); if(tit) tit.textContent=g?'🧬 Editar datos genómicos':'🧬 Datos genómicos';
+  openModal('modal-genomica');
+}
+function genLeerFilas(){
+  const valores=[...document.querySelectorAll('#gen-valores .gen-fila')].map(f=>({c:f.querySelector('.gen-v-c').value.trim(),v:f.querySelector('.gen-v-v').value.trim(),p:f.querySelector('.gen-v-p').value.trim()})).filter(x=>x.c&&x.v!=='');
+  const enfermedades=[...document.querySelectorAll('#gen-enfs .gen-fila')].map(f=>({c:f.querySelector('.gen-e-c').value.trim(),e:f.querySelector('.gen-e-e').value})).filter(x=>x.c);
+  return {valores,enfermedades};
+}
+function guardarGenomica(){
+  const rp=String($v('gen-rp')||'').trim();
+  if(!rp){toast('RP obligatorio','err');return;}
+  const {valores,enfermedades}=genLeerFilas();
+  if(!valores.length&&!enfermedades.length){toast('Cargá al menos un valor o una enfermedad genética','err');return;}
+  const idEdit=parseInt($v('gen-id'))||0;
+  const g={id:idEdit||Date.now(),rp,fecha:$v('gen-fecha')||new Date().toISOString().split('T')[0],lab:$v('gen-lab'),registro:$v('gen-registro'),padre:$v('gen-padre'),madre:$v('gen-madre'),valores,enfermedades,obs:$v('gen-obs'),fuente:'manual'};
+  if(!DB.genomica)DB.genomica=[];
+  const k=idEdit?DB.genomica.findIndex(x=>x.id===idEdit):-1;
+  if(k>=0){ g.fuente=DB.genomica[k].fuente||'manual'; g.nombre=DB.genomica[k].nombre||''; DB.genomica[k]=g; } else DB.genomica.push(g);
+  addHistorial('Genómica',`RP ${rp}: ${valores.length} valores, ${enfermedades.length} enfermedades genéticas`,rp,'');
+  closeModal('modal-genomica'); renderGenomica(); saveToStorage();
+  toast('Datos genómicos guardados ✅','ok');
+}
+function eliminarGenomica(id){
+  if(!confirm('¿Eliminar este registro genómico?'))return;
+  DB.genomica=(DB.genomica||[]).filter(x=>x.id!==id);
+  renderGenomica(); saveToStorage(); toast('Registro genómico eliminado','info');
+}
+function renderGenomica(){
+  const tbody=document.getElementById('genomica-tbody'); if(!tbody) return;
+  const lista=DB.genomica||[];
+  if(!lista.length){tbody.innerHTML=emptyRow(7);return;}
+  const resumen=g=>{const v=g.valores||[]; return (v.slice(0,4).map(x=>`<span class="badge badge-gray" style="margin:1px">${esc(x.c)} ${esc(x.v)}</span>`).join('')+(v.length>4?` <span style="font-size:12px;color:var(--text3)">+${v.length-4} más</span>`:''))||'--';};
+  const enfs=g=>(g.enfermedades||[]).map(x=>`<span class="badge ${genBadgeEstado(x.e)}" style="margin:1px">${esc(x.c)}: ${esc(x.e)}</span>`).join('')||'--';
+  tbody.innerHTML=[...lista].sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||''))).map(g=>`<tr>
+  <td class="td-mono">${esc(g.fecha||'--')}</td>
+  <td class="td-mono"><a href="#" onclick="abrirFichaAnimal(${rfJs(g.rp)});return false">${esc(g.rp)}</a></td>
+  <td>${esc(g.registro||'--')}${g.nombre?`<div style="font-size:12px;color:var(--text3)">${esc(g.nombre)}</div>`:''}</td>
+  <td>${resumen(g)}</td><td>${enfs(g)}</td>
+  <td style="font-size:12px;color:var(--text3)">${g.fuente==='pdf'?'📄 PDF':'✍️ Manual'}${g.lab?'<br>'+esc(g.lab):''}</td>
+  <td style="white-space:nowrap"><button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="genAbrir(${rfN(g.id)})">✏️</button> <button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarGenomica(${rfN(g.id)})">🗑</button></td>
+  </tr>`).join('');
+}
+function genomicaCardHtml(rp){
+  const l=(DB.genomica||[]).filter(g=>g.rp===rp).sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
+  if(!l.length) return '';
+  const g=l[0], v=g.valores||[];
+  const vals=v.slice(0,10).map(x=>`<span class="badge badge-gray" style="margin:1px">${esc(x.c)} <b>${esc(x.v)}</b>${x.p?` (${esc(x.p)}%)`:''}</span>`).join('');
+  const enfs=(g.enfermedades||[]).map(x=>`<span class="badge ${genBadgeEstado(x.e)}" style="margin:1px">${esc(x.c)}: ${esc(x.e)}</span>`).join('');
+  return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--green,#2ecc71)"><b>🧬 Genómica</b> · informe ${esc(g.fecha||'--')}${g.lab?' · '+esc(g.lab):''}${g.registro?' · Reg. '+esc(g.registro):''}<div style="margin-top:6px">${vals}</div><div style="margin-top:4px">${enfs}</div>${v.length>10?`<div style="font-size:12px;color:var(--text3)">+${v.length-10} valores más (Sanidad → Genómica)</div>`:''}</div>`;
+}
+// ── Lectura de un PDF con IA ──
+async function genLeerPDF(input){
+  const file=input&&input.files&&input.files[0]; if(input) input.value='';
+  if(!file) return;
+  if(!(file.type==='application/pdf'||/\.pdf$/i.test(file.name||''))){toast('El archivo tiene que ser un PDF','err');return;}
+  if(file.size>6*1024*1024){toast('El PDF pesa más de 6 MB: dividilo o comprimilo','err');return;}
+  if(navigator.onLine===false){toast('Necesitás conexión a internet para leer el PDF','err');return;}
+  if(!rfLimiteVentana('pdf',3,60000)){toast('Muchas lecturas seguidas: esperá un minuto','info');return;}
+  toast('Leyendo el PDF con IA… puede tardar hasta un minuto','info');
+  try{
+    const b64=await new Promise((res,rej)=>{const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]||''); r.onerror=()=>rej(new Error('No se pudo abrir el archivo')); r.readAsDataURL(file);});
+    const fn=firebase.app().functions('us-central1').httpsCallable('leerGenomicaPDF',{timeout:170000});
+    const {data}=await fn({estabId:window.ESTAB_ID_ACTIVO,pdfBase64:b64});
+    const lista=(data&&data.animales)||[];
+    if(!lista.length){toast('No encontré datos genómicos en ese PDF','info');return;}
+    genMostrarRevision(lista);
+  }catch(e){ console.error('genLeerPDF error:',e); toast('No se pudo leer el PDF: '+(e&&e.message||'sin conexión'),'err'); }
+}
+window._genPdfPend=[];
+function genMostrarRevision(lista){
+  window._genPdfPend=lista;
+  const cont=document.getElementById('gen-pdf-lista'); if(!cont) return;
+  cont.innerHTML=lista.map((x,i)=>{
+    const v=x.valores||[], e=x.enfermedades||[];
+    const quien=[x.nombre,x.registro?'Reg. '+x.registro:'',x.raza,x.sexo].filter(Boolean).join(' · ');
+    return `<div class="card" style="margin-bottom:10px"><div style="display:flex;gap:8px;align-items:flex-start">
+    <input type="checkbox" checked id="gen-pdf-ck-${i}" style="margin-top:8px">
+    <div style="flex:1">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b>RP</b><input type="text" class="form-control" id="gen-pdf-rp-${i}" value="${esc(x.rp||'')}" style="max-width:150px" placeholder="RP del animal" oninput="genPdfEstado(${i})"><span id="gen-pdf-est-${i}" style="font-size:12px"></span></div>
+      ${quien?`<div style="font-size:12px;color:var(--text2);margin-top:2px">${esc(quien)}</div>`:''}
+      <div style="margin-top:4px">${v.slice(0,6).map(a=>`<span class="badge badge-gray" style="margin:1px">${esc(a.c)} ${esc(a.v)}</span>`).join('')}${v.length>6?` <span style="font-size:12px;color:var(--text3)">+${v.length-6} más</span>`:''}</div>
+      <div style="margin-top:2px">${e.map(a=>`<span class="badge ${genBadgeEstado(a.e)}" style="margin:1px">${esc(a.c)}: ${esc(a.e)}</span>`).join('')}</div>
+    </div></div></div>`;
+  }).join('');
+  lista.forEach((x,i)=>genPdfEstado(i));
+  openModal('modal-genomica-pdf');
+}
+function genPdfEstado(i){
+  const inp=document.getElementById('gen-pdf-rp-'+i), el=document.getElementById('gen-pdf-est-'+i); if(!inp||!el) return;
+  const rp=inp.value.trim();
+  if(!rp){ el.textContent='⚠️ Falta el RP: completalo para guardarlo'; el.style.color='var(--amber)'; }
+  else if((DB.animales||[]).some(a=>a.rp===rp)){ el.textContent='✅ Está en tu rodeo'; el.style.color='var(--green)'; }
+  else { el.textContent='⚠️ Ese RP no está en tu rodeo (se guarda igual)'; el.style.color='var(--amber)'; }
+}
+function genConfirmarPDF(){
+  const lista=window._genPdfPend||[]; if(!DB.genomica)DB.genomica=[];
+  const hoy=new Date().toISOString().split('T')[0]; let n=0, sinRp=0;
+  lista.forEach((x,i)=>{
+    const ck=document.getElementById('gen-pdf-ck-'+i); if(!ck||!ck.checked) return;
+    const rp=(document.getElementById('gen-pdf-rp-'+i)?.value||'').trim();
+    if(!rp){ sinRp++; return; }
+    const rec={id:Date.now()+i,rp,fecha:x.fecha||hoy,lab:x.lab||'',registro:x.registro||'',nombre:x.nombre||'',padre:x.padre||'',madre:x.madre||'',valores:x.valores||[],enfermedades:x.enfermedades||[],obs:x.obs||'',fuente:'pdf'};
+    const k=DB.genomica.findIndex(g=>g.rp===rp&&g.fecha===rec.fecha&&g.fuente==='pdf');
+    if(k>=0){ rec.id=DB.genomica[k].id; DB.genomica[k]=rec; } else DB.genomica.push(rec);
+    addHistorial('Genómica',`RP ${rp}: ${rec.valores.length} valores, ${rec.enfermedades.length} enfermedades genéticas (PDF)`,rp,'');
+    n++;
+  });
+  if(!n){ toast(sinRp?'Completá el RP de los animales marcados':'No marcaste ningún animal','err'); return; }
+  closeModal('modal-genomica-pdf'); renderGenomica(); saveToStorage();
+  toast(n+' registro(s) genómico(s) guardado(s) 🧬'+(sinRp?' — '+sinRp+' sin RP quedaron sin guardar':''),sinRp?'info':'ok');
+}
+
 function guardarSangradoLote(){
   const potrero=$v('sangl-potrero');
   const categoria=$v('sangl-cat');
@@ -9780,7 +9987,7 @@ function confirmReset(){
       insumos:[], insumoLotes:[],
       saldosPotreros:{},
       aguadas:[], precipitaciones:[],
-      raspajes:[], sangrados:[],
+      raspajes:[], sangrados:[], genomica:[],
       settings:{
         establecimiento: estab||'Mi Establecimiento',
         phones, trialStart:ts, trialDays:30,
@@ -10416,7 +10623,9 @@ function abrirFichaAnimal(rp){
       <b>🐮 Historial como madre:</b> ${partosComoMadre.length} parto(s) registrado(s)
     </div>` : ''}
 
-    <h3 style="margin:10px 0 6px;font-size:14px">💰 Costo y rentabilidad</h3>
+    ${genomicaCardHtml(a.rp)}
+
+  <h3 style="margin:10px 0 6px;font-size:14px">💰 Costo y rentabilidad</h3>
     <div class="card" style="margin-bottom:14px">
       <div style="font-size:13px;line-height:1.8">
         Alimentación: <b>$${costo.costoAlimentacion.toLocaleString('es-AR',{maximumFractionDigits:0})}</b>
@@ -14698,13 +14907,15 @@ function mostrarRegistrosPendientes(registros) {
   const container = document.getElementById('wa-ia-resultado');
   const lista = document.getElementById('wa-ia-lista');
   if(!container||!lista) return;
-  const iconos = {Pesada:'⚖️',Vacuna:'💉',Tratamiento:'🩺',Animal:'🐄',Compra:'📥',Venta:'📤',Aborto:'⚠️',Tacto:'🔬',Destete:'🍼',Traslado:'🚛'};
+  const iconos = {Pesada:'⚖️',Vacuna:'💉',Tratamiento:'🩺',Animal:'🐄',Compra:'📥',Venta:'📤',Aborto:'⚠️',Tacto:'🔬',Destete:'🍼',Traslado:'🚛',Nacimiento:'🐣',Muerte:'⚰️'};
   lista.innerHTML = registros.map((r,i)=>`
     <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
       <input type="checkbox" checked id="wa-check-${i}" style="margin-top:3px">
       <div>
         <div style="font-weight:700;font-size:13px">${iconos[r.tipo]||'📌'} ${esc(r.tipo)} ${r.rp?'· RP '+esc(r.rp):''}</div>
         <div style="font-size:14px;color:var(--text2)">${esc(r.descripcion||JSON.stringify(r.datos))}</div>
+        ${(r.rp&&['Pesada','Vacuna','Tratamiento','Tacto','Muerte','Traslado'].includes(r.tipo)&&!(DB.animales||[]).some(a=>a.rp===r.rp))?`<div style="font-size:12px;color:var(--amber)">⚠️ El RP ${esc(r.rp)} no está cargado en el rodeo</div>`:''}
+        ${r.tipo==='Muerte'?`<div style="font-size:12px;color:var(--amber)">Dará de baja al animal del rodeo</div>`:''}
       </div>
     </div>`).join('');
   container.style.display = 'block';
@@ -14712,7 +14923,7 @@ function mostrarRegistrosPendientes(registros) {
 }
 
 async function confirmarRegistrosWA() {
-  let guardados = 0;
+  let guardados = 0; const revisar = [];
   waRegistrosPendientes.forEach((r,i) => {
     const cb = document.getElementById('wa-check-'+i);
     if(!cb||!cb.checked) return;
@@ -14728,19 +14939,25 @@ async function confirmarRegistrosWA() {
           const a = DB.animales.find(x=>x.rp===rp);
           if(a){a.peso=peso;if(!a.pesoHistorico)a.pesoHistorico=[];a.pesoHistorico.push({fecha:p.fecha,kg:peso});}
           addHistorial('Pesada',`RP ${rp}: ${peso}kg (WA/Audio)`,rp,p.operador);
+          // Si dijo "lote/potrero X" y coincide con un potrero cargado, el animal pasa a ese potrero
+          if(a && d.potrero){
+            const _n=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/^(potrero|lote|piquete)\s+/,'').trim();
+            const _q=_n(d.potrero), _pot=_q?(DB.potreros||[]).find(x=>x&&x.nombre&&_n(x.nombre)===_q):null;
+            if(_pot){ p.potrero=_pot.nombre; if(a.potrero!==_pot.nombre){ const _o=a.potrero||'Sin potrero'; a.potrero=_pot.nombre; addHistorial('Traslado',`Cambio potrero: ${_o}→${_pot.nombre} (WA/Audio)`,rp,p.operador); } }
+          }
           guardados++;
         }
       } else if(r.tipo==='Vacuna') {
         const rp = r.rp || d.rp;
         if(rp) {
-          DB.vacunas.push({id:Date.now()+i,rp,fecha:d.fecha||hoy,vacuna:d.vacuna||d.nombre||'',dosis:d.dosis||'',lab:d.lab||'',lote:'',refuerzo:'',operador:d.operador||'WhatsApp'});
+          DB.vacunas.push({id:Date.now()+i,rp,fecha:d.fecha||hoy,vacuna:d.vacuna||d.nombre||'',dosis:d.dosis||'',lab:d.lab||'',lote:'',refuerzo:'',potrero:d.potrero||'',operador:d.operador||'WhatsApp'});
           addHistorial('Vacuna',`RP ${rp}: ${d.vacuna||d.nombre||''} (WA)`,rp,'');
           guardados++;
         }
       } else if(r.tipo==='Tratamiento') {
         const rp = r.rp || d.rp;
         if(rp) {
-          DB.tratamientos.push({id:Date.now()+i,rp,fecha:d.fecha||hoy,diag:d.diag||d.diagnostico||'',med:d.med||d.medicamento||'',dosis:d.dosis||'',via:d.via||'IM',dias:d.dias||'',vet:d.vet||d.veterinario||'',estado:'En Curso'});
+          DB.tratamientos.push({id:Date.now()+i,rp,fecha:d.fecha||hoy,diag:d.diag||d.diagnostico||'',med:d.med||d.medicamento||'',dosis:d.dosis||'',via:d.via||(d.med||d.medicamento?'IM':''),dias:d.dias||'',vet:d.vet||d.veterinario||'',potrero:d.potrero||'',obs:d.obs||'',estado:'En Curso'});
           addHistorial('Tratamiento',`RP ${rp}: ${esc(d.diag||'')} (WA)`,rp,'');
           guardados++;
         }
@@ -14772,6 +14989,50 @@ async function confirmarRegistrosWA() {
           addHistorial('Tacto',`RP ${rp}: ${res} (WA)`,rp,'');
           guardados++;
         }
+      } else if(r.tipo==='Nacimiento') {
+        const _n=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/^(potrero|lote|piquete)\s+/,'').trim();
+        const fecha=d.fecha||hoy, madreRp=d.madre||'', madre=DB.animales.find(x=>x.rp===madreRp);
+        const sexo=(d.sexo==='Hembra'||d.sexo==='Macho')?d.sexo:'';
+        const rpProv=!(r.rp||d.rp);
+        const rp=r.rp||d.rp||('NAC-'+String(Date.now()).slice(-6)+i);
+        const _q=_n(d.potrero), _pot=_q?(DB.potreros||[]).find(x=>x&&x.nombre&&_n(x.nombre)===_q):null;
+        const potrero=(_pot&&_pot.nombre)||(madre&&madre.potrero)||'';
+        const obs=[rpProv?'RP provisorio: asignar caravana':'', !sexo?'Sexo sin confirmar':'', d.obs||''].filter(Boolean).join(' · ');
+        if(DB.animales.find(x=>x.rp===rp)) { toast(`RP ${rp} ya existe, se omitió`,'info'); }
+        else {
+          if(!DB.nacimientos)DB.nacimientos=[];
+          DB.nacimientos.push({id:Date.now()+i,rp,fecha,madre:madreRp,sexo,raza:d.raza||'',peso:d.peso||'',potrero,vet:d.vet||'',obs});
+          DB.animales.push({id:Date.now()+i+1,rp,nombre:'',rfid:'',categoria:sexo==='Hembra'?'Ternera H':'Ternero M',sexo:sexo||'Macho',raza:d.raza||(madre&&madre.raza)||'',color:(madre&&madre.color)||'',fnac:fecha,peso:parseFloat(d.peso)||0,potrero,procedencia:'Propio (Nacido) – madre RP '+(madreRp||'--'),prenada:'No',obs,activo:true,pesoHistorico:d.peso?[{fecha,kg:parseFloat(d.peso)}]:[]});
+          if(madre) madre.prenada='No';
+          addHistorial('Animal',`Nacimiento cría RP ${rp} – madre ${madreRp||'--'} (${sexo||'sexo sin confirmar'}) (WA/Audio)`,rp,d.vet||'');
+          if(rpProv||!sexo) revisar.push(rp+(rpProv?' (RP provisorio)':' (revisá el sexo)'));
+          guardados++;
+        }
+      } else if(r.tipo==='Muerte') {
+        const rp=r.rp||d.rp;
+        if(rp) {
+          const a=DB.animales.find(x=>x.rp===rp);
+          const causa=d.causa||d.diag||'';
+          const tipoM=/accident|atropell|rayo|ahog/i.test(causa)?'Accidente':/sacrific/i.test(causa)?'Sacrificio':/robo|rob[oó]/i.test(causa)?'Robo':'Muerte natural';
+          if(!DB.muertes)DB.muertes=[];
+          DB.muertes.push({id:Date.now()+i,rp,fecha:d.fecha||hoy,tipo:tipoM,causa,peso:d.peso||'',potrero:d.potrero||(a&&a.potrero)||'',vet:d.vet||'',diag:d.diag||''});
+          if(a) a.activo=false;
+          addHistorial('Mortandad',`RP ${rp}: ${tipoM} · ${esc(causa||'--')} (WA/Audio)`,rp,d.vet||'');
+          if(!a) revisar.push('RP '+rp+' no estaba en el rodeo');
+          guardados++;
+        }
+      } else if(r.tipo==='Traslado') {
+        const rp=r.rp||d.rp;
+        const _n=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/^(potrero|lote|piquete)\s+/,'').trim();
+        const _q=_n(d.potrero||d.destino), _pot=_q?(DB.potreros||[]).find(x=>x&&x.nombre&&_n(x.nombre)===_q):null;
+        const a=rp?DB.animales.find(x=>x.rp===rp):null;
+        if(!a) { toast(`Traslado omitido: el RP ${rp||'?'} no está en el rodeo`,'info'); }
+        else if(!_pot) { toast(`Traslado omitido: el potrero "${d.potrero||d.destino||'?'}" no existe`,'info'); }
+        else {
+          const _o=a.potrero||'Sin potrero'; a.potrero=_pot.nombre;
+          addHistorial('Traslado',`Cambio potrero: ${_o}→${_pot.nombre} (WA/Audio)`,rp,'');
+          guardados++;
+        }
       }
     } catch(e){ console.error('Error guardando registro WA:', e, r); }
   });
@@ -14781,7 +15042,7 @@ async function confirmarRegistrosWA() {
     saveToStorage();
     renderAll();
     updateKPIs();
-    toast(guardados+' registros guardados ✅','ok');
+    toast(guardados+' registros guardados ✅'+(revisar.length?' — Revisá: '+revisar.join(', '):''),revisar.length?'info':'ok');
     document.getElementById('wa-ia-resultado').style.display='none';
     closeModal('modal-whatsapp-entrada');
     // Limpiar inputs
@@ -15475,7 +15736,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-05.4';
+const RF_VERSION = '2026-11-05.7';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -16107,7 +16368,7 @@ function healthCheckDB() {
   const arrays = ['animales','potreros','pesadas','vacunas','tratamientos','encierres',
                   'enfermedades','nacimientos','destetes','abortos','recategorizaciones',
                   'pastoreos','compras','ventas','romaneos','traslados','muertes','historial',
-                  'transportistas','clientes'];
+                  'transportistas','clientes','genomica'];
   for (const key of arrays) {
     if (!Array.isArray(DB[key])) {
       problemas.push(`DB.${key} no es array (es ${typeof DB[key]})`);
@@ -16160,7 +16421,7 @@ function dbVacia(nombre) {
   objetivosGDP: {},
     saldosPotreros:{},
     aguadas:[], precipitaciones:[],
-    raspajes:[], sangrados:[],
+    raspajes:[], sangrados:[], genomica:[],
     settings: {
       establecimiento: nombre || 'Nuevo Establecimiento',
       phones: [{num:'',name:'Titular'},{num:'',name:'Operario'},{num:'',name:'Administrador'},{num:'',name:'Veterinario'}],
