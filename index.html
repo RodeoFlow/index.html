@@ -2977,7 +2977,7 @@
 
     <!-- ═══ CONFIGURACIÓN ═══ -->
     <div id="page-configuracion" class="page">
-      <div class="page-header"><div class="page-title">⚙️ Configuración</div></div>
+      <div class="page-header"><div class="page-title">⚙️ Configuración <span id="rf-version-txt" style="font-size:11px;font-weight:400;color:var(--text3);margin-left:8px"></span></div></div>
       <div class="card" style="margin-bottom:16px;border-left:3px solid var(--amber)">
         <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>🔐 Dispositivos autorizados</span><button class="btn-secondary" style="padding:4px 12px;font-size:13px" onclick="renderDispositivos()">🔄 Actualizar</button></div>
         <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Quien tenga el código de tu establecimiento puede pedir acceso: acá lo aprobás o lo rechazás, elegís su rol y podés quitar el acceso a un dispositivo que no reconozcas.<br><b>Dueño</b>: ve y modifica todo. <b>Peón / Veterinario</b>: no reciben ventas, compras, clientes, romaneos, valuaciones, gastos ni compromisos, y Firebase lo impide aunque alguien lo intente.</div>
@@ -5246,7 +5246,7 @@ function showPage(id) {
   if(id === 'administracion') { renderVencimientos(); prepararResumenWA(); renderSenasaResumen(); }
   if(id === 'rentabilidad') { renderRentabilidadPotreroSelect(); renderRentabilidad(); }
   if(id === 'ia') iaRender();
-  if(id === 'configuracion') { renderDispositivos(); renderClaveRecuperacion(); renderRecuperarBorrados(); renderRangosPeso(); renderConfigPhones(); updateTrialStatus(); renderBackupHistorial(); actualizarEstadoBackup(); actualizarPanelSync(); renderConfigUbicacion(); renderNotifEstado(); renderPrefVoz(); }
+  if(id === 'configuracion') { renderDispositivos(); renderClaveRecuperacion(); renderRecuperarBorrados(); renderRangosPeso(); rfMostrarVersion(); renderConfigPhones(); updateTrialStatus(); renderBackupHistorial(); actualizarEstadoBackup(); actualizarPanelSync(); renderConfigUbicacion(); renderNotifEstado(); renderPrefVoz(); }
   // Close sidebar on mobile
   document.getElementById('sidebar').classList.remove('mobile-open');
 }
@@ -15414,6 +15414,35 @@ function initBaston() {
   // Mostrar solo panel BT HID por defecto
   selModoBT('bt-hid');
 }
+
+// ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
+// Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
+const RF_VERSION = '2026-11-05.1';
+console.log('RodeoFlow versión', RF_VERSION);
+let _rfUltimaBusqueda = 0;
+async function rfBuscarActualizacion(){
+  try{
+    if(!navigator.onLine || Date.now() - _rfUltimaBusqueda < 10 * 60000) return; // como mucho una vez cada 10 minutos
+    _rfUltimaBusqueda = Date.now();
+    const r = await fetch(location.href.split('#')[0], { cache: 'no-store' });
+    if(!r.ok) return;
+    const m = /RF_VERSION = '(\d{4}-\d{2}-\d{2}\.\d+)'/.exec(await r.text()); // formato AAAA-MM-DD.n (no se confunde con esta misma línea)
+    if(m && m[1] !== RF_VERSION) rfMostrarAvisoVersion(m[1]);
+  }catch(e){}
+}
+function rfMostrarAvisoVersion(nueva){
+  if(document.getElementById('rf-aviso-version')) return;
+  const d = document.createElement('div'); d.id = 'rf-aviso-version';
+  d.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9300;background:var(--bg2);border:2px solid var(--accent);border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 30px rgba(0,0,0,0.6);max-width:92vw;font-size:14px';
+  d.innerHTML = '<span>🔄 Hay una versión nueva de RodeoFlow</span><button class="btn-primary" id="rf-aviso-version-ok" style="padding:5px 12px;font-size:13px">Actualizar</button><button class="btn-secondary" id="rf-aviso-version-no" style="padding:5px 10px;font-size:13px">Después</button>';
+  document.body.appendChild(d);
+  document.getElementById('rf-aviso-version-ok').onclick = () => location.reload();   // el usuario elige cuándo: no se recarga solo
+  document.getElementById('rf-aviso-version-no').onclick = () => d.remove();
+}
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') rfBuscarActualizacion(); });
+setTimeout(rfBuscarActualizacion, 15000);
+setInterval(rfBuscarActualizacion, 30 * 60000);
+function rfMostrarVersion(){ const e = document.getElementById('rf-version-txt'); if(e) e.textContent = 'versión ' + RF_VERSION; }
 
 // ─── PWA: Service Worker, instalación y estado de conexión ───
 let pwaDeferredPrompt = null;
