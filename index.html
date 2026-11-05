@@ -36,7 +36,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+<!-- firebase-messaging (notificaciones push de Firebase) NO se carga: no hay archivo firebase-messaging-sw.js en el sitio y hacía fallar las consultas en equipos con notificaciones permitidas. Las notificaciones locales de la app no lo usan. -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════
@@ -15467,7 +15467,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-05.2';
+const RF_VERSION = '2026-11-05.3';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
