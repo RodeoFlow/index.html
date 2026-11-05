@@ -13562,6 +13562,12 @@ const IA_EJEMPLOS=['¿Cuántos terneros tengo?','¿Cuál fue la ganancia diaria 
  '¿Cuánto llovió este mes?','¿Qué potreros están sobrecargados?'];
 const IA_VISIBLES=6;
 window._iaChat=window._iaChat||[];
+window._iaChatEstab=window._iaChatEstab||null;
+// El chat de la IA pertenece a UN establecimiento: si cambió el activo, se descarta (no mostrar datos de otro campo)
+function iaChatDelEstab(){
+  if(window._iaChatEstab!==(window.ESTAB_ID_ACTIVO||null)){ window._iaChat=[]; window._iaChatEstab=window.ESTAB_ID_ACTIVO||null; _iaOcupado=false; }
+  return window._iaChat;
+}
 let _iaOcupado=false;
 
 function iaRender(){
@@ -13577,6 +13583,7 @@ function iaRender(){
 function iaFmtRespuesta(t){return esc(String(t||'')).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>');}
 function iaPintarChat(){
   const el=document.getElementById('ia-chat'); if(!el) return;
+  iaChatDelEstab();
   el.innerHTML=window._iaChat.map(m=>m.rol==='u'
     ?`<div style="align-self:flex-end;max-width:85%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px">${esc(m.texto)}</div>`
     :`<div style="align-self:flex-start;max-width:92%;background:var(--bg2);border:1px solid ${m.error?'var(--red)':'var(--accent)'};border-radius:10px;padding:10px 14px;font-size:14px;line-height:1.6">${m.cargando?'<span style="color:var(--text3)">Analizando tus datos…</span>':iaFmtRespuesta(m.texto)}</div>`
@@ -13877,6 +13884,7 @@ function iaLocal(pregunta){
 }
 
 async function iaPreguntar(texto){
+  iaChatDelEstab();
   if(_iaOcupado) return;
   const inp=document.getElementById('ia-input');
   const q=String(texto||inp.value||'').trim(); if(!q) return;
@@ -15467,7 +15475,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-05.3';
+const RF_VERSION = '2026-11-05.4';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -16281,6 +16289,7 @@ async function cambiarEstablecimiento(id) {
   await idbSet(RF_ACTIVO_KEY, id);
   ESTAB_ID_ACTIVO = id;
   window.ESTAB_ID_ACTIVO = id;
+  try{ window._iaChat=[]; window._iaChatEstab=id; }catch(e){}
 
   // Cargar nueva DB
   const raw = await idbGet('rf_estab_' + id);
