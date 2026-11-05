@@ -58,14 +58,19 @@
   //    Se activa antes de usar cualquier servicio de Firebase. Clave de sitio = la PÚBLICA de reCAPTCHA (nunca la secreta).
   const RF_APPCHECK_SITE_KEY = '6LcWxhAuAAAAAC-ywDlTL8U0AM2SbJZ_EHMxbz2r';
   const RF_APPCHECK_PROVEEDOR = 'enterprise'; // 'enterprise' = reCAPTCHA Enterprise (clave creada en Google Cloud, sin clave secreta) · 'v3' = reCAPTCHA v3 clásico
-  try {
-    if (RF_APPCHECK_SITE_KEY && firebase.appCheck) {
-      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // pruebas en la PC
-      const _proveedorAC = RF_APPCHECK_PROVEEDOR === 'v3' ? RF_APPCHECK_SITE_KEY : new firebase.appCheck.ReCaptchaEnterpriseProvider(RF_APPCHECK_SITE_KEY);
-      firebase.appCheck().activate(_proveedorAC, true);
-      console.log('🛡️ App Check activado');
-    } else { console.log('App Check: sin configurar'); }
-  } catch(e) { console.warn('App Check no se pudo activar:', e); }
+  function rfActivarAppCheck() {
+    try {
+      if (RF_APPCHECK_SITE_KEY && firebase.appCheck) {
+        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // pruebas en la PC
+        const _proveedorAC = RF_APPCHECK_PROVEEDOR === 'v3' ? RF_APPCHECK_SITE_KEY : new firebase.appCheck.ReCaptchaEnterpriseProvider(RF_APPCHECK_SITE_KEY);
+        firebase.appCheck().activate(_proveedorAC, true);
+        console.log('🛡️ App Check activado');
+      } else { console.log('App Check: sin configurar'); }
+    } catch(e) { console.warn('App Check no se pudo activar:', e); }
+  }
+  // El reCAPTCHA arma su contenedor dentro de <body>, que todavía no existe mientras corre este script del <head>: se activa apenas la página lo tiene.
+  // (Realtime Database, Storage y Functions toman el token recién cuando se usan, y eso ocurre después.)
+  if (document.body) rfActivarAppCheck(); else document.addEventListener('DOMContentLoaded', rfActivarAppCheck);
   const rtdb = firebase.database();
 
   // ── Auth anónima: requerida por las reglas (auth != null) para bloquear
