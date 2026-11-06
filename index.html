@@ -8900,14 +8900,22 @@ function guardarSangrado(){
 }
 
 // ═══ GENÓMICA: DEP/EPD, índices y enfermedades genéticas (carga manual o leída desde un PDF) ═══
-const GEN_VALORES_COMUNES=['Largo de gestación','Peso al nacer','Destete directo','Leche','Peso final','Circunferencia escrotal','Altura','Área de ojo de bife','Grasa dorsal','Grasa de cadera','Grasa intramuscular','% de cortes minoristas'];
+const GEN_PLANTILLAS={
+  'Angus':['Largo de gestación','Peso al nacer','Destete directo','Leche','Peso final','Circunferencia escrotal','Altura','Área de ojo de bife','Grasa dorsal','Grasa de cadera','Grasa intramuscular','% de cortes minoristas'],
+  'Hereford':['Facilidad de parto directa (%)','Facilidad de parto hijas (%)','Peso al nacer (kg)','Peso al destete (kg)','Peso al final (kg)','Peso vaca adulta (kg)','Leche (kg)','Leche y crecimiento (kg)','Circunferencia escrotal (cm)','Peso carcasa (kg)','Área de ojo de bife (cm²)','Grasa dorsal (mm)','Grasa intramuscular (%)']
+};
+// Carga todas las filas de la raza de una vez (solo queda escribir los números)
+function genPlantilla(raza){
+  const ya=new Set([...document.querySelectorAll('#gen-valores .gen-v-c')].map(i=>i.value.trim()));
+  (GEN_PLANTILLAS[raza]||[]).forEach(n=>{ if(!ya.has(n)) genAddValor(n,'','','',''); });
+}
 const GEN_ENFS_COMUNES=['Artrogriposis múltiple (AM)','Hidrocefalia neuropática (NH)','Aracnodactilia contractural (CA)','Osteopetrosis (OS)'];
 const GEN_ESTADOS=['Libre','Portador','Afectado'];
 function genBadgeEstado(e){ return e==='Libre'?'badge-green':e==='Portador'?'badge-amber':e==='Afectado'?'badge-red':'badge-gray'; }
-function genFilaValor(c,v,p,per){
+function genFilaValor(c,v,p,per,prom){
   const d=document.createElement('div'); d.className='gen-fila'; d.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
   const mk=(cls,ph,val,fl)=>{const i=document.createElement('input'); i.type='text'; i.className='form-control '+cls; i.placeholder=ph; i.value=val==null?'':String(val); i.style.flex=fl; return i;};
-  d.appendChild(mk('gen-v-c','Característica',c,'3')); d.appendChild(mk('gen-v-v','DEP',v,'1')); d.appendChild(mk('gen-v-p','Prec.',p,'1')); d.appendChild(mk('gen-v-r','Perc. %',per,'1'));
+  d.appendChild(mk('gen-v-c','Característica',c,'3')); d.appendChild(mk('gen-v-v','DEP',v,'1')); d.appendChild(mk('gen-v-p','Prec.',p,'1')); d.appendChild(mk('gen-v-r','Perc. %',per,'1')); d.appendChild(mk('gen-v-m','Prom. raza',prom,'1'));
   const b=document.createElement('button'); b.type='button'; b.className='btn-danger'; b.textContent='✕'; b.style.cssText='padding:2px 8px'; b.onclick=()=>d.remove(); d.appendChild(b);
   return d;
 }
@@ -8920,11 +8928,11 @@ function genFilaEnf(c,e){
   const b=document.createElement('button'); b.type='button'; b.className='btn-danger'; b.textContent='✕'; b.style.cssText='padding:2px 8px'; b.onclick=()=>d.remove(); d.appendChild(b);
   return d;
 }
-function genAddValor(c,v,p,per){ document.getElementById('gen-valores').appendChild(genFilaValor(c,v,p,per)); }
+function genAddValor(c,v,p,per,prom){ document.getElementById('gen-valores').appendChild(genFilaValor(c,v,p,per,prom)); }
 function genAddEnf(c,e){ document.getElementById('gen-enfs').appendChild(genFilaEnf(c,e)); }
 function genChips(){
   const mk=(id,lista,fn)=>{const c=document.getElementById(id); if(!c) return; c.innerHTML=''; lista.forEach(n=>{const b=document.createElement('button'); b.type='button'; b.className='btn-secondary'; b.style.cssText='padding:2px 8px;font-size:12px;margin:2px'; b.textContent='＋ '+n; b.onclick=()=>fn(n); c.appendChild(b);});};
-  mk('gen-chips-v',GEN_VALORES_COMUNES,n=>genAddValor(n,'','',''));
+  const cv=document.getElementById('gen-chips-v'); if(cv){ cv.innerHTML=''; Object.keys(GEN_PLANTILLAS).forEach(r=>{const b=document.createElement('button'); b.type='button'; b.className='btn-secondary'; b.style.cssText='padding:4px 10px;font-size:12px;margin:2px'; b.textContent='📋 Plantilla '+r; b.onclick=()=>genPlantilla(r); cv.appendChild(b);}); }
   mk('gen-chips-e',GEN_ENFS_COMUNES,n=>genAddEnf(n,'Libre'));
 }
 function genAbrir(id){
@@ -8934,13 +8942,13 @@ function genAbrir(id){
   set('gen-registro',g?g.registro:''); set('gen-lab',g?g.lab:''); set('gen-padre',g?g.padre:''); set('gen-madre',g?g.madre:''); set('gen-obs',g?g.obs:'');
   const dl=document.getElementById('gen-rp-list'); if(dl){ dl.innerHTML=''; (DB.animales||[]).slice(0,5000).forEach(a=>{const o=document.createElement('option'); o.value=a.rp; dl.appendChild(o);}); }
   document.getElementById('gen-valores').innerHTML=''; document.getElementById('gen-enfs').innerHTML='';
-  ((g&&g.valores)||[]).forEach(x=>genAddValor(x.c,x.v,x.p,x.per)); ((g&&g.enfermedades)||[]).forEach(x=>genAddEnf(x.c,x.e));
+  ((g&&g.valores)||[]).forEach(x=>genAddValor(x.c,x.v,x.p,x.per,x.prom)); ((g&&g.enfermedades)||[]).forEach(x=>genAddEnf(x.c,x.e));
   genChips();
   const tit=document.getElementById('gen-titulo'); if(tit) tit.textContent=g?'🧬 Editar datos genómicos':'🧬 Datos genómicos';
   openModal('modal-genomica');
 }
 function genLeerFilas(){
-  const valores=[...document.querySelectorAll('#gen-valores .gen-fila')].map(f=>({c:f.querySelector('.gen-v-c').value.trim(),v:f.querySelector('.gen-v-v').value.trim(),p:f.querySelector('.gen-v-p').value.trim(),per:f.querySelector('.gen-v-r').value.trim().replace(/%/g,'')})).filter(x=>x.c&&x.v!=='');
+  const valores=[...document.querySelectorAll('#gen-valores .gen-fila')].map(f=>({c:f.querySelector('.gen-v-c').value.trim(),v:f.querySelector('.gen-v-v').value.trim(),p:f.querySelector('.gen-v-p').value.trim(),per:f.querySelector('.gen-v-r').value.trim().replace(/%/g,''),prom:f.querySelector('.gen-v-m').value.trim()})).filter(x=>x.c&&x.v!=='');
   const enfermedades=[...document.querySelectorAll('#gen-enfs .gen-fila')].map(f=>({c:f.querySelector('.gen-e-c').value.trim(),e:f.querySelector('.gen-e-e').value})).filter(x=>x.c);
   return {valores,enfermedades};
 }
@@ -8982,7 +8990,7 @@ function genomicaCardHtml(rp){
   const l=(DB.genomica||[]).filter(g=>g.rp===rp).sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
   if(!l.length) return '';
   const g=l[0], v=g.valores||[];
-  const vals=v.slice(0,10).map(x=>`<span class="badge badge-gray" style="margin:1px">${esc(x.c)} <b>${esc(x.v)}</b>${(x.p||x.per)?` <span style="font-size:11px;color:var(--text3)">(${x.p?'prec '+esc(x.p):''}${x.p&&x.per?' · ':''}${x.per?'perc '+esc(String(x.per).replace(/%/g,''))+'%':''})</span>`:''}</span>`).join('');
+  const vals=v.slice(0,10).map(x=>`<span class="badge badge-gray" style="margin:1px">${esc(x.c)} <b>${esc(x.v)}</b>${(x.p||x.per||x.prom)?` <span style="font-size:11px;color:var(--text3)">(${[x.p?'prec '+esc(x.p):'',x.per?'perc '+esc(String(x.per).replace(/%/g,''))+'%':'',x.prom?'prom raza '+esc(x.prom):''].filter(Boolean).join(' · ')})</span>`:''}</span>`).join('');
   const enfs=(g.enfermedades||[]).map(x=>`<span class="badge ${genBadgeEstado(x.e)}" style="margin:1px">${esc(x.c)}: ${esc(x.e)}</span>`).join('');
   return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--green,#2ecc71)"><b>🧬 Genómica</b> · informe ${esc(g.fecha||'--')}${g.lab?' · '+esc(g.lab):''}${g.registro?' · Reg. '+esc(g.registro):''}${g.catAsoc?' · '+esc(g.catAsoc):''}${g.evaluacion?' · Evaluación '+esc(g.evaluacion):''}<div style="margin-top:6px">${vals}</div><div style="margin-top:4px">${enfs}</div>${v.length>10?`<div style="font-size:12px;color:var(--text3)">+${v.length-10} valores más (Sanidad → Genómica)</div>`:''}</div>`;
 }
@@ -15736,7 +15744,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-05.8';
+const RF_VERSION = '2026-11-05.9';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
