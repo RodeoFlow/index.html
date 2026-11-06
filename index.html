@@ -3638,7 +3638,10 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
   </div>
   <h4 style="margin:12px 0 6px;font-size:14px">DEP / EPD e índices</h4>
   <div id="gen-valores"></div>
-  <div id="gen-chips-v" style="margin:4px 0"></div>
+  <div style="border:2px dashed #f5c542;border-radius:10px;padding:10px 12px;margin:6px 0 12px;background:rgba(245,197,66,.10)">
+  <div style="font-weight:700;font-size:14px;margin-bottom:8px">⚡ Planilla rápida: elegí la raza y completá solo los números</div>
+  <div id="gen-chips-v" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+  </div>
   <button type="button" class="btn-secondary" style="font-size:12px" onclick="genAddValor('','','','')">＋ Otra característica</button>
   <h4 style="margin:14px 0 6px;font-size:14px">Enfermedades genéticas</h4>
   <div id="gen-enfs"></div>
@@ -8932,7 +8935,12 @@ function genAddValor(c,v,p,per,prom){ document.getElementById('gen-valores').app
 function genAddEnf(c,e){ document.getElementById('gen-enfs').appendChild(genFilaEnf(c,e)); }
 function genChips(){
   const mk=(id,lista,fn)=>{const c=document.getElementById(id); if(!c) return; c.innerHTML=''; lista.forEach(n=>{const b=document.createElement('button'); b.type='button'; b.className='btn-secondary'; b.style.cssText='padding:2px 8px;font-size:12px;margin:2px'; b.textContent='＋ '+n; b.onclick=()=>fn(n); c.appendChild(b);});};
-  const cv=document.getElementById('gen-chips-v'); if(cv){ cv.innerHTML=''; Object.keys(GEN_PLANTILLAS).forEach(r=>{const b=document.createElement('button'); b.type='button'; b.className='btn-secondary'; b.style.cssText='padding:4px 10px;font-size:12px;margin:2px'; b.textContent='📋 Plantilla '+r; b.onclick=()=>genPlantilla(r); cv.appendChild(b);}); }
+  const cv=document.getElementById('gen-chips-v');
+  if(cv){
+    const col={Angus:'background:#111827;color:#fff;border:2px solid #f5c542',Hereford:'background:#b3261e;color:#fff;border:2px solid #ffd7d2'};
+    cv.innerHTML='';
+    Object.keys(GEN_PLANTILLAS).forEach(r=>{const b=document.createElement('button'); b.type='button'; b.className='btn-primary'; b.style.cssText='padding:12px 20px;font-size:15px;font-weight:700;border-radius:10px;cursor:pointer;flex:1;min-width:150px;box-shadow:0 2px 6px rgba(0,0,0,.35);'+(col[r]||''); b.textContent='📋 Planilla '+r; b.onclick=()=>genPlantilla(r); cv.appendChild(b);});
+  }
   mk('gen-chips-e',GEN_ENFS_COMUNES,n=>genAddEnf(n,'Libre'));
 }
 function genAbrir(id){
@@ -15744,7 +15752,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-05.9';
+const RF_VERSION = '2026-11-05.10';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
