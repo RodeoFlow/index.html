@@ -3630,12 +3630,29 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
   </div>
   <div class="form-row">
   <div class="form-group"><label class="form-label">Registro / HBA</label><input type="text" id="gen-registro" class="form-control"></div>
-  <div class="form-group"><label class="form-label">Laboratorio o asociación</label><input type="text" id="gen-lab" class="form-control"></div>
+  <div class="form-group"><label class="form-label">Laboratorio o asociación (identificación)</label><input type="text" id="gen-lab" class="form-control"></div>
   </div>
   <div class="form-row">
-  <div class="form-group"><label class="form-label">Padre</label><input type="text" id="gen-padre" class="form-control"></div>
-  <div class="form-group"><label class="form-label">Madre</label><input type="text" id="gen-madre" class="form-control"></div>
+  <div class="form-group"><label class="form-label">Padre (nombre y HBA)</label><input type="text" id="gen-padre" class="form-control"></div>
+  <div class="form-group"><label class="form-label">Madre (nombre y HBA)</label><input type="text" id="gen-madre" class="form-control"></div>
   </div>
+  <div style="margin:10px 0 4px"><button type="button" class="btn-secondary" style="font-size:12px" onclick="genTraerAnimal()">📥 Traer datos del animal (nacimiento, sexo, madre y pesos)</button></div>
+  <details id="gen-ingreso" style="margin:8px 0">
+  <summary style="cursor:pointer;font-weight:700;font-size:14px">Ingreso al programa y datos de ADN</summary>
+  <div class="form-row" style="margin-top:8px">
+  <div class="form-group"><label class="form-label">Fecha de nacimiento</label><input type="date" id="gen-fnac" class="form-control"></div>
+  <div class="form-group"><label class="form-label">Sexo</label><select id="gen-sexo" class="form-control"><option value=""></option><option>Macho</option><option>Hembra</option></select></div>
+  </div>
+  <div class="form-row">
+  <div class="form-group"><label class="form-label">Tipo de servicio</label><select id="gen-servicio" class="form-control"><option value=""></option><option>Inseminación Artificial (IA)</option><option>IATF (a tiempo fijo)</option><option>Monta natural</option><option>Repaso natural</option><option>Transferencia embrionaria</option></select></div>
+  <div class="form-group"><label class="form-label">Grupo o código de manejo</label><input type="text" id="gen-grupo" class="form-control"></div>
+  </div>
+  <div class="form-row">
+  <div class="form-group"><label class="form-label">Panel de ADN utilizado</label><input type="text" id="gen-panel" class="form-control"></div>
+  <div class="form-group"><label class="form-label">Marcadores analizados</label><input type="text" id="gen-marcadores" class="form-control"></div>
+  </div>
+  <div class="form-group"><label class="form-label">Parentesco genético</label><select id="gen-parentesco" class="form-control"><option value=""></option><option>Verificado</option><option>No coincide</option><option>Pendiente</option></select></div>
+  </details>
   <h4 style="margin:12px 0 6px;font-size:14px">DEP / EPD e índices</h4>
   <div id="gen-valores"></div>
   <div style="border:2px dashed #f5c542;border-radius:10px;padding:10px 12px;margin:6px 0 12px;background:rgba(245,197,66,.10)">
@@ -5146,7 +5163,7 @@ function init(desdeSync) {
   if(DB.precios?.categorias_full) {
     updateMAGTable(DB.precios);
     if(DB.bna) updateBNADisplay(DB.bna);
-    updatePaywallARS(DB.precios.dolar_oficial||1055);
+    updatePaywallARS(DB.precios.dolar_oficial||DOLAR_REF.venta);
   }
 }
 
@@ -6336,77 +6353,58 @@ function addHistorial(tipo,desc,rp='',responsable='') {
 }
 
 // ─── PRECIOS MAG + BNA ───
+// Valor de referencia: SOLO se muestra la primera vez que se abre sin conexión y siempre marcado como "referencia". Actualizado el 06/11/2026.
+const DOLAR_REF = { compra: 1520, venta: 1570, blue: 1555, fecha: '06/11/2026' };
+async function _rfFetchJson(url, ms) {
+  for (let i = 0; i < 2; i++) { // 2 intentos: en el campo la señal es mala y una consulta sola falla seguido
+    try { const r = await fetch(url, { signal: AbortSignal.timeout(ms) }); if (r.ok) return await r.json(); } catch (e) {}
+  }
+  return null;
+}
+function _rfFechaFuente(iso) {
+  try { const d = iso ? new Date(iso) : new Date(); if (isNaN(d)) throw 0; return d.toLocaleDateString('es-AR') + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }); }
+  catch (e) { return new Date().toLocaleDateString('es-AR'); }
+}
 async function fetchBNADolar() {
-  // Fuente 1: dolarapi.com — API pública confiable para dólar oficial BNA
-  try {
-    const r = await fetch('https://dolarapi.com/v1/dolares/oficial', { signal: AbortSignal.timeout(5000) });
-    if(r.ok) {
-      const d = await r.json();
-      if(d.compra && d.venta) {
-        return { compra: d.compra, venta: d.venta, fuente: 'dolarapi.com (BNA)', fecha: new Date().toLocaleDateString('es-AR') };
-      }
-    }
-  } catch(e) {}
-
-  // Fuente 2: otra API de dólar
-  try {
-    const r = await fetch('https://api.bluelytics.com.ar/v2/latest', { signal: AbortSignal.timeout(5000) });
-    if(r.ok) {
-      const d = await r.json();
-      const compra = d.oficial?.value_buy;
-      const venta = d.oficial?.value_sell;
-      if(compra && venta) {
-        return { compra, venta, fuente: 'Bluelytics (BNA)', fecha: new Date().toLocaleDateString('es-AR') };
-      }
-    }
-  } catch(e) {}
-
-  // Fuente 3: BNA vía proxy (fallback)
+  // Fuente 1: dolarapi.com (dólar oficial BNA)
+  let d = await _rfFetchJson('https://dolarapi.com/v1/dolares/oficial', 9000);
+  if (d && d.compra && d.venta) return { compra: d.compra, venta: d.venta, fuente: 'dolarapi.com (BNA)', fecha: _rfFechaFuente(d.fechaActualizacion) };
+  // Fuente 2: Bluelytics
+  d = await _rfFetchJson('https://api.bluelytics.com.ar/v2/latest', 9000);
+  if (d && d.oficial && d.oficial.value_buy && d.oficial.value_sell) return { compra: d.oficial.value_buy, venta: d.oficial.value_sell, fuente: 'Bluelytics (BNA)', fecha: _rfFechaFuente(d.last_update) };
+  // Fuente 3: ArgentinaDatos (devuelve el historial: el último es el de hoy)
+  d = await _rfFetchJson('https://api.argentinadatos.com/v1/cotizaciones/dolares/oficial', 9000);
+  if (Array.isArray(d)) d = d[d.length - 1];
+  if (d && d.compra && d.venta) return { compra: d.compra, venta: d.venta, fuente: 'ArgentinaDatos', fecha: d.fecha ? new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-AR') : _rfFechaFuente() };
+  // Fuente 4: BNA vía proxy
   try {
     const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://www.bna.com.ar/Personas'), { signal: AbortSignal.timeout(6000) });
     const data = await r.json();
     const html = data.contents || '';
     const matches = html.match(/U\.S\.dollar[\s\S]*?<td[^>]*>([\d,\.]+)<\/td>[\s\S]*?<td[^>]*>([\d,\.]+)<\/td>/i);
-    if(matches) {
-      const compra = parseFloat(matches[1].replace(',','.'));
-      const venta = parseFloat(matches[2].replace(',','.'));
-      if(compra > 100 && venta > 100) {
-        return { compra, venta, fuente: 'BNA.com.ar', fecha: new Date().toLocaleDateString('es-AR') };
-      }
+    if (matches) {
+      const compra = parseFloat(matches[1].replace(',', '.'));
+      const venta = parseFloat(matches[2].replace(',', '.'));
+      if (compra > 100 && venta > 100) return { compra, venta, fuente: 'BNA.com.ar', fecha: _rfFechaFuente() };
     }
-  } catch(e) {}
-
-  // Fallback final: valor de referencia actualizado
-  return { compra: 1150, venta: 1180, fuente: 'Referencia (sin conexión)', fecha: new Date().toLocaleDateString('es-AR') };
+  } catch (e) {}
+  // Sin conexión: se conserva el último valor REAL guardado, con SU fecha y marcado como desactualizado.
+  // Si nunca hubo uno, se usa la referencia, también marcada. Nunca se muestra un número inventado como si fuera actual.
+  const g = DB && DB.bna;
+  if (g && g.venta && !g.referencia && !/Referencia/.test(g.fuente || '')) {
+    return { compra: g.compra, venta: g.venta, fuente: 'Último valor guardado', fecha: g.fecha, desactualizado: true };
+  }
+  return { compra: DOLAR_REF.compra, venta: DOLAR_REF.venta, fuente: 'Referencia (sin conexión)', fecha: DOLAR_REF.fecha, desactualizado: true, referencia: true };
 }
 
 async function fetchBlueDolar() {
-  // Fuente 1: dolarapi.com — dólar blue real en tiempo real
-  try {
-    const r = await fetch('https://dolarapi.com/v1/dolares/blue', { signal: AbortSignal.timeout(5000) });
-    if(r.ok) {
-      const d = await r.json();
-      if(d.venta) return { compra: d.compra, venta: d.venta, fuente: 'dolarapi.com (Blue)', fecha: new Date().toLocaleDateString('es-AR') };
-    }
-  } catch(e) {}
-  // Fuente 2: bluelytics.com.ar
-  try {
-    const r = await fetch('https://api.bluelytics.com.ar/v2/latest', { signal: AbortSignal.timeout(5000) });
-    if(r.ok) {
-      const d = await r.json();
-      const compra = d.blue?.value_buy;
-      const venta = d.blue?.value_sell;
-      if(venta) return { compra, venta, fuente: 'Bluelytics (Blue)', fecha: new Date().toLocaleDateString('es-AR') };
-    }
-  } catch(e) {}
-  // Fuente 3: argentinadatos.com
-  try {
-    const r = await fetch('https://api.argentinadatos.com/v1/cotizaciones/dolares/blue', { signal: AbortSignal.timeout(5000) });
-    if(r.ok) {
-      const d = await r.json();
-      if(d.venta) return { compra: d.compra, venta: d.venta, fuente: 'ArgentinaDatos (Blue)', fecha: new Date().toLocaleDateString('es-AR') };
-    }
-  } catch(e) {}
+  let d = await _rfFetchJson('https://dolarapi.com/v1/dolares/blue', 9000);
+  if (d && d.venta) return { compra: d.compra, venta: d.venta, fuente: 'dolarapi.com (Blue)', fecha: _rfFechaFuente(d.fechaActualizacion) };
+  d = await _rfFetchJson('https://api.bluelytics.com.ar/v2/latest', 9000);
+  if (d && d.blue && d.blue.value_sell) return { compra: d.blue.value_buy, venta: d.blue.value_sell, fuente: 'Bluelytics (Blue)', fecha: _rfFechaFuente(d.last_update) };
+  d = await _rfFetchJson('https://api.argentinadatos.com/v1/cotizaciones/dolares/blue', 9000);
+  if (Array.isArray(d)) d = d[d.length - 1];
+  if (d && d.venta) return { compra: d.compra, venta: d.venta, fuente: 'ArgentinaDatos (Blue)', fecha: d.fecha ? new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-AR') : _rfFechaFuente() };
   return null;
 }
 
@@ -6418,7 +6416,7 @@ async function fetchPrices() {
   // Fetch BNA + Blue + MAG en paralelo
   const [bnaData, blueData, magData] = await Promise.all([fetchBNADolar(), fetchBlueDolar(), fetchMAGPrices()]);
 
-  const dolarBlue = blueData?.venta || magData.dolar_blue || 0;
+  const dolarBlue = blueData?.venta || DB.precios?.dolar_blue || DOLAR_REF.blue;
 
   // Historial de precios por fecha de mercado — así la tendencia compara
   // contra el último remate DISTINTO, no contra el fetch anterior de hoy
@@ -6442,7 +6440,7 @@ async function fetchPrices() {
 
   DB.precios = { ...magData, dolar_bna_compra: bnaData.compra, dolar_bna_venta: bnaData.venta, dolar_oficial: bnaData.venta, dolar_blue: dolarBlue };
   DB.bna = bnaData;
-  DB.blue = blueData;
+  DB.blue = blueData || DB.blue || null;
 
   updatePriceDisplay(DB.precios);
   updateBNADisplay(bnaData);
@@ -6452,7 +6450,8 @@ async function fetchPrices() {
   if(el) el.textContent = 'Última actualización: ' + new Date().toLocaleTimeString('es-AR');
   renderDashPricesMini();
   const blueLabel = blueData ? ` · Blue: $${Number(dolarBlue).toLocaleString('es-AR')} (${blueData.fuente})` : '';
-  toast('Precios MAG + BNA actualizados ✅' + blueLabel, 'ok');
+  if (bnaData.desactualizado) toast('⚠️ No se pudo consultar el dólar: se muestra el del ' + bnaData.fecha + ' (' + bnaData.fuente + ')', 'info');
+  else toast('Precios MAG + BNA actualizados ✅' + blueLabel, 'ok');
 }
 
 // ── Precios MAG: se leen del archivo precios-mag.json (mismo repo, sin CORS) ──
@@ -6507,7 +6506,7 @@ async function fetchMAGPrices() {
       indice_arr_fuente: 'ref. local',
       categorias_full: { ...fallbackCategorias },
       categorias: Object.fromEntries(Object.entries(fallbackCategorias).map(([k,v]) => [k, v.prom])),
-      dolar_oficial: 1055, dolar_blue: 1260,
+      dolar_oficial: DOLAR_REF.venta, dolar_blue: DOLAR_REF.blue,
       indice_arrendamiento_novillo_kg_ha: idx,
       equivalente_arr_pesos_ha: Math.round(idx * 4200)
     };
@@ -6528,7 +6527,7 @@ async function fetchMAGPrices() {
     indice_arr_fuente: datos.indice_arrendamiento_novillo_kg_ha ? 'MAG / elrural.com (robot automático)' : 'ref. local',
     categorias_full: categoriasFull,
     categorias: flatCats,
-    dolar_oficial: 1055, dolar_blue: 1260, // se sobrescriben siempre con datos reales en fetchPrices()
+    dolar_oficial: DOLAR_REF.venta, dolar_blue: DOLAR_REF.blue, // se sobrescriben siempre con datos reales en fetchPrices()
     indice_arrendamiento_novillo_kg_ha: idxVal,
     equivalente_arr_pesos_ha: Math.round(idxVal * novProm)
   };
@@ -6537,7 +6536,7 @@ function updateBNADisplay(bna) {
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   s('bna-compra','$'+Number(bna.compra||0).toLocaleString('es-AR'));
   s('bna-venta','$'+Number(bna.venta||0).toLocaleString('es-AR'));
-  s('bna-fecha','Fuente: '+(bna.fuente||'BNA')+' · '+bna.fecha+(DB.blue?' · Blue: $'+Number(DB.blue.venta).toLocaleString('es-AR')+' ('+DB.blue.fuente+')':''));
+  s('bna-fecha',(bna.desactualizado?'⚠️ DESACTUALIZADO · ':'')+'Fuente: '+(bna.fuente||'BNA')+' · '+bna.fecha+(DB.blue?' · Blue: $'+Number(DB.blue.venta).toLocaleString('es-AR')+' ('+DB.blue.fuente+')':''));
   s('dash-usd-oficial2','$'+Number(bna.venta||0).toLocaleString('es-AR'));
   s('precios-usd-blue','$'+(DB.precios?.dolar_blue||'--'));
   const brecha = bna.venta ? (((DB.precios?.dolar_blue||bna.venta)/bna.venta-1)*100).toFixed(1)+'%' : '--';
@@ -6551,7 +6550,7 @@ function updateMAGTable(p) {
   const tbody = document.getElementById('mag-tabla-body');
   if(!tbody) return;
   const cats = p.categorias_full || {};
-  const usd = p.dolar_oficial || 1055;
+  const usd = p.dolar_oficial || DOLAR_REF.venta;
   const colores = {
     'Novillo':'var(--amber)','Novillito':'var(--accent)','Vaquillona':'var(--purple)',
     'Vaca Invernada':'var(--blue)',
@@ -6614,10 +6613,10 @@ function updatePriceDisplay(p) {
   s('t-tern','$'+(cats['Novillito']||'--'));
   s('tv-tern','▲ ref');
   s('t-usd','$'+(p.dolar_oficial||'--'));
-  s('tv-usd','oficial');
+  s('tv-usd','oficial'+(DB.bna&&DB.bna.desactualizado?' ⚠️ sin actualizar':''));
 
   // Dashboard USD widgets
-  s('dash-usd-oficial','$'+(p.dolar_oficial||'--').toLocaleString('es-AR'));
+  s('dash-usd-oficial','$'+(p.dolar_oficial||'--').toLocaleString('es-AR')+(DB.bna&&DB.bna.desactualizado?' ⚠️':''));
   s('dash-usd-blue','$'+(p.dolar_blue||'--').toLocaleString('es-AR'));
 
   // Índice arrendamiento novillo
@@ -8905,7 +8904,8 @@ function guardarSangrado(){
 // ═══ GENÓMICA: DEP/EPD, índices y enfermedades genéticas (carga manual o leída desde un PDF) ═══
 const GEN_PLANTILLAS={
   'Angus':['Largo de gestación','Peso al nacer','Destete directo','Leche','Peso final','Circunferencia escrotal','Altura','Área de ojo de bife','Grasa dorsal','Grasa de cadera','Grasa intramuscular','% de cortes minoristas'],
-  'Hereford':['Facilidad de parto directa (%)','Facilidad de parto hijas (%)','Peso al nacer (kg)','Peso al destete (kg)','Peso al final (kg)','Peso vaca adulta (kg)','Leche (kg)','Leche y crecimiento (kg)','Circunferencia escrotal (cm)','Peso carcasa (kg)','Área de ojo de bife (cm²)','Grasa dorsal (mm)','Grasa intramuscular (%)']
+  'Hereford':['Facilidad de parto directa (%)','Facilidad de parto hijas (%)','Peso al nacer (kg)','Peso al destete (kg)','Peso al final (kg)','Peso vaca adulta (kg)','Leche (kg)','Leche y crecimiento (kg)','Circunferencia escrotal (cm)','Peso carcasa (kg)','Área de ojo de bife (cm²)','Grasa dorsal (mm)','Grasa intramuscular (%)'],
+  'Limangus':['Peso al nacimiento','Peso al destete','Aptitud materna','Peso a los 18 meses','Circunferencia escrotal','Desarrollo muscular (fenotípico)','Grasa dorsal (fenotípico)','Área de ojo de bife (fenotípico)','Altura (fenotípico)','Circunferencia escrotal (fenotípico)','Evaluación reproductiva (fenotípico)','Peso al nacimiento (fenotípico)','Peso al destete (fenotípico)','Peso final (fenotípico)']
 };
 // Carga todas las filas de la raza de una vez (solo queda escribir los números)
 function genPlantilla(raza){
@@ -8918,7 +8918,7 @@ function genBadgeEstado(e){ return e==='Libre'?'badge-green':e==='Portador'?'bad
 function genFilaValor(c,v,p,per,prom){
   const d=document.createElement('div'); d.className='gen-fila'; d.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
   const mk=(cls,ph,val,fl)=>{const i=document.createElement('input'); i.type='text'; i.className='form-control '+cls; i.placeholder=ph; i.value=val==null?'':String(val); i.style.flex=fl; return i;};
-  d.appendChild(mk('gen-v-c','Característica',c,'3')); d.appendChild(mk('gen-v-v','DEP',v,'1')); d.appendChild(mk('gen-v-p','Prec.',p,'1')); d.appendChild(mk('gen-v-r','Perc. %',per,'1')); d.appendChild(mk('gen-v-m','Prom. raza',prom,'1'));
+  d.appendChild(mk('gen-v-c','Característica',c,'3')); d.appendChild(mk('gen-v-v','DEP',v,'1')); d.appendChild(mk('gen-v-p','Prec.',p,'1')); d.appendChild(mk('gen-v-r','Perc./Rank',per,'1')); d.appendChild(mk('gen-v-m','Prom. raza',prom,'1'));
   const b=document.createElement('button'); b.type='button'; b.className='btn-danger'; b.textContent='✕'; b.style.cssText='padding:2px 8px'; b.onclick=()=>d.remove(); d.appendChild(b);
   return d;
 }
@@ -8937,7 +8937,7 @@ function genChips(){
   const mk=(id,lista,fn)=>{const c=document.getElementById(id); if(!c) return; c.innerHTML=''; lista.forEach(n=>{const b=document.createElement('button'); b.type='button'; b.className='btn-secondary'; b.style.cssText='padding:2px 8px;font-size:12px;margin:2px'; b.textContent='＋ '+n; b.onclick=()=>fn(n); c.appendChild(b);});};
   const cv=document.getElementById('gen-chips-v');
   if(cv){
-    const col={Angus:'background:#111827;color:#fff;border:2px solid #f5c542',Hereford:'background:#b3261e;color:#fff;border:2px solid #ffd7d2'};
+    const col={Angus:'background:#111827;color:#fff;border:2px solid #f5c542',Hereford:'background:#b3261e;color:#fff;border:2px solid #ffd7d2',Limangus:'background:#166534;color:#fff;border:2px solid #bbf7d0'};
     cv.innerHTML='';
     Object.keys(GEN_PLANTILLAS).forEach(r=>{const b=document.createElement('button'); b.type='button'; b.className='btn-primary'; b.style.cssText='padding:12px 20px;font-size:15px;font-weight:700;border-radius:10px;cursor:pointer;flex:1;min-width:150px;box-shadow:0 2px 6px rgba(0,0,0,.35);'+(col[r]||''); b.textContent='📋 Planilla '+r; b.onclick=()=>genPlantilla(r); cv.appendChild(b);});
   }
@@ -8947,13 +8947,37 @@ function genAbrir(id){
   const g=id?(DB.genomica||[]).find(x=>x.id===id):null;
   const set=(k,v)=>{const el=document.getElementById(k); if(el) el.value=v==null?'':v;};
   set('gen-id',g?g.id:''); set('gen-rp',g?g.rp:''); set('gen-fecha',g?g.fecha:new Date().toISOString().split('T')[0]);
-  set('gen-registro',g?g.registro:''); set('gen-lab',g?g.lab:''); set('gen-padre',g?g.padre:''); set('gen-madre',g?g.madre:''); set('gen-obs',g?g.obs:'');
+  set('gen-registro',g?g.registro:''); set('gen-lab',g?g.lab:'');
+  const setSel=(k,v)=>{const el=document.getElementById(k); if(!el) return; if(v&&![...el.options].some(o=>o.value===v)){const o=document.createElement('option'); o.value=v; o.textContent=v; el.appendChild(o);} el.value=v||'';};
+  set('gen-fnac',g?g.fnac:''); setSel('gen-sexo',g?g.sexo:''); setSel('gen-servicio',g?g.servicio:''); set('gen-grupo',g?g.grupo:''); set('gen-panel',g?g.panel:''); set('gen-marcadores',g?g.marcadores:''); setSel('gen-parentesco',g?g.parentesco:'');
+  const det=document.getElementById('gen-ingreso'); if(det) det.open=!!(g&&(g.fnac||g.sexo||g.servicio||g.grupo||g.panel||g.marcadores||g.parentesco)); set('gen-padre',g?g.padre:''); set('gen-madre',g?g.madre:''); set('gen-obs',g?g.obs:'');
   const dl=document.getElementById('gen-rp-list'); if(dl){ dl.innerHTML=''; (DB.animales||[]).slice(0,5000).forEach(a=>{const o=document.createElement('option'); o.value=a.rp; dl.appendChild(o);}); }
   document.getElementById('gen-valores').innerHTML=''; document.getElementById('gen-enfs').innerHTML='';
   ((g&&g.valores)||[]).forEach(x=>genAddValor(x.c,x.v,x.p,x.per,x.prom)); ((g&&g.enfermedades)||[]).forEach(x=>genAddEnf(x.c,x.e));
   genChips();
   const tit=document.getElementById('gen-titulo'); if(tit) tit.textContent=g?'🧬 Editar datos genómicos':'🧬 Datos genómicos';
   openModal('modal-genomica');
+}
+function genTraerAnimal(){
+  const rp=String($v('gen-rp')||'').trim();
+  if(!rp){toast('Primero escribí el RP','err');return;}
+  const a=(DB.animales||[]).find(x=>x.rp===rp);
+  if(!a){toast('Ese RP no está en tu rodeo','err');return;}
+  const n=(DB.nacimientos||[]).find(x=>x.rp===rp), d=(DB.destetes||[]).find(x=>x.ternero===rp);
+  const set=(k,v)=>{const el=document.getElementById(k); if(el&&v&&!el.value){ if(el.tagName==='SELECT'&&![...el.options].some(o=>o.value===v)) return; el.value=v; }};
+  set('gen-fnac',a.fnac||(n&&n.fecha)||''); set('gen-sexo',a.sexo||(n&&n.sexo)||'');
+  const madre=(n&&n.madre)||(d&&d.madre)||''; if(madre) set('gen-madre','RP '+madre);
+  const setPeso=(nombre,val)=>{
+    if(!val&&val!==0) return;
+    let fila=[...document.querySelectorAll('#gen-valores .gen-fila')].find(f=>f.querySelector('.gen-v-c').value.trim()===nombre);
+    if(!fila){ genAddValor(nombre,'','','',''); const fs=document.querySelectorAll('#gen-valores .gen-fila'); fila=fs[fs.length-1]; }
+    const inp=fila.querySelector('.gen-v-v'); if(!inp.value) inp.value=String(val);
+  };
+  setPeso('Peso al nacimiento (fenotípico)',n&&n.peso);
+  setPeso('Peso al destete (fenotípico)',d&&d.peso);
+  const ph=a.pesoHistorico||[]; setPeso('Peso final (fenotípico)',ph.length?ph[ph.length-1].kg:a.peso);
+  const det=document.getElementById('gen-ingreso'); if(det) det.open=true;
+  toast('Datos del animal traídos ✅ Revisá el peso final: es el último peso registrado','ok');
 }
 function genLeerFilas(){
   const valores=[...document.querySelectorAll('#gen-valores .gen-fila')].map(f=>({c:f.querySelector('.gen-v-c').value.trim(),v:f.querySelector('.gen-v-v').value.trim(),p:f.querySelector('.gen-v-p').value.trim(),per:f.querySelector('.gen-v-r').value.trim().replace(/%/g,''),prom:f.querySelector('.gen-v-m').value.trim()})).filter(x=>x.c&&x.v!=='');
@@ -8966,7 +8990,7 @@ function guardarGenomica(){
   const {valores,enfermedades}=genLeerFilas();
   if(!valores.length&&!enfermedades.length){toast('Cargá al menos un valor o una enfermedad genética','err');return;}
   const idEdit=parseInt($v('gen-id'))||0;
-  const g={id:idEdit||Date.now(),rp,fecha:$v('gen-fecha')||new Date().toISOString().split('T')[0],lab:$v('gen-lab'),registro:$v('gen-registro'),padre:$v('gen-padre'),madre:$v('gen-madre'),valores,enfermedades,obs:$v('gen-obs'),fuente:'manual'};
+  const g={id:idEdit||Date.now(),rp,fecha:$v('gen-fecha')||new Date().toISOString().split('T')[0],lab:$v('gen-lab'),registro:$v('gen-registro'),padre:$v('gen-padre'),madre:$v('gen-madre'),fnac:$v('gen-fnac'),sexo:$v('gen-sexo'),servicio:$v('gen-servicio'),grupo:$v('gen-grupo'),panel:$v('gen-panel'),marcadores:$v('gen-marcadores'),parentesco:$v('gen-parentesco'),valores,enfermedades,obs:$v('gen-obs'),fuente:'manual'};
   if(!DB.genomica)DB.genomica=[];
   const k=idEdit?DB.genomica.findIndex(x=>x.id===idEdit):-1;
   if(k>=0){ DB.genomica[k]=Object.assign({},DB.genomica[k],g); } else DB.genomica.push(g);
@@ -8988,7 +9012,7 @@ function renderGenomica(){
   tbody.innerHTML=[...lista].sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||''))).map(g=>`<tr>
   <td class="td-mono">${esc(g.fecha||'--')}</td>
   <td class="td-mono"><a href="#" onclick="abrirFichaAnimal(${rfJs(g.rp)});return false">${esc(g.rp)}</a></td>
-  <td>${esc(g.registro||'--')}${g.nombre?`<div style="font-size:12px;color:var(--text3)">${esc(g.nombre)}</div>`:''}${(g.catAsoc||g.color)?`<div style="font-size:12px;color:var(--text3)">${esc([g.catAsoc,g.color].filter(Boolean).join(' · '))}</div>`:''}</td>
+  <td>${esc(g.registro||'--')}${g.nombre?`<div style="font-size:12px;color:var(--text3)">${esc(g.nombre)}</div>`:''}${(g.catAsoc||g.color||g.grupo)?`<div style="font-size:12px;color:var(--text3)">${esc([g.catAsoc,g.color,g.grupo?'Grupo '+g.grupo:''].filter(Boolean).join(' · '))}</div>`:''}</td>
   <td>${resumen(g)}</td><td>${enfs(g)}</td>
   <td style="font-size:12px;color:var(--text3)">${g.fuente==='pdf'?'📄 PDF':'✍️ Manual'}${g.lab?'<br>'+esc(g.lab):''}</td>
   <td style="white-space:nowrap"><button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="genAbrir(${rfN(g.id)})">✏️</button> <button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarGenomica(${rfN(g.id)})">🗑</button></td>
@@ -9000,7 +9024,7 @@ function genomicaCardHtml(rp){
   const g=l[0], v=g.valores||[];
   const vals=v.slice(0,10).map(x=>`<span class="badge badge-gray" style="margin:1px">${esc(x.c)} <b>${esc(x.v)}</b>${(x.p||x.per||x.prom)?` <span style="font-size:11px;color:var(--text3)">(${[x.p?'prec '+esc(x.p):'',x.per?'perc '+esc(String(x.per).replace(/%/g,''))+'%':'',x.prom?'prom raza '+esc(x.prom):''].filter(Boolean).join(' · ')})</span>`:''}</span>`).join('');
   const enfs=(g.enfermedades||[]).map(x=>`<span class="badge ${genBadgeEstado(x.e)}" style="margin:1px">${esc(x.c)}: ${esc(x.e)}</span>`).join('');
-  return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--green,#2ecc71)"><b>🧬 Genómica</b> · informe ${esc(g.fecha||'--')}${g.lab?' · '+esc(g.lab):''}${g.registro?' · Reg. '+esc(g.registro):''}${g.catAsoc?' · '+esc(g.catAsoc):''}${g.evaluacion?' · Evaluación '+esc(g.evaluacion):''}<div style="margin-top:6px">${vals}</div><div style="margin-top:4px">${enfs}</div>${v.length>10?`<div style="font-size:12px;color:var(--text3)">+${v.length-10} valores más (Sanidad → Genómica)</div>`:''}</div>`;
+  return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--green,#2ecc71)"><b>🧬 Genómica</b> · informe ${esc(g.fecha||'--')}${g.lab?' · '+esc(g.lab):''}${g.registro?' · Reg. '+esc(g.registro):''}${g.catAsoc?' · '+esc(g.catAsoc):''}${g.evaluacion?' · Evaluación '+esc(g.evaluacion):''}<div style="margin-top:6px">${vals}</div><div style="margin-top:4px">${enfs}</div>${(g.panel||g.marcadores||g.parentesco)?`<div style="margin-top:4px;font-size:12px;color:var(--text2)">🧬 ADN: ${esc([g.panel?'panel '+g.panel:'',g.marcadores?g.marcadores+' marcadores':'',g.parentesco?'parentesco '+g.parentesco.toLowerCase():''].filter(Boolean).join(' · '))}</div>`:''}${v.length>10?`<div style="font-size:12px;color:var(--text3)">+${v.length-10} valores más (Sanidad → Genómica)</div>`:''}</div>`;
 }
 // ── Lectura de un PDF con IA ──
 async function genLeerPDF(input){
@@ -9053,7 +9077,7 @@ function genConfirmarPDF(){
     const ck=document.getElementById('gen-pdf-ck-'+i); if(!ck||!ck.checked) return;
     const rp=(document.getElementById('gen-pdf-rp-'+i)?.value||'').trim();
     if(!rp){ sinRp++; return; }
-    const rec={id:Date.now()+i,rp,fecha:x.fecha||hoy,lab:x.lab||'',registro:x.registro||'',nombre:x.nombre||'',color:x.color||'',catAsoc:x.catAsoc||'',adn:x.adn||'',fnac:x.fnac||'',evaluacion:x.evaluacion||'',padre:x.padre||'',madre:x.madre||'',valores:x.valores||[],enfermedades:x.enfermedades||[],obs:x.obs||'',fuente:'pdf'};
+    const rec={id:Date.now()+i,rp,fecha:x.fecha||hoy,lab:x.lab||'',registro:x.registro||'',nombre:x.nombre||'',color:x.color||'',catAsoc:x.catAsoc||'',adn:x.adn||'',fnac:x.fnac||'',evaluacion:x.evaluacion||'',sexo:x.sexo||'',servicio:x.servicio||'',grupo:x.grupo||'',panel:x.panel||'',marcadores:x.marcadores||'',parentesco:x.parentesco||'',padre:x.padre||'',madre:x.madre||'',valores:x.valores||[],enfermedades:x.enfermedades||[],obs:x.obs||'',fuente:'pdf'};
     const k=DB.genomica.findIndex(g=>g.rp===rp&&g.fecha===rec.fecha&&g.fuente==='pdf');
     if(k>=0){ rec.id=DB.genomica[k].id; DB.genomica[k]=rec; } else DB.genomica.push(rec);
     addHistorial('Genómica',`RP ${rp}: ${rec.valores.length} valores, ${rec.enfermedades.length} enfermedades genéticas (PDF)`,rp,'');
@@ -14533,7 +14557,7 @@ function exportExcelCompleto(){
   const wb = XLSX.utils.book_new();
   const estab = document.getElementById('estab-name')?.value || 'RodeoFlow';
   const fecha = new Date().toISOString().split('T')[0];
-  const usd = DB.precios?.dolar_oficial || 1055;
+  const usd = DB.precios?.dolar_oficial || DOLAR_REF.venta;
   const categorias = ['Novillo','Novillito','Vaca','Vaquillona','Toro','Torito','Ternero M','Ternera H','Invernada Machos','Invernada Hembras','Invernada Vientres'];
 
   // Helper: agrega hoja siempre, aunque esté vacía
@@ -15206,7 +15230,7 @@ function exportExcelCategorias() {
       'Promedio $/kg':typeof v==='object'?v.prom:v,
       'Máximo $/kg':typeof v==='object'?v.max:v,
       'USD Oficial':DB.precios.dolar_oficial||'--',
-      'USD Prom.':(typeof v==='object'?v.prom:v)/(DB.precios.dolar_oficial||1055),
+      'USD Prom.':(typeof v==='object'?v.prom:v)/(DB.precios.dolar_oficial||DOLAR_REF.venta),
       'Fecha':DB.precios.fecha||''
     }));
     const ws = XLSX.utils.json_to_sheet(magRows);
@@ -15240,7 +15264,7 @@ function exportExcelCategorias() {
     const lista = DB.animales.filter(a=>a.activo&&a.categoria===cat);
     const pesos = lista.filter(a=>a.peso>0).map(a=>a.peso);
     const precioMAG = DB.precios?.categorias?.[cat]||0;
-    const usd = DB.precios?.dolar_oficial||1055;
+    const usd = DB.precios?.dolar_oficial||DOLAR_REF.venta;
     return {
       'Categoría':cat,'Cantidad':lista.length,
       'Peso Mín kg':pesos.length?Math.min(...pesos):0,
@@ -15752,7 +15776,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-05.10';
+const RF_VERSION = '2026-11-06.2';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
