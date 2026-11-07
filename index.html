@@ -6355,10 +6355,15 @@ function addHistorial(tipo,desc,rp='',responsable='') {
 // ─── PRECIOS MAG + BNA ───
 // Valor de referencia: SOLO se muestra la primera vez que se abre sin conexión y siempre marcado como "referencia". Actualizado el 06/11/2026.
 const DOLAR_REF = { compra: 1520, venta: 1570, blue: 1555, fecha: '06/11/2026' };
+function rfSenalTimeout(ms) {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  if (typeof AbortController === 'undefined') return undefined;
+  const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal;
+}
 async function _rfFetchJson(url, ms, intentos = 2) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return null; // sin conexión no se pierde tiempo
   for (let i = 0; i < intentos; i++) { // 2 intentos: en el campo la señal es mala y una consulta sola falla seguido
-    try { const r = await fetch(url, { signal: AbortSignal.timeout(ms) }); if (r.ok) return await r.json(); } catch (e) {}
+    try { const r = await fetch(url, { signal: rfSenalTimeout(ms) }); if (r.ok) return await r.json(); } catch (e) {}
   }
   return null;
 }
@@ -6380,7 +6385,7 @@ async function fetchBNADolar() {
   // Fuente 4: BNA vía proxy
   try {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('sin conexión');
-    const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://www.bna.com.ar/Personas'), { signal: AbortSignal.timeout(6000) });
+    const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://www.bna.com.ar/Personas'), { signal: rfSenalTimeout(6000) });
     const data = await r.json();
     const html = data.contents || '';
     const matches = html.match(/U\.S\.dollar[\s\S]*?<td[^>]*>([\d,\.]+)<\/td>[\s\S]*?<td[^>]*>([\d,\.]+)<\/td>/i);
@@ -6494,7 +6499,7 @@ async function fetchMAGPrices() {
 
   let datos = null;
   try {
-    const r = await fetch('./precios-mag.json?t=' + Date.now(), { signal: AbortSignal.timeout(6000) });
+    const r = await fetch('./precios-mag.json?t=' + Date.now(), { signal: rfSenalTimeout(6000) });
     if (r.ok) datos = await r.json();
   } catch (e) { console.warn('[MAG] No se pudo leer precios-mag.json:', e.message); }
 
@@ -15784,7 +15789,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-06.4';
+const RF_VERSION = '2026-11-06.5';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -16050,7 +16055,7 @@ function marcarAvisado(clave){
 }
 
 function verificarYNotificar(){
-  if(Notification.permission!=='granted' || !DB.settings.notificaciones?.activadas) return;
+  if(typeof Notification==='undefined' || Notification.permission!=='granted' || !DB.settings.notificaciones?.activadas) return;
   const prefs = DB.settings.notificaciones.categorias || {};
 
   if(prefs.vencimientos!==false && typeof obtenerVencimientos==='function'){
@@ -16099,7 +16104,7 @@ function iniciarChequeoNotificaciones(){
 // Si el usuario ya había activado notificaciones en una sesión anterior, retomar el chequeo
 window.addEventListener('load', () => {
   setTimeout(() => {
-    if(Notification && Notification.permission==='granted' && DB.settings?.notificaciones?.activadas){
+    if(typeof Notification!=='undefined' && Notification.permission==='granted' && DB.settings?.notificaciones?.activadas){
       iniciarChequeoNotificaciones();
     }
   }, 3000);
@@ -16338,6 +16343,8 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 
 function mostrarErrorBoundary(msg, linea) {
+  // Una función opcional que este navegador no tiene (notificaciones, vibración, etc.) no es un error crítico
+  if (/Notification|serviceWorker|vibrate|wakeLock|AbortSignal|BroadcastChannel|PushManager/i.test(String(msg||''))) return;
   // No mostrar si la app ya está activa (error no crítico en módulo)
   const app = document.getElementById('app');
   if (app && app.style.display !== 'none' && app.style.display !== '') return;
