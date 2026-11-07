@@ -14542,9 +14542,15 @@ function renderResumen(){
   const activos=DB.animales.filter(a=>a.activo);
   const tc=DB.compras.reduce((s,c)=>s+(c.total||0),0);
   const tv=DB.ventas.reduce((s,v)=>s+(v.total||0),0);
+  // Stock de vacunas (de Insumos): se muestra debajo de las vacunas aplicadas
+  const vacIns=(DB.insumos||[]).filter(i=>i.categoria==='Vacuna').map(i=>({n:i.nombre||'Vacuna',s:stockActualInsumo(i.id),u:i.unidad||'',bajo:stockActualInsumo(i.id)<(parseFloat(i.stockMinimo)||0)}));
+  const hayBajo=vacIns.some(x=>x.bajo);
+  const stockVacTxt=vacIns.length
+    ? vacIns.slice(0,3).map(x=>`${x.bajo?'🔴 ':''}${esc(x.n)}: ${x.s} ${esc(x.u)}`).join(' · ')+(vacIns.length>3?` · +${vacIns.length-3} más`:'')
+    : 'Sin vacunas cargadas en Insumos';
   el.innerHTML=`<div class="grid-4">
     <div class="kpi green"><div class="kpi-label">Animales</div><div class="kpi-val">${activos.length}</div></div>
-    <div class="kpi amber"><div class="kpi-label">Vacunas</div><div class="kpi-val">${DB.vacunas.length}</div></div>
+    <div class="kpi amber"><div class="kpi-label">Vacunas aplicadas</div><div class="kpi-val">${DB.vacunas.length}</div><div style="font-size:11px;margin-top:6px;color:${hayBajo?'var(--red)':'var(--text3)'}" title="Stock de vacunas según Insumos">📦 Stock: ${stockVacTxt}</div></div>
     <div class="kpi blue"><div class="kpi-label">Tratamientos</div><div class="kpi-val">${DB.tratamientos.length}</div></div>
     <div class="kpi purple"><div class="kpi-label">Potreros</div><div class="kpi-val">${DB.potreros.length}</div></div>
     <div class="kpi green"><div class="kpi-label">Compras $</div><div class="kpi-val" style="font-size:18px">$${(tc/1000000).toFixed(1)}M</div></div>
@@ -15778,7 +15784,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-06.3';
+const RF_VERSION = '2026-11-06.4';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
