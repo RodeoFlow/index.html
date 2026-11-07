@@ -6355,8 +6355,9 @@ function addHistorial(tipo,desc,rp='',responsable='') {
 // ─── PRECIOS MAG + BNA ───
 // Valor de referencia: SOLO se muestra la primera vez que se abre sin conexión y siempre marcado como "referencia". Actualizado el 06/11/2026.
 const DOLAR_REF = { compra: 1520, venta: 1570, blue: 1555, fecha: '06/11/2026' };
-async function _rfFetchJson(url, ms) {
-  for (let i = 0; i < 2; i++) { // 2 intentos: en el campo la señal es mala y una consulta sola falla seguido
+async function _rfFetchJson(url, ms, intentos = 2) {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return null; // sin conexión no se pierde tiempo
+  for (let i = 0; i < intentos; i++) { // 2 intentos: en el campo la señal es mala y una consulta sola falla seguido
     try { const r = await fetch(url, { signal: AbortSignal.timeout(ms) }); if (r.ok) return await r.json(); } catch (e) {}
   }
   return null;
@@ -6370,14 +6371,15 @@ async function fetchBNADolar() {
   let d = await _rfFetchJson('https://dolarapi.com/v1/dolares/oficial', 9000);
   if (d && d.compra && d.venta) return { compra: d.compra, venta: d.venta, fuente: 'dolarapi.com (BNA)', fecha: _rfFechaFuente(d.fechaActualizacion) };
   // Fuente 2: Bluelytics
-  d = await _rfFetchJson('https://api.bluelytics.com.ar/v2/latest', 9000);
+  d = await _rfFetchJson('https://api.bluelytics.com.ar/v2/latest', 9000, 1);
   if (d && d.oficial && d.oficial.value_buy && d.oficial.value_sell) return { compra: d.oficial.value_buy, venta: d.oficial.value_sell, fuente: 'Bluelytics (BNA)', fecha: _rfFechaFuente(d.last_update) };
   // Fuente 3: ArgentinaDatos (devuelve el historial: el último es el de hoy)
-  d = await _rfFetchJson('https://api.argentinadatos.com/v1/cotizaciones/dolares/oficial', 9000);
+  d = await _rfFetchJson('https://api.argentinadatos.com/v1/cotizaciones/dolares/oficial', 9000, 1);
   if (Array.isArray(d)) d = d[d.length - 1];
   if (d && d.compra && d.venta) return { compra: d.compra, venta: d.venta, fuente: 'ArgentinaDatos', fecha: d.fecha ? new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-AR') : _rfFechaFuente() };
   // Fuente 4: BNA vía proxy
   try {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('sin conexión');
     const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://www.bna.com.ar/Personas'), { signal: AbortSignal.timeout(6000) });
     const data = await r.json();
     const html = data.contents || '';
@@ -6400,9 +6402,9 @@ async function fetchBNADolar() {
 async function fetchBlueDolar() {
   let d = await _rfFetchJson('https://dolarapi.com/v1/dolares/blue', 9000);
   if (d && d.venta) return { compra: d.compra, venta: d.venta, fuente: 'dolarapi.com (Blue)', fecha: _rfFechaFuente(d.fechaActualizacion) };
-  d = await _rfFetchJson('https://api.bluelytics.com.ar/v2/latest', 9000);
+  d = await _rfFetchJson('https://api.bluelytics.com.ar/v2/latest', 9000, 1);
   if (d && d.blue && d.blue.value_sell) return { compra: d.blue.value_buy, venta: d.blue.value_sell, fuente: 'Bluelytics (Blue)', fecha: _rfFechaFuente(d.last_update) };
-  d = await _rfFetchJson('https://api.argentinadatos.com/v1/cotizaciones/dolares/blue', 9000);
+  d = await _rfFetchJson('https://api.argentinadatos.com/v1/cotizaciones/dolares/blue', 9000, 1);
   if (Array.isArray(d)) d = d[d.length - 1];
   if (d && d.venta) return { compra: d.compra, venta: d.venta, fuente: 'ArgentinaDatos (Blue)', fecha: d.fecha ? new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-AR') : _rfFechaFuente() };
   return null;
@@ -15776,7 +15778,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-06.2';
+const RF_VERSION = '2026-11-06.3';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -15807,10 +15809,9 @@ function rfMostrarVersion(){ const e = document.getElementById('rf-version-txt')
 let pwaDeferredPrompt = null;
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(err => {
-      console.warn('No se pudo registrar el service worker (modo offline puede no estar disponible):', err);
-    });
+  // Se registra de inmediato (no se espera al evento "load", que con señal mala tarda) y sin usar copias viejas de sw.js
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(err => {
+  console.warn('No se pudo registrar el service worker (modo offline puede no estar disponible):', err);
   });
 }
 
