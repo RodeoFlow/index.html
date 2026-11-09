@@ -4793,6 +4793,7 @@ function rfLimpiarSesion() { ['rf_logged','rf_role','rf_user_name','rf_login_ts'
 })();
 
 async function checkAuth() {
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e) {}
   // Cargar desde IndexedDB (con migración automática desde localStorage)
   await loadFromStorageAsync();
   console.log('📦 checkAuth IDB - animales:', DB.animales?.length, '| potreros:', DB.potreros?.length);
@@ -5277,7 +5278,7 @@ function saveToStorage() {
   // Guardar localmente (IDB)
   saveEstabActivo().catch(e => console.warn('saveEstabActivo error:', e));
   // Backup en localStorage
-  try { localStorage.setItem(RF_DB_KEY, JSON.stringify(DB)); } catch(e) {}
+  try { localStorage.setItem(RF_DB_KEY, JSON.stringify(DB)); localStorage.setItem('rf_bk_estab', window.ESTAB_ID_ACTIVO || ''); } catch(e) {}
   // Sync a Firebase (throttled, no bloquea)
   if (window.pushSyncFirebase) window.pushSyncFirebase();
 }
@@ -15894,7 +15895,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-08.2';
+const RF_VERSION = '2026-11-09.1';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -16624,6 +16625,8 @@ async function cargarEstabActivo() {
   try {
     // Obtener ID activo
     let id = await idbGet(RF_ACTIVO_KEY);
+    // IndexedDB vacío (borrado por el navegador): recuperar el id del respaldo en localStorage
+    if (!id) { try { id = localStorage.getItem('rf_bk_estab') || null; } catch(e) {} }
 
     // Si no hay ID activo, migrar datos existentes o crear nuevo
     if (!id) {
@@ -16648,6 +16651,24 @@ async function cargarEstabActivo() {
   } catch(e) {
     console.warn('Error cargando establecimiento activo:', e);
   }
+  rfRestaurarRespaldoLocal();
+}
+// Si IndexedDB no trajo datos (falla puntual o borrado), usar el respaldo de localStorage
+// del MISMO establecimiento, en vez de mostrar la pantalla de alta como si fuera el primer uso.
+function rfRestaurarRespaldoLocal() {
+  try {
+    if (window.DB && DB.settings && DB.settings.hasBeenSetup) return;
+    const id = window.ESTAB_ID_ACTIVO, bkId = localStorage.getItem('rf_bk_estab'), ls = localStorage.getItem(RF_DB_KEY);
+    if (!id || !ls || bkId !== id) return;
+    const b = runMigrations(JSON.parse(ls));
+    if (!b.settings || !b.settings.hasBeenSetup) return;
+    DB = b; window.DB = b;
+    if (!DB.encierres) DB.encierres = [];
+    if (!DB.nacimientos) DB.nacimientos = [];
+    idbSet(RF_ACTIVO_KEY, id).catch(() => {});
+    idbSet('rf_estab_' + id, ls).catch(() => {});
+    console.warn('♻️ Datos restaurados desde el respaldo local');
+  } catch(e) { console.warn('Respaldo local no disponible:', e); }
 }
 
 // ── Migración: datos existentes → primer establecimiento
