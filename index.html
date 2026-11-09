@@ -1301,6 +1301,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
           <button class="btn-primary" onclick="openModalAnimal()">＋ Alta animal</button>
         </div>
       </div>
+      <div id="animales-resumen-cat" style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px"></div>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th>Foto</th><th>RP</th><th>RFID</th><th>Categoría</th><th>Raza</th><th>Sexo</th><th>F.Nac</th><th>Peso</th><th>GDP</th><th>Potrero</th><th>Preñez</th><th>Estado</th><th>Obs</th><th>Ficha</th><th>Acciones</th></tr></thead>
@@ -10667,6 +10668,38 @@ function renderAnimales(filtrados){
     <td><button class="btn-secondary" style="padding:2px 8px;font-size:14px" data-rp="${esc(a.rp)}" onclick="abrirFichaAnimal(this.dataset.rp)" title="Ver ficha completa">👁</button></td>
     <td style="white-space:nowrap"><button class="btn-secondary" style="padding:2px 8px;font-size:14px" onclick="animalEditar(${rfN(a.id)})" title="Editar datos">✏️</button> <button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaAnimal(${rfN(a.id)})">🗑 Baja</button></td>
   </tr>`).join('')||emptyRow(15);
+  renderResumenCategorias();
+}
+
+// ── Cantidad de animales por categoría (respeta campo, potrero y búsqueda; no el filtro de categoría) ──
+const CATS_BASE_ANIMALES=['Novillo','Novillito','Vaca','Vaquillona','Toro','Torito','Ternero M','Ternera H','Invernada Machos','Invernada Hembras','Invernada Vientres'];
+function renderResumenCategorias(){
+  const box=document.getElementById('animales-resumen-cat'), sel=document.getElementById('filtro-categoria');
+  if(!box) return;
+  const pot=document.getElementById('filtro-potrero')?.value||'';
+  const busq=(document.getElementById('buscar-animal')?.value||'').toLowerCase();
+  const camp=document.getElementById('filtro-campo')?.value||'';
+  const cat=sel?.value||'';
+  const base=(DB.animales||[]).filter(a=>a.activo&&(!camp||campoDeAnimal(a)===camp)&&(!pot||(pot==='__sin__'?!a.potrero:a.potrero===pot))&&(!busq||String(a.rp).toLowerCase().includes(busq)||(a.nombre||'').toLowerCase().includes(busq)));
+  const cnt={}; base.forEach(a=>{ const c=a.categoria||'Sin categoría'; cnt[c]=(cnt[c]||0)+1; });
+  const chip=(valor,txt,n)=>{
+    const act=valor===cat;
+    return `<button type="button" data-cat="${esc(valor)}" onclick="filtrarPorCategoria(this.dataset.cat)" style="padding:4px 10px;border-radius:14px;font-size:13px;cursor:pointer;border:1px solid ${act?'var(--accent)':'var(--border)'};background:${act?'var(--accent)':'var(--bg3)'};color:${act?'#1c1f26':'var(--text)'};font-weight:${act?'700':'500'}">${esc(txt)} <b>${n}</b></button>`;
+  };
+  const orden=Object.keys(cnt).sort((x,y)=>cnt[y]-cnt[x]||x.localeCompare(y));
+  box.innerHTML=chip('','Total',base.length)+orden.map(c=>chip(c,c,cnt[c])).join('');
+  // El desplegable también muestra la cantidad, e incluye las categorías que no estaban en la lista fija (Destete, Recría…)
+  if(sel){
+    const todas=[...new Set([...CATS_BASE_ANIMALES,...Object.keys(cnt).filter(c=>c!=='Sin categoría')])];
+    if(cat&&!todas.includes(cat)) todas.push(cat);
+    sel.innerHTML=`<option value="">Todas las categorías (${base.length})</option>`+todas.map(c=>`<option value="${esc(c)}">${esc(c)} (${cnt[c]||0})</option>`).join('');
+    sel.value=cat;
+  }
+}
+function filtrarPorCategoria(c){
+  const sel=document.getElementById('filtro-categoria'); if(!sel) return;
+  sel.value=(sel.value===c)?'':c; // tocar la categoría activa la saca
+  filtrarAnimales();
 }
 
 // ── Ver observaciones completas del animal en un popup ──
@@ -15907,7 +15940,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-09.5';
+const RF_VERSION = '2026-11-09.6';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
