@@ -10680,14 +10680,20 @@ function renderResumenCategorias(){
   const busq=(document.getElementById('buscar-animal')?.value||'').toLowerCase();
   const camp=document.getElementById('filtro-campo')?.value||'';
   const cat=sel?.value||'';
-  const base=(DB.animales||[]).filter(a=>a.activo&&(!camp||campoDeAnimal(a)===camp)&&(!pot||(pot==='__sin__'?!a.potrero:a.potrero===pot))&&(!busq||String(a.rp).toLowerCase().includes(busq)||(a.nombre||'').toLowerCase().includes(busq)));
+  const sx=window._filtroSexo||'';
+  const baseSinSexo=(DB.animales||[]).filter(a=>a.activo&&(!camp||campoDeAnimal(a)===camp)&&(!pot||(pot==='__sin__'?!a.potrero:a.potrero===pot))&&(!busq||String(a.rp).toLowerCase().includes(busq)||(a.nombre||'').toLowerCase().includes(busq)));
+  const base=sx?baseSinSexo.filter(a=>a.sexo===sx):baseSinSexo;
+  const nM=baseSinSexo.filter(a=>a.sexo==='Macho').length, nH=baseSinSexo.filter(a=>a.sexo==='Hembra').length;
+  const chipSx=(v,txt,n,color)=>{ const act=v===sx; return `<button type="button" data-sx="${v}" onclick="filtrarPorSexo(this.dataset.sx)" style="padding:4px 10px;border-radius:14px;font-size:13px;cursor:pointer;border:2px solid ${color};background:${act?color:'var(--bg3)'};color:${act?'#fff':'var(--text)'};font-weight:${act?'700':'500'}">${txt} <b>${n}</b></button>`; };
   const cnt={}; base.forEach(a=>{ const c=a.categoria||'Sin categoría'; cnt[c]=(cnt[c]||0)+1; });
   const chip=(valor,txt,n)=>{
     const act=valor===cat;
     return `<button type="button" data-cat="${esc(valor)}" onclick="filtrarPorCategoria(this.dataset.cat)" style="padding:4px 10px;border-radius:14px;font-size:13px;cursor:pointer;border:1px solid ${act?'var(--accent)':'var(--border)'};background:${act?'var(--accent)':'var(--bg3)'};color:${act?'#1c1f26':'var(--text)'};font-weight:${act?'700':'500'}">${esc(txt)} <b>${n}</b></button>`;
   };
   const orden=Object.keys(cnt).sort((x,y)=>cnt[y]-cnt[x]||x.localeCompare(y));
-  box.innerHTML=chip('','Total',base.length)+orden.map(c=>chip(c,c,cnt[c])).join('');
+  box.innerHTML=chipSx('Macho','♂ Machos',nM,'#3498db')+chipSx('Hembra','♀ Hembras',nH,'#e84393')
+    +'<span style="width:1px;background:var(--border);margin:0 4px"></span>'
+    +chip('',sx?(sx==='Macho'?'Total machos':'Total hembras'):'Total',base.length)+orden.map(c=>chip(c,c,cnt[c])).join('');
   // El desplegable también muestra la cantidad, e incluye las categorías que no estaban en la lista fija (Destete, Recría…)
   if(sel){
     const todas=[...new Set([...CATS_BASE_ANIMALES,...Object.keys(cnt).filter(c=>c!=='Sin categoría')])];
@@ -10695,6 +10701,13 @@ function renderResumenCategorias(){
     sel.innerHTML=`<option value="">Todas las categorías (${base.length})</option>`+todas.map(c=>`<option value="${esc(c)}">${esc(c)} (${cnt[c]||0})</option>`).join('');
     sel.value=cat;
   }
+}
+function filtrarPorSexo(v){
+  window._filtroSexo=(window._filtroSexo===v)?'':v; // tocar el activo lo saca
+  // Si la categoría elegida no corresponde al sexo nuevo, se limpia
+  const sel=document.getElementById('filtro-categoria');
+  if(sel&&sel.value&&window._filtroSexo&&!(DB.animales||[]).some(a=>a.activo&&a.categoria===sel.value&&a.sexo===window._filtroSexo)) sel.value='';
+  filtrarAnimales();
 }
 function filtrarPorCategoria(c){
   const sel=document.getElementById('filtro-categoria'); if(!sel) return;
@@ -10935,7 +10948,8 @@ function filtrarAnimales(){
   const pot=document.getElementById('filtro-potrero')?.value||'';
   const busq=(document.getElementById('buscar-animal')?.value||'').toLowerCase();
   const camp=document.getElementById('filtro-campo')?.value||'';
-  const lista=DB.animales.filter(a=>a.activo&&(!camp||campoDeAnimal(a)===camp)&&(!cat||a.categoria===cat)&&(!pot||(pot==='__sin__'?!a.potrero:a.potrero===pot))&&(!busq||a.rp.toLowerCase().includes(busq)||(a.nombre||'').toLowerCase().includes(busq)));
+  const sx=window._filtroSexo||'';
+  const lista=DB.animales.filter(a=>a.activo&&(!sx||a.sexo===sx)&&(!camp||campoDeAnimal(a)===camp)&&(!cat||a.categoria===cat)&&(!pot||(pot==='__sin__'?!a.potrero:a.potrero===pot))&&(!busq||a.rp.toLowerCase().includes(busq)||(a.nombre||'').toLowerCase().includes(busq)));
   renderAnimales(lista);
 }
 
@@ -15940,7 +15954,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-09.6';
+const RF_VERSION = '2026-11-09.7';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
