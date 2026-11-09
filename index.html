@@ -9503,6 +9503,7 @@ function guardarTraslado(){
   // Egreso: dar de baja; Ingreso: reactivar/crear; Interno: cambiar potrero
   const allRps=[...rps];
   if(t.rp)allRps.unshift(t.rp);
+  const potrerosPrevios=allRps.map(rp=>(DB.animales.find(a=>a.rp===rp)||{}).potrero).filter(Boolean);
   allRps.forEach(function(rp){
     if(!rp)return;
     const animal=DB.animales.find(function(a){return a.rp===rp;});
@@ -9529,7 +9530,7 @@ function guardarTraslado(){
     }
   });
   addHistorial('Traslado',`${t.tipo}: ${t.rp||t.cant+' animales'} – ${esc(t.origen)}→${esc(t.destino)}`,t.rp||rps.join(', '),'');
-  actualizarSaldosPotreros(t.origen, t.destino);
+  actualizarSaldosPotreros(t.origen, t.destino, ...potrerosPrevios);
   closeModal('modal-traslado');renderTraslados();updateKPIs();if(cambios)renderAnimales();
   const msg=cambios?' · '+cambios+' RP actualizados':'';
   toast('Traslado registrado'+msg,'ok');
@@ -9545,6 +9546,7 @@ function guardarCambioPotrero(){
   actualizarSaldosPotreros(orig, dest);
   addHistorial('Traslado',`Cambio potrero: ${orig}→${dest}`,rp,'');
   closeModal('modal-cambio-potrero');renderTraslados();renderAnimales();
+  saveToStorage();
   toast('Cambio de potrero registrado','ok');
 }
 
@@ -11904,6 +11906,7 @@ function recalcularSaldoPotrero(nombrePotrero){
 function actualizarSaldosPotreros(...nombres){
   const unicos = [...new Set(nombres.filter(Boolean))];
   unicos.forEach(recalcularSaldoPotrero);
+  try{ if(typeof dibujarPotrerosGuardados==='function') dibujarPotrerosGuardados(); }catch(e){} // el mapa muestra la carga al instante
 }
 
 // Lectura: usa la caché si existe: si no, la calcula una sola vez y la deja guardada
@@ -12412,7 +12415,7 @@ function dibujarPotrerosGuardados(){
     const color = colorPotrero(p.id);
     const opacidad = p.estado==='Activo' ? 0.35 : 0.15;
     const poly=L.polygon(p.poligono, {color, weight:3, fillOpacity:opacidad}).addTo(_mapaPotreros);
-    poly.bindTooltip(p.nombre, {permanent:true, direction:'center', className:'mappot-label'});
+    poly.bindTooltip(`${esc(p.nombre)} · ${animales} 🐄`, {permanent:true, direction:'center', className:'mappot-label'});
     poly.bindPopup(`<b>${esc(p.nombre)}</b><br>${(p.ha||0).toFixed(1)} ha · ${animales} animal(es)<br>Estado: ${esc(p.estado)}`);
     _capasPotreros.push(poly);
     p.poligono.forEach(pt=>bounds.push(pt));
@@ -15110,7 +15113,7 @@ async function confirmarRegistrosWA() {
           if(a && d.potrero){
             const _n=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/^(potrero|lote|piquete)\s+/,'').trim();
             const _q=_n(d.potrero), _pot=_q?(DB.potreros||[]).find(x=>x&&x.nombre&&_n(x.nombre)===_q):null;
-            if(_pot){ p.potrero=_pot.nombre; if(a.potrero!==_pot.nombre){ const _o=a.potrero||'Sin potrero'; a.potrero=_pot.nombre; addHistorial('Traslado',`Cambio potrero: ${_o}→${_pot.nombre} (WA/Audio)`,rp,p.operador); } }
+            if(_pot){ p.potrero=_pot.nombre; if(a.potrero!==_pot.nombre){ const _o=a.potrero||'Sin potrero'; const _prev=a.potrero; a.potrero=_pot.nombre; actualizarSaldosPotreros(_prev, _pot.nombre); addHistorial('Traslado',`Cambio potrero: ${_o}→${_pot.nombre} (WA/Audio)`,rp,p.operador); } }
           }
           guardados++;
         }
@@ -15196,7 +15199,8 @@ async function confirmarRegistrosWA() {
         if(!a) { toast(`Traslado omitido: el RP ${rp||'?'} no está en el rodeo`,'info'); }
         else if(!_pot) { toast(`Traslado omitido: el potrero "${d.potrero||d.destino||'?'}" no existe`,'info'); }
         else {
-          const _o=a.potrero||'Sin potrero'; a.potrero=_pot.nombre;
+          const _o=a.potrero||'Sin potrero'; const _prev=a.potrero; a.potrero=_pot.nombre;
+          actualizarSaldosPotreros(_prev, _pot.nombre);
           addHistorial('Traslado',`Cambio potrero: ${_o}→${_pot.nombre} (WA/Audio)`,rp,'');
           guardados++;
         }
@@ -15903,7 +15907,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-09.4';
+const RF_VERSION = '2026-11-09.5';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
