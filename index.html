@@ -452,20 +452,21 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
     const uid = firebase.auth().currentUser && firebase.auth().currentUser.uid;
     if (!uid) throw new Error('Sin sesión de Firebase Auth');
     const estabRef = rtdb.ref(`establecimientos/${estabId}`);
-    const snap = await estabRef.child('members').once('value'); // solo 'members': un no-miembro no puede leer el resto del establecimiento
-
-    if (!snap.exists()) {
-      // Establecimiento nuevo, o viejo de antes del sistema de miembros: me auto-agrego.
-      await estabRef.child('members/' + uid).set(true);
-      // Índice liviano (solo existencia, sin datos) para poder validar códigos
-      // desde unirseAEstablecimiento sin necesitar ya ser miembro para leer.
-      await rtdb.ref('estabs_index/' + estabId).set(true);
-      return;
-    }
-    if (snap.child(uid).exists()) {
+    // Solo se lee la entrada propia: la lista completa de members es privada del establecimiento
+    const mio = await estabRef.child('members/' + uid).once('value');
+    if (mio.exists()) {
       // Establecimientos anteriores al índice: se crea ahora para que otros dispositivos puedan pedir acceso con el código
       rtdb.ref('estabs_index/' + estabId).once('value').then(i => { if (!i.exists()) return rtdb.ref('estabs_index/' + estabId).set(true); }).catch(() => {});
       return; // ya soy miembro
+    }
+    const idx = await rtdb.ref('estabs_index/' + estabId).once('value');
+    if (!idx.exists()) {
+      // Establecimiento nuevo: me auto-agrego. Si ya tenía miembros (viejo, sin índice), las reglas lo rechazan y se pide acceso.
+      try {
+        await estabRef.child('members/' + uid).set(true);
+        await rtdb.ref('estabs_index/' + estabId).set(true);
+        return;
+      } catch (e) { console.warn('Alta directa rechazada, se pide acceso', e); }
     }
 
     // No soy miembro todavía: pido acceso y espero que otro dispositivo autorizado
@@ -15893,7 +15894,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-08.1';
+const RF_VERSION = '2026-11-08.2';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
