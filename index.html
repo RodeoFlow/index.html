@@ -4805,6 +4805,14 @@ async function checkAuth() {
     try {
       const act = (await getEstablecimientos()).find(e => e.id === window.ESTAB_ID_ACTIVO);
       if(act && act.compartido){ mostrarEspera(act.id); return false; }
+      // Establecimiento creado desde el selector en una versión anterior (sin la marca de alta): se repara
+      const lista = await getEstablecimientos();
+      if(act && !act.compartido && lista.length > 1 && (await rfGetItem('rf_setup_done')) === '1'){
+        DB.settings.hasBeenSetup = true;
+        DB.settings.establecimiento = DB.settings.establecimiento || act.nombre;
+        await saveEstabActivo();
+        return checkAuth();
+      }
     } catch(e) {}
     document.getElementById('trial-screen').style.display = 'flex';
     return false;
@@ -15895,7 +15903,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-09.1';
+const RF_VERSION = '2026-11-09.2';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -16763,6 +16771,7 @@ async function crearNuevoEstablecimiento(nombre) {
   lista.push({ id, nombre: nombre.trim(), creadoEn: Date.now() });
   await saveEstablecimientos(lista);
   const dbNueva = dbVacia(nombre.trim());
+  dbNueva.settings.hasBeenSetup = true; // el titular ya completó la planilla en este dispositivo: sin esto, al recargar mostraba la pantalla de alta y no sincronizaba
   // El nuevo establecimiento hereda la prueba y la suscripción del dispositivo: no inicia otra prueba
   dbNueva.settings.trialStart = (await rfAnchorTrial()) || Date.now();
   ['subscribed','activationDate','activationDays','activationCode'].forEach(k=>{ if(DB&&DB.settings&&DB.settings[k]!==undefined) dbNueva.settings[k]=DB.settings[k]; });
