@@ -15903,7 +15903,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-09.3';
+const RF_VERSION = '2026-11-09.4';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -17085,7 +17085,10 @@ async function rfVerificarDatosPerdidos(motivo){
     // B) si igual queda (casi) vacío, el backup más reciente y completo del mismo establecimiento
     const metas = JSON.parse(await idbGet(RF_BACKUP_KEY) || '[]'), nombre = String((DB.settings && DB.settings.establecimiento) || '').trim().toLowerCase();
     for(const m of metas) await rfCompletarMeta(m);
-    const cands = metas.filter(m => m.tipo !== 'antes-de-restaurar' && m.vol >= RF_RESTAURAR_MIN_VOL && (m.estabId ? m.estabId === estab : (m.nombre && m.nombre === nombre)));
+    // Solo backups de ESTE establecimiento: mismo código Y mismo nombre (un backup grabado con el código equivocado trae el nombre del otro campo).
+    // Los backups viejos sin código solo valen por nombre si hay un único establecimiento en el dispositivo.
+    const _unico = ((await getEstablecimientos()) || []).length <= 1;
+    const cands = metas.filter(m => m.tipo !== 'antes-de-restaurar' && m.vol >= RF_RESTAURAR_MIN_VOL && m.nombre === nombre && (m.estabId ? m.estabId === estab : _unico));
     let desdeBackup = null;
     if(cands.length){
       const mejor = Math.max(...cands.map(m => m.vol));
