@@ -1578,6 +1578,16 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
         </div>
       </div>
       <div class="card" style="margin-top:16px">
+        <div class="card-title">📥 Importar sesión de balanza (Tru-Test / Gallagher)</div>
+        <div style="font-size:13px;color:var(--text3);margin-bottom:8px">Subí el CSV o Excel que exporta el indicador. Cada fila se asigna al animal por EID (RFID) o por VID/RP y se guarda como pesada. Los animales que no estén en tu rodeo se informan para darlos de alta con <b>Importar animales</b>.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:200px"><label class="form-label">Archivo de la sesión</label><input type="file" id="ses-archivo" class="form-control" accept=".csv,.txt,.xlsx,.xls" onchange="impSesionLeer(this)"></div>
+          <div style="min-width:160px"><label class="form-label">Operador</label><input type="text" id="ses-operador" class="form-control" placeholder="Opcional"></div>
+        </div>
+        <div id="ses-resumen" style="margin-top:10px"></div>
+        <button class="btn-primary" id="ses-btn-confirmar" style="display:none;margin-top:8px" onclick="impSesionConfirmar()">Importar pesadas</button>
+      </div>
+      <div class="card" style="margin-top:16px">
         <div class="card-title">Historial de pesadas</div>
         <div class="tbl-wrap">
           <table><thead><tr><th>Fecha</th><th>RP</th><th>RFID</th><th>Peso</th><th>Potrero</th><th>Operador</th><th>GDP g/d</th></tr></thead>
@@ -6385,7 +6395,8 @@ async function fetchBNADolar() {
   // Fuente 4: BNA vía proxy
   try {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('sin conexión');
-    const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://www.bna.com.ar/Personas'), { signal: rfSenalTimeout(6000) });
+    const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://www.bna.com.ar/Personas'), { signal: rfSenalTimeout(6000) });
+
     const data = await r.json();
     const html = data.contents || '';
     const matches = html.match(/U\.S\.dollar[\s\S]*?<td[^>]*>([\d,\.]+)<\/td>[\s\S]*?<td[^>]*>([\d,\.]+)<\/td>/i);
@@ -8451,6 +8462,99 @@ const RANGOS_PESO_CATEGORIA = {
   'Invernada Machos':[100,500],'Invernada Hembras':[100,450],'Invernada Vientres':[150,500]
 };
 
+// ── IMPORTAR SESIÓN DE BALANZA (CSV/Excel de Tru-Test, Gallagher, etc.) ──
+let _ses=null;
+function sesDig(v){ return String(v==null?'':v).replace(/\D/g,''); }
+function sesCol(nh, alias){ return nh.findIndex(h=>alias.includes(h)); }
+async function impSesionLeer(input){
+  const f=input.files&&input.files[0]; if(!f) return;
+  if(f.size>8*1024*1024){ toast('El archivo es muy grande (máx. 8 MB)','err'); input.value=''; return; }
+  try{
+    const buf=await f.arrayBuffer(); let filas;
+    if(/\.(csv|txt)$/i.test(f.name)){
+      let txt=new TextDecoder('utf-8').decode(buf);
+      if(txt.includes('\uFFFD')) txt=new TextDecoder('windows-1252').decode(buf);
+      filas=impParseCSV(txt);
+    } else {
+      if(typeof XLSX==='undefined'){ toast('No se pudo cargar el lector de Excel','err'); input.value=''; return; }
+      const wb=XLSX.read(buf,{type:'array'});
+      filas=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true,blankrows:false});
+    }
+    impSesionProcesar(filas, f.name);
+  }catch(e){ console.error(e); toast('No se pudo leer el archivo','err'); }
+  input.value='';
+}
+function impSesionProcesar(filas, nombre){
+  const box=document.getElementById('ses-resumen'), btn=document.getElementById('ses-btn-confirmar');
+  _ses=null; btn.style.display='none';
+  const hi=filas.slice(0,10).findIndex(r=>r.filter(c=>impTxt(c)!=='').length>=2);
+  if(hi<0){ box.innerHTML='⚠️ No se encontraron columnas.'; return; }
+  const nh=filas[hi].map(impNorm);
+  const cEid=sesCol(nh,['eid','rfid','electronicid','caravanaelectronica']);
+  const cVid=sesCol(nh,['vid','rp','visualid','caravana','caravanavisual']);
+  const cPeso=sesCol(nh,['weight','peso','pesokg','kg']);
+  const cFecha=sesCol(nh,['fecha','date']);
+  const cRec=sesCol(nh,['daterecorded','fecharegistro']);
+  if(cPeso<0||(cEid<0&&cVid<0)){ box.innerHTML='⚠️ El archivo necesita una columna de peso (Weight) y una de EID o VID.'; return; }
+  // Índices del rodeo: EID completo, últimos 12 dígitos y RP
+  const porEid={}, porSuf={}, porRp={};
+  (DB.animales||[]).forEach(a=>{
+    const d=sesDig(a.rfid); if(d){ porEid[d]=a; const s=d.slice(-12); porSuf[s]=porSuf[s]===undefined?a:null; }
+    const r=String(a.rp||'').trim(); if(r){ porRp[r]=a; const dr=sesDig(r); if(dr.length>=12&&!porEid[dr]) porEid[dr]=a; }
+  });
+  const ya=new Set((DB.pesadas||[]).map(p=>p.rp+'|'+p.fecha+'|'+p.peso));
+  const res={ok:[],sinPeso:0,sinFecha:0,noEnc:[],sinId:[],dup:0,dupArch:0};
+  const vistos=new Set();
+  filas.slice(hi+1).forEach(r=>{
+    if(!r.some(c=>impTxt(c)!=='')) return;
+    const peso=impPeso(r[cPeso]); if(!peso){ res.sinPeso++; return; }
+    let fecha=cFecha>=0?impFecha(r[cFecha]):'';
+    if(!fecha&&cRec>=0){
+      const t=impTxt(r[cRec]); fecha=impFecha(t);
+      // Tru-Test exporta la medianoche local en UTC-3 (21:00 del día anterior)
+      if(fecha&&/\s21:00(:00)?$/.test(t)){ const d=new Date(fecha+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+1); fecha=d.toISOString().slice(0,10); }
+    }
+    if(!fecha){ res.sinFecha++; return; }
+    const eid=cEid>=0?sesDig(r[cEid]):'', vid=cVid>=0?rpLimpio(impTxt(r[cVid])):'';
+    if(!eid&&!vid){ res.sinId.push(peso); return; }
+    let a=(eid&&(porEid[eid]||porSuf[eid.slice(-12)]))||(vid&&porRp[vid])||null;
+    if(!a){ res.noEnc.push(vid||impTxt(r[cEid])); return; }
+    const k=a.rp+'|'+fecha+'|'+peso;
+    if(ya.has(k)){ res.dup++; return; }
+    if(vistos.has(a.rp+'|'+fecha)){ res.dupArch++; return; }
+    vistos.add(a.rp+'|'+fecha);
+    res.ok.push({a,peso,fecha});
+  });
+  _ses={nombre,res};
+  const li=(ic,t)=>`<div style="font-size:13px;margin-bottom:4px">${ic} ${t}</div>`;
+  let h=li(res.ok.length?'✅':'⚠️',`<b>${res.ok.length}</b> pesadas listas para importar (${esc(nombre)})`);
+  if(res.noEnc.length) h+=li('⚠️',`${res.noEnc.length} caravanas que no están en tu rodeo: ${res.noEnc.slice(0,6).map(esc).join(', ')}${res.noEnc.length>6?'…':''} (dalas de alta con Importar animales y volvé a importar la sesión)`);
+  if(res.sinId.length) h+=li('⚠️',`${res.sinId.length} pesadas sin caravana leída (${res.sinId.slice(0,6).join(' kg, ')} kg): no se pueden asignar, cargalas a mano si sabés de qué animal son`);
+  if(res.dup) h+=li('ℹ️',`${res.dup} ya estaban cargadas (se omiten)`);
+  if(res.dupArch) h+=li('ℹ️',`${res.dupArch} repetidas en el archivo para el mismo animal y día (se toma la primera)`);
+  if(res.sinPeso) h+=li('ℹ️',`${res.sinPeso} filas sin peso válido (se omiten)`);
+  if(res.sinFecha) h+=li('ℹ️',`${res.sinFecha} filas sin fecha reconocida (se omiten)`);
+  box.innerHTML=h;
+  if(res.ok.length){ btn.style.display=''; btn.textContent=`Importar ${res.ok.length} pesadas`; }
+}
+function impSesionConfirmar(){
+  if(!_ses||!_ses.res.ok.length) return;
+  const ok=_ses.res.ok, operador=$v('ses-operador')||'';
+  if(!confirm(`¿Importar ${ok.length} pesadas?`)) return;
+  const base=Date.now();
+  ok.forEach(({a,peso,fecha},i)=>{
+    DB.pesadas.push({id:base+i,rp:a.rp,rfid:a.rfid||'',peso,fecha,potrero:a.potrero||'',operador});
+    if(!a.pesoHistorico) a.pesoHistorico=[];
+    a.pesoHistorico.push({fecha,kg:peso});
+    a.pesoHistorico.sort((x,y)=>String(x.fecha).localeCompare(String(y.fecha)));
+    // El peso actual solo cambia si esta pesada es la más reciente del animal
+    if(a.pesoHistorico[a.pesoHistorico.length-1].fecha===fecha) a.peso=peso;
+  });
+  addHistorial('Pesada',`Importación de sesión de balanza: ${ok.length} pesadas desde ${_ses.nombre}`,'',operador);
+  saveToStorage(); renderPesadas(); renderAnimales(); updateKPIs();
+  toast(`${ok.length} pesadas importadas`,'ok');
+  _ses=null; document.getElementById('ses-resumen').innerHTML=''; document.getElementById('ses-btn-confirmar').style.display='none';
+}
 function evaluarPesoAnormal(a, pesoNuevo){
   if(a && a.pesoHistorico && a.pesoHistorico.length>0){
     const last=a.pesoHistorico[a.pesoHistorico.length-1];
@@ -15789,7 +15893,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-06.5';
+const RF_VERSION = '2026-11-08.1';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
