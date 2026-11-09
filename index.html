@@ -15903,7 +15903,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-09.2';
+const RF_VERSION = '2026-11-09.3';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -16646,6 +16646,7 @@ async function cargarEstabActivo() {
 
     // Cargar DB de ese establecimiento
     const raw = await idbGet('rf_estab_' + id);
+    window._rfSinDatosLocales = !raw;
     if (raw) {
       DB = runMigrations(JSON.parse(raw));
     } else {
@@ -16666,6 +16667,7 @@ async function cargarEstabActivo() {
 function rfRestaurarRespaldoLocal() {
   try {
     if (window.DB && DB.settings && DB.settings.hasBeenSetup) return;
+    if (window._rfSinDatosLocales === false) return; // hay datos propios de este establecimiento (ej. uno recién creado): no se pisan con el respaldo
     const id = window.ESTAB_ID_ACTIVO, bkId = localStorage.getItem('rf_bk_estab'), ls = localStorage.getItem(RF_DB_KEY);
     if (!id || !ls || bkId !== id) return;
     const b = runMigrations(JSON.parse(ls));
@@ -16735,21 +16737,25 @@ async function saveEstabActivo() {
 async function cambiarEstablecimiento(id) {
   // Guardar estado actual antes de cambiar
   await saveEstabActivo();
-  await idbSet(RF_ACTIVO_KEY, id);
+
+  // Cargar la nueva DB ANTES de cambiar el id activo. Antes se cambiaba el id y después se esperaba la lectura:
+  // en ese hueco el autoguardado (cada 5 s) grababa los datos del establecimiento anterior con el id nuevo.
+  const raw = await idbGet('rf_estab_' + id);
+  let nuevaDB;
+  if (raw) {
+    nuevaDB = runMigrations(JSON.parse(raw));
+    if (!nuevaDB.encierres)   nuevaDB.encierres   = [];
+    if (!nuevaDB.nacimientos) nuevaDB.nacimientos = [];
+  } else {
+    nuevaDB = dbVacia('Establecimiento');
+  }
+  // Id y datos se cambian juntos, sin esperas en el medio
   ESTAB_ID_ACTIVO = id;
   window.ESTAB_ID_ACTIVO = id;
-  try{ window._iaChat=[]; window._iaChatEstab=id; }catch(e){}
-
-  // Cargar nueva DB
-  const raw = await idbGet('rf_estab_' + id);
-  if (raw) {
-    DB = runMigrations(JSON.parse(raw));
-    if (!DB.encierres)   DB.encierres   = [];
-    if (!DB.nacimientos) DB.nacimientos = [];
-  } else {
-    DB = dbVacia('Establecimiento');
-  }
+  DB = nuevaDB;
   window.DB = DB;
+  try{ window._iaChat=[]; window._iaChatEstab=id; }catch(e){}
+  await idbSet(RF_ACTIVO_KEY, id);
 
   cerrarModalEstab();
 
