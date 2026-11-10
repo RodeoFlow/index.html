@@ -1109,7 +1109,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
     <div class="paywall-price" id="paywall-precio">USD 46 <span>/ mes</span></div><div id="paywall-tramo" style="font-size:13px;color:var(--text2);margin-top:-8px">según la cantidad de animales activos</div>
     <p style="font-size:14px;color:var(--text3);margin-bottom:8px">≈ ARS <span id="paywall-ars-equiv">calculando...</span> al dólar oficial BNA</p>
     <p style="font-size:14px;color:var(--text3);margin-bottom:16px">Acceso completo · Sin límites · Soporte incluido</p>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:16px">📅 <strong>Plan anual:</strong> pagás 11 meses y el mes 12 va sin cargo (365 días de acceso).</p>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:16px">📅 <strong>Plan anual:</strong> pagás 10 meses y dos meses van sin cargo (365 días de acceso).</p>
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:20px;text-align:left;font-size:12px;color:var(--text3)">
       🔄 <strong style="color:var(--text2)">Renovación:</strong> al vencer tu período (30 días en el plan mensual, 365 en el anual) pagás de nuevo y enviás el comprobante por WhatsApp para recibir tu nuevo código; no hay cobro automático. Podés dar de baja cuando quieras desde Configuración → "❌ Cancelar suscripción" — la baja se procesa en hasta 2 días hábiles.
     </div>
@@ -3269,6 +3269,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
     </div>
     <div style="font-size:13px;color:var(--text2);line-height:1.7">
       <p><strong style="color:var(--text)">💵 Precio:</strong> Se cobra según la cantidad de animales activos del establecimiento (se toma el máximo del mes): hasta 300 animales USD 46/mes; hasta 1000, USD 70; hasta 2000, USD 120; hasta 3000, USD 170; hasta 4000, USD 210; hasta 5000, USD 260; más de 5000, a convenir. Plan anual: se pagan 10 meses (dos meses sin cargo) por 365 días de acceso. Ambos planes se suman a la prueba gratuita de 30 días y se cobran en su equivalente en pesos argentinos al tipo de cambio oficial BNA del día del pago.</p>
+      <p><strong style="color:var(--text)">📈 Cantidad de animales y cambio de tramo:</strong> se cuentan los animales activos del establecimiento (no se cuentan los vendidos, muertos ni dados de baja) y se toma el máximo alcanzado en el mes del pago. Si durante el período pagado el establecimiento pasa a un tramo más alto, no se cobra diferencia: el precio nuevo rige desde la próxima renovación, mensual o anual. Si baja de tramo, el precio menor también se aplica desde la próxima renovación. Con más de 5000 animales activos el precio se acuerda por WhatsApp.</p>
       <p><strong style="color:var(--text)">💳 Medio de pago:</strong> transferencia bancaria al alias <code>CMORENO.agromp2</code> (CVU universal, cualquier banco/billetera).</p>
       <p><strong style="color:var(--text)">🔄 Renovación:</strong> cada activación habilita 30 días de acceso (plan mensual) o 365 días (plan anual). Al vencer, se renueva pagando de nuevo y enviando el comprobante — no hay cobro automático a tarjeta, es un proceso manual por WhatsApp.</p>
       <p><strong style="color:var(--text)">⏳ Días de gracia:</strong> 3 días después del vencimiento antes de cortar el acceso, para dar tiempo a renovar.</p>
@@ -16016,7 +16017,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-10.1';
+const RF_VERSION = '2026-11-10.2';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
