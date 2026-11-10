@@ -1047,7 +1047,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
       </div>
       <div style="flex:1">
         <label>CUIT *</label>
-        <input id="setup-cuit" type="text" placeholder="20-12345678-9" inputmode="numeric">
+        <input id="setup-cuit" type="text" placeholder="20-12345678-6" inputmode="numeric">
       </div>
     </div>
     <label>Empresa / Razón social *</label>
@@ -4634,6 +4634,28 @@ const RFID_PESO_CORRELACION_MS = 5000; // ventana máx entre lectura RFID y peso
 // ─── TRIAL / AUTH SYSTEM ───
 const TRIAL_DAYS = 30;
 
+// ── Validación de DNI y CUIT/CUIL (sin internet) ──
+function rfCuitValido(cuit){
+  const d = String(cuit||'').replace(/\D/g,'');
+  if(d.length !== 11) return false;
+  if(!['20','23','24','27','30','33','34'].includes(d.slice(0,2))) return false;
+  const pesos = [5,4,3,2,7,6,5,4,3,2];
+  const suma = pesos.reduce((t,p,i) => t + p * Number(d[i]), 0);
+  let dv = 11 - (suma % 11);
+  if(dv === 11) dv = 0;
+  if(dv === 10) return false;
+  return dv === Number(d[10]);
+}
+function rfValidarDniCuit(dni, cuit){
+  const dd = String(dni||'').replace(/\D/g,''), dc = String(cuit||'').replace(/\D/g,'');
+  if(dd.length < 7 || dd.length > 8) return 'El DNI tiene que tener 7 u 8 números.';
+  if(dc.length !== 11) return 'El CUIT tiene que tener 11 números (ej: 20-12345678-6).';
+  if(!rfCuitValido(dc)) return 'El CUIT no es válido: revisá los números, sobre todo el último.';
+  // CUIT/CUIL de persona (20, 23, 24, 27): los 8 números del medio son el DNI
+  if(['20','23','24','27'].includes(dc.slice(0,2)) && dc.slice(2,10) !== dd.padStart(8,'0'))
+    return 'El DNI no coincide con el CUIT: los 8 números del medio del CUIT tienen que ser tu DNI.';
+  return '';
+}
 async function startTrial() {
   const nombre    = document.getElementById('setup-nombre').value.trim();
   const email     = document.getElementById('setup-email').value.trim();
@@ -4663,6 +4685,9 @@ async function startTrial() {
     alert('Completá estos datos antes de iniciar la prueba:\n\n' + faltantes.join('\n'));
     return;
   }
+  // DNI y CUIT: se verifican al instante, sin conexión (dígito verificador y coincidencia DNI-CUIT)
+  const _errId = rfValidarDniCuit(dni, cuit);
+  if(_errId){ alert(_errId); return; }
 
   // SEGURIDAD: "Iniciar prueba gratuita" tiene que crear SIEMPRE un
   // establecimiento nuevo y separado — nunca debe pisar/reutilizar el que
@@ -16017,7 +16042,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-10.2';
+const RF_VERSION = '2026-11-10.3';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
