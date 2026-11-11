@@ -1894,6 +1894,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
             </div>
             <div class="form-group"><label class="form-label">Fecha de inicio (Día 0)</label><input type="date" id="iatf-fecha-inicio" class="form-control"></div>
           </div>
+          <div class="form-group"><label class="form-label">Productos y dosis (indicados por el veterinario)</label><input type="text" id="iatf-indicaciones" class="form-control" maxlength="300" placeholder="Ej: dispositivo y dosis de cada hormona según el veterinario"></div>
           <button class="btn-primary" onclick="generarProtocoloIATF()">📅 Generar calendario</button>
         </div>
 
@@ -11413,18 +11414,18 @@ const PLANTILLAS_IATF = {
   be8: {
     nombre: '8 días — Dispositivo + Benzoato de Estradiol',
     pasos: [
-      {dia:0, tarea:'Colocación de dispositivo (DIB/CIDR) + Benzoato de Estradiol (2mg IM)'},
-      {dia:8, tarea:'Retiro del dispositivo + PGF2α IM + eCG (400-500 UI, opcional en vacas con cría al pie)'},
-      {dia:9, tarea:'Cipionato de Estradiol (ECP, 0.5-1mg IM) — 24hs post-retiro'},
-      {dia:9, tarea:'Inseminación Artificial a Tiempo Fijo (IATF) — 52-56hs post-retiro', esIA:true}
+      {dia:0, tarea:'Colocación de dispositivo (DIB/CIDR) + Benzoato de Estradiol'},
+      {dia:8, tarea:'Retiro del dispositivo + PGF2α + eCG (opcional en vacas con cría al pie)'},
+      {dia:9, tarea:'Cipionato de Estradiol (ECP) — 24 hs post-retiro'},
+      {dia:10, tarea:'Inseminación Artificial a Tiempo Fijo (IATF) — 52-56 hs post-retiro', esIA:true}
     ]
   },
   gnrh9: {
     nombre: '9 días — Dispositivo + GnRH (tipo Ovsynch)',
     pasos: [
-      {dia:0, tarea:'Colocación de dispositivo (DIB/CIDR) + GnRH (100mcg IM)'},
-      {dia:9, tarea:'Retiro del dispositivo + PGF2α IM'},
-      {dia:9, tarea:'2ª dosis de GnRH + Inseminación Artificial a Tiempo Fijo (IATF) — 54-56hs post-retiro', esIA:true}
+      {dia:0, tarea:'Colocación de dispositivo (DIB/CIDR) + GnRH'},
+      {dia:9, tarea:'Retiro del dispositivo + PGF2α'},
+      {dia:11, tarea:'2ª dosis de GnRH + Inseminación Artificial a Tiempo Fijo (IATF) — 54-56 hs post-retiro', esIA:true}
     ]
   }
 };
@@ -11473,7 +11474,8 @@ function generarProtocoloIATF(){
       id: 'iatf_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
       rp: suj.valor, potrero: suj.potrero||'',
       plantillaKey, plantillaNombre: plantilla.nombre,
-      fechaInicio, pasos
+      fechaInicio, pasos,
+      indicaciones: (document.getElementById('iatf-indicaciones')?.value||'').trim()
     });
   });
 
@@ -11511,9 +11513,30 @@ function eliminarProtocoloIATF(protocoloId){
   renderProtocolosIATF();
 }
 
+// Corrige los protocolos generados con las plantillas viejas (día de IATF mal calculado y dosis fijas).
+// Es idempotente: también arregla los que lleguen sincronizados desde un dispositivo con una versión anterior.
+// Las tareas ya hechas conservan su fecha; las pendientes se recalculan desde el Día 0.
+function rfCorregirIATF(){
+  let cambio = false;
+  (DB.protocolosIATF||[]).forEach(prot=>{
+    const pl = PLANTILLAS_IATF[prot.plantillaKey];
+    if(!pl || !Array.isArray(prot.pasos) || prot.pasos.length !== pl.pasos.length || !prot.fechaInicio) return;
+    prot.pasos.forEach((paso,i)=>{
+      const np = pl.pasos[i];
+      if(paso.dia === np.dia && paso.tarea === np.tarea) return;
+      paso.dia = np.dia; paso.tarea = np.tarea; paso.esIA = !!np.esIA;
+      if(!paso.hecho){ const f = new Date(prot.fechaInicio); f.setDate(f.getDate()+np.dia); paso.fecha = f.toISOString().split('T')[0]; }
+      cambio = true;
+    });
+    if(prot.plantillaNombre !== pl.nombre){ prot.plantillaNombre = pl.nombre; cambio = true; }
+  });
+  if(cambio){ try{ saveToStorage(); }catch(e){} }
+  return cambio;
+}
 function renderTareasIATF(){
   const tbody = document.getElementById('iatf-tareas-tbody');
   if(!tbody) return;
+  rfCorregirIATF();
   const filas = [];
   (DB.protocolosIATF||[]).forEach(prot=>{
     prot.pasos.forEach((paso,idx)=>{
@@ -11531,7 +11554,7 @@ function renderTareasIATF(){
       <td class="td-mono" style="color:${color};font-weight:600">${esc(paso.fecha)}</td>
       <td class="td-mono">${esc(prot.rp)}${prot.potrero?` (${esc(prot.potrero)})`:''}</td>
       <td style="font-size:12px">${esc(prot.plantillaNombre)}</td>
-      <td>${paso.esIA?'🔵 ':''}${paso.tarea}</td>
+      <td>${paso.esIA?'🔵 ':''}${paso.tarea}${prot.indicaciones?`<div style="font-size:11px;color:var(--text3);margin-top:2px">💉 ${esc(prot.indicaciones)}</div>`:''}</td>
     </tr>`;
   }).join('');
 }
@@ -16073,7 +16096,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-10.4';
+const RF_VERSION = '2026-11-10.6';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
