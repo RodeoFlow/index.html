@@ -16163,7 +16163,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-12.2';
+const RF_VERSION = '2026-11-12.3';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -17044,6 +17044,8 @@ async function crearNuevoEstablecimiento(nombre) {
   // El CUIT del titular viaja con él: si ya tuvo una prueba vencida sin pagar, el servidor bloquea esta.
   dbNueva.settings.trialStart = Date.now();
   if (DB && DB.settings) dbNueva.settings.cuitTitular = DB.settings.cuitTitular || (DB.settings.registroUsuario && DB.settings.registroUsuario.cuit) || '';
+  // Mismos usuarios (teléfono, rol y PIN) que el establecimiento desde donde se crea: queda protegido desde el primer momento
+  if (DB && DB.settings && Array.isArray(DB.settings.phones) && DB.settings.phones.length) dbNueva.settings.phones = JSON.parse(JSON.stringify(DB.settings.phones));
   await idbSet('rf_estab_' + id, JSON.stringify(dbNueva));
   await cambiarEstablecimiento(id);
   await renderSelectorEstab();
