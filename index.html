@@ -534,7 +534,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
       if ((!s || !s.trialStart) && window._rfTrialInitPedido !== estabId && window.DB && window.DB.settings && !String(estabId).startsWith('demo-')) {
         window._rfTrialInitPedido = estabId;
         try {
-          firebase.app().functions('us-central1').httpsCallable('iniciarTrial')({ estabId, trialStartLocal: window.DB.settings.trialStart || 0 })
+          firebase.app().functions('us-central1').httpsCallable('iniciarTrial')({ estabId, trialStartLocal: window.DB.settings.trialStart || 0, cuit: String(window.DB.settings.cuitTitular || (window.DB.settings.registroUsuario && window.DB.settings.registroUsuario.cuit) || '').replace(/\D/g,'') })
             .catch(e => console.warn('iniciarTrial no disponible (se usa el inicio local):', e?.message || e));
         } catch(e) {}
       }
@@ -543,6 +543,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
       window.DB.settings.activationDate = s.activationDate || null;
       window.DB.settings.activationDays = (Number(s.activationDays) > 0) ? Number(s.activationDays) : 30; // duración del período (30, 365, etc.)
       window.DB.settings.activationCode = s.activationCode || null;
+      window._rfTrialBloqueado = !!s.trialBloqueado; // prueba bloqueada por reutilizar un rodeo o un CUIT con prueba vencida sin pagar
       if (typeof s.trialStart === 'number' && s.trialStart > 0) {
         window._rfTrialServidor = true;
         window._rfTrialStartServidor = s.trialStart;
@@ -1106,7 +1107,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
   <div class="paywall-box">
     <div style="font-size:36px;margin-bottom:8px">⛔</div>
     <h2>Período de prueba finalizado</h2>
-    <p>Tu prueba gratuita de 30 días ha expirado. Activá tu suscripción para continuar usando RodeoFlow.</p>
+    <p id="paywall-motivo">Tu prueba gratuita de 30 días ha expirado. Activá tu suscripción para continuar usando RodeoFlow.</p>
     <div class="paywall-price" id="paywall-precio">USD 46 <span>/ mes</span></div><div id="paywall-tramo" style="font-size:13px;color:var(--text2);margin-top:-8px">según la cantidad de animales activos</div>
     <p style="font-size:14px;color:var(--text3);margin-bottom:8px">≈ ARS <span id="paywall-ars-equiv">calculando...</span> al dólar oficial BNA</p>
     <p style="font-size:14px;color:var(--text3);margin-bottom:16px">Acceso completo · Sin límites · Soporte incluido</p>
@@ -4750,6 +4751,7 @@ async function startTrial() {
   };
   DB.settings.registroUsuario = registro;
   DB.settings.tycAceptados = { version: RF_TYC_VERSION, fecha: registro.fecha };
+  DB.settings.cuitTitular = String(cuit||'').replace(/\D/g,'');
 
   DB.settings.phones = [
     {num: t1, name:'Titular', rol:'Dueño', pinHash: await rfHashPin(document.getElementById('setup-pin1').value)},
@@ -5348,6 +5350,7 @@ function saveToStorage() {
   saveEstabActivo().catch(e => console.warn('saveEstabActivo error:', e));
   // Backup en localStorage
   try { rfActualizarMaxMes(); } catch(e) {}
+  try { rfProgramarHuellas(); } catch(e) {}
   try { localStorage.setItem(RF_DB_KEY, JSON.stringify(DB)); localStorage.setItem('rf_bk_estab', window.ESTAB_ID_ACTIVO || ''); } catch(e) {}
   // Sync a Firebase (throttled, no bloquea)
   if (window.pushSyncFirebase) window.pushSyncFirebase();
@@ -10188,7 +10191,36 @@ function rfTramoHTML(){
     <div style="font-size:11px;color:var(--text3);margin-top:6px">Pago anual: dos meses sin cargo. Precios en dólares, se pagan en pesos al tipo de cambio oficial BNA del día.</div>
   </div>`;
 }
+// ═══ ANTI-ABUSO DE LA PRUEBA: huellas de las caravanas electrónicas ═══
+// Se mandan al servidor solo los hashes (nunca los números). Si el rodeo coincide con el de otro establecimiento
+// cuya prueba venció sin pagar, el servidor bloquea esta prueba. Un establecimiento que ya pagó no manda nada.
+let _rfHuellasTimer = null;
+function rfProgramarHuellas(){
+  if(_rfHuellasTimer) return; // el autoguardado corre cada 5 s: no se reinicia la espera
+  _rfHuellasTimer = setTimeout(()=>{ _rfHuellasTimer = null; rfEnviarHuellas().catch(e=>console.warn('Huellas:', e?.message||e)); }, 20000);
+}
+async function rfEnviarHuellas(){
+  if(!window.DB || !DB.settings || !DB.settings.hasBeenSetup) return;
+  const id = window.ESTAB_ID_ACTIVO; if(!id || String(id).startsWith('demo-')) return;
+  if(Number(DB.settings.activationDate) > 0) return;
+  if(typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length || !(window.crypto && crypto.subtle)) return;
+  const eids = [...new Set((DB.animales||[]).map(a=>String(a.rfid||'').replace(/\D/g,'')).filter(d=>d.length>=12).map(d=>d.slice(-12)))];
+  if(eids.length < 20) return;
+  const enc = new TextEncoder();
+  const hx = async t => [...new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(t)))].map(b=>b.toString(16).padStart(2,'0')).join('');
+  const firma = (await hx(eids.slice().sort().join(','))).slice(0,16);
+  const k = 'rf_huellas_' + id;
+  let prev = {}; try { prev = JSON.parse(localStorage.getItem(k)||'{}'); } catch(e) {}
+  if(prev.firma === firma && Date.now() - (prev.ts||0) < 7*86400000) return; // mismo rodeo y ya informado esta semana
+  const huellas = await Promise.all(eids.slice(0,10000).map(e => hx('rf-eid:'+e).then(h=>h.slice(0,24))));
+  await firebase.app().functions('us-central1').httpsCallable('registrarHuellas')({ estabId: id, huellas });
+  try { localStorage.setItem(k, JSON.stringify({ firma, ts: Date.now() })); } catch(e) {}
+}
 function rfPintarPaywall(){
+  const pm = document.getElementById('paywall-motivo');
+  if(pm) pm.textContent = window._rfTrialBloqueado
+    ? 'Este rodeo o este CUIT ya usaron su prueba gratuita en otro establecimiento. Para continuar, activá tu suscripción.'
+    : 'Tu prueba gratuita de 30 días ha expirado. Activá tu suscripción para continuar usando RodeoFlow.';
   const el = document.getElementById('paywall-precio'), el2 = document.getElementById('paywall-tramo');
   if(!el || !window.DB || !DB.settings) return;
   const { max, tramo } = rfInfoTramo();
@@ -16114,7 +16146,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-10.7';
+const RF_VERSION = '2026-11-12.1';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -16613,6 +16645,7 @@ async function rfAnchorTrial(){
   window._rfTrialAnchor=a; return a;
 }
 function trialInicio(){
+  if(window._rfTrialBloqueado) return 1; // prueba bloqueada por el servidor: cuenta como vencida
   // El inicio es el del establecimiento (se sincroniza entre dispositivos). El anchor del dispositivo solo sirve de respaldo si falta.
   if(window._rfTrialStartServidor) return window._rfTrialStartServidor; // autoritativo (servidor)
   const ts=(window.DB&&DB.settings&&DB.settings.trialStart)||0;
@@ -16983,15 +17016,17 @@ async function cambiarEstablecimiento(id) {
 // ── Crear nuevo establecimiento ───────────────────────
 async function crearNuevoEstablecimiento(nombre) {
   if (!nombre?.trim()) { toast('Ingresá un nombre', 'err'); return; }
-  const id     = genEstabId();
   const lista  = await getEstablecimientos();
+  if (lista.length && !confirm('Si es otro campo tuyo, conviene agregarlo como campo dentro de este establecimiento: así pagás un solo plan por el total de animales.\n\nUn establecimiento nuevo tiene su propia prueba gratuita y su propia suscripción.\n\n¿Crear el establecimiento nuevo igual?')) return;
+  const id     = genEstabId();
   lista.push({ id, nombre: nombre.trim(), creadoEn: Date.now() });
   await saveEstablecimientos(lista);
   const dbNueva = dbVacia(nombre.trim());
   dbNueva.settings.hasBeenSetup = true; // el titular ya completó la planilla en este dispositivo: sin esto, al recargar mostraba la pantalla de alta y no sincronizaba
-  // El nuevo establecimiento hereda la prueba y la suscripción del dispositivo: no inicia otra prueba
-  dbNueva.settings.trialStart = (await rfAnchorTrial()) || Date.now();
-  ['subscribed','activationDate','activationDays','activationCode'].forEach(k=>{ if(DB&&DB.settings&&DB.settings[k]!==undefined) dbNueva.settings[k]=DB.settings[k]; });
+  // Cada establecimiento es independiente: arranca su propia prueba y tiene su propia suscripción (la fija el servidor).
+  // El CUIT del titular viaja con él: si ya tuvo una prueba vencida sin pagar, el servidor bloquea esta.
+  dbNueva.settings.trialStart = Date.now();
+  if (DB && DB.settings) dbNueva.settings.cuitTitular = DB.settings.cuitTitular || (DB.settings.registroUsuario && DB.settings.registroUsuario.cuit) || '';
   await idbSet('rf_estab_' + id, JSON.stringify(dbNueva));
   await cambiarEstablecimiento(id);
   await renderSelectorEstab();
