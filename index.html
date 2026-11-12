@@ -1117,6 +1117,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
     </div>
     <button class="btn-pay" onclick="mostrarDatosPago()">💳 Ver datos de transferencia</button>
     <button class="btn-activate" onclick="checkActivation()">🔑 Ya pagué – ingresar código</button>
+<div id="paywall-estabs" style="margin-top:14px"></div>
     <p style="margin-top:10px"><a href="#" onclick="openModal('modal-reglas-pago');return false" style="font-size:12px;color:var(--text3);text-decoration:underline">📋 Ver reglas de pago completas</a> · <a href="#" onclick="verTerminos();return false" style="font-size:12px;color:var(--text3);text-decoration:underline">📄 Términos y condiciones</a></p>
   </div>
 </div>
@@ -10216,7 +10217,23 @@ async function rfEnviarHuellas(){
   await firebase.app().functions('us-central1').httpsCallable('registrarHuellas')({ estabId: id, huellas });
   try { localStorage.setItem(k, JSON.stringify({ firma, ts: Date.now() })); } catch(e) {}
 }
+// Desde la pantalla de pago se puede pasar a otro establecimiento del dispositivo o eliminar el vencido
+async function rfPaywallEstabs(){
+  const box = document.getElementById('paywall-estabs'); if(!box) return;
+  const lista = (await getEstablecimientos()) || [];
+  if(lista.length < 2){ box.innerHTML = ''; return; }
+  box.innerHTML = '<div style="font-size:12px;color:var(--text3);margin-bottom:4px">Otros establecimientos en este dispositivo:</div>'
+    + lista.filter(e => e.id !== ESTAB_ID_ACTIVO).map(e => `<button type="button" class="btn-activate" style="margin-top:6px" data-id="${esc(e.id)}" onclick="rfPaywallIrA(this.dataset.id)">🏡 Abrir ${esc(e.nombre || 'Establecimiento')}</button>`).join('')
+    + '<p style="margin-top:10px"><a href="#" onclick="rfPaywallEliminar();return false" style="font-size:12px;color:var(--red);text-decoration:underline">🗑 Eliminar este establecimiento</a></p>';
+}
+async function rfPaywallIrA(id){ try{ await cambiarEstablecimiento(id); }catch(e){ console.warn(e); } location.reload(); }
+async function rfPaywallEliminar(){
+  const antes = ESTAB_ID_ACTIVO;
+  try{ await eliminarEstablecimiento(antes); }catch(e){ console.warn(e); }
+  if(ESTAB_ID_ACTIVO !== antes) location.reload(); // si se canceló la confirmación, no pasa nada
+}
 function rfPintarPaywall(){
+  rfPaywallEstabs().catch(()=>{});
   const pm = document.getElementById('paywall-motivo');
   if(pm) pm.textContent = window._rfTrialBloqueado
     ? 'Este rodeo o este CUIT ya usaron su prueba gratuita en otro establecimiento. Para continuar, activá tu suscripción.'
@@ -16146,7 +16163,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-12.1';
+const RF_VERSION = '2026-11-12.2';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
