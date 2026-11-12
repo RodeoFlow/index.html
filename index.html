@@ -15275,14 +15275,31 @@ function mostrarRegistrosPendientes(registros) {
         <div style="font-size:14px;color:var(--text2)">${esc(r.descripcion||JSON.stringify(r.datos))}</div>
         ${(r.rp&&['Pesada','Vacuna','Tratamiento','Tacto','Muerte','Traslado'].includes(r.tipo)&&!(DB.animales||[]).some(a=>a.rp===r.rp))?`<div style="font-size:12px;color:var(--amber)">⚠️ El RP ${esc(r.rp)} no está cargado en el rodeo</div>`:''}
         ${r.tipo==='Muerte'?`<div style="font-size:12px;color:var(--amber)">Dará de baja al animal del rodeo</div>`:''}
+        ${r.tipo==='Animal'?waSelectorAltaHTML(r,i):''}
       </div>
     </div>`).join('');
   container.style.display = 'block';
   toast(registros.length+' registros detectados — revisalos','info');
 }
 
+// Alta por voz/WhatsApp: categoría y sexo nunca se inventan; si el dictado no los dice, se piden acá
+const WA_CATS_ALTA = ['Vaca','Vaquillona','Toro','Torito','Novillo','Novillito','Ternero M','Ternera H','Destete Macho','Destete Hembra','Recría','Invernada Machos','Invernada Hembras','Invernada Vientres'];
+function waNormCat(c){ const t=String(c||'').trim().toLowerCase(); return WA_CATS_ALTA.find(x=>x.toLowerCase()===t)||(t?String(c).trim():''); }
+function waNormSexo(x){ const t=String(x||'').trim().toLowerCase(); return t.startsWith('m')?'Macho':(t.startsWith('h')?'Hembra':''); }
+function waSelectorAltaHTML(r,i){
+  const d=r.datos||{}, cat=waNormCat(d.categoria), sx=waNormSexo(d.sexo);
+  const cats=[...new Set([...WA_CATS_ALTA,...(cat?[cat]:[])])];
+  const falta=!cat||!sx;
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+    <select id="wa-cat-${i}" class="form-control" style="width:auto;padding:4px 8px;font-size:13px${!cat?';border-color:var(--amber)':''}"><option value="">Categoría…</option>${cats.map(c=>`<option ${c===cat?'selected':''}>${esc(c)}</option>`).join('')}</select>
+    <select id="wa-sexo-${i}" class="form-control" style="width:auto;padding:4px 8px;font-size:13px${!sx?';border-color:var(--amber)':''}"><option value="">Sexo…</option><option ${sx==='Macho'?'selected':''}>Macho</option><option ${sx==='Hembra'?'selected':''}>Hembra</option></select>
+  </div>${falta?`<div style="font-size:12px;color:var(--amber);margin-top:4px">⚠️ El dictado no dijo ${!cat&&!sx?'la categoría ni el sexo':!cat?'la categoría':'el sexo'}: elegilo antes de confirmar</div>`:''}`;
+}
 async function confirmarRegistrosWA() {
   let guardados = 0; const revisar = [];
+  // Ningún alta se guarda sin categoría y sexo elegidos
+  const faltan = waRegistrosPendientes.map((r,i)=>({r,i})).filter(({r,i})=>r.tipo==='Animal' && document.getElementById('wa-check-'+i)?.checked && (!document.getElementById('wa-cat-'+i)?.value || !document.getElementById('wa-sexo-'+i)?.value));
+  if(faltan.length){ toast(`Elegí la categoría y el sexo de ${faltan.length===1?'1 animal':faltan.length+' animales'} antes de confirmar`,'err'); return; }
   waRegistrosPendientes.forEach((r,i) => {
     const cb = document.getElementById('wa-check-'+i);
     if(!cb||!cb.checked) return;
@@ -15323,7 +15340,8 @@ async function confirmarRegistrosWA() {
       } else if(r.tipo==='Animal') {
         const rp = r.rp || d.rp || 'WA-'+Date.now();
         if(!DB.animales.find(a=>a.rp===rp)) {
-          DB.animales.push({id:Date.now()+i,rp,nombre:d.nombre||'',rfid:'',categoria:d.categoria||'Novillo',sexo:d.sexo||'Macho',raza:d.raza||'Cruza',color:'',fnac:d.fnac||'',peso:parseFloat(d.peso)||0,potrero:d.potrero||'',procedencia:'Alta WA',prenada:'No',obs:'',activo:true,pesoHistorico:[]});
+          const _cat = document.getElementById('wa-cat-'+i)?.value || waNormCat(d.categoria), _sx = document.getElementById('wa-sexo-'+i)?.value || waNormSexo(d.sexo);
+          DB.animales.push({id:Date.now()+i,rp,nombre:d.nombre||'',rfid:'',categoria:_cat,sexo:_sx,raza:d.raza||'Cruza',color:'',fnac:d.fnac||'',peso:parseFloat(d.peso)||0,potrero:d.potrero||'',procedencia:'Alta WA',prenada:'No',obs:'',activo:true,pesoHistorico:[]});
           addHistorial('Animal',`Alta WA: RP ${rp} ${d.categoria||''}`,rp,'');
           guardados++;
         } else { toast(`RP ${rp} ya existe, se omitió`,'info'); }
@@ -16096,7 +16114,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-10.6';
+const RF_VERSION = '2026-11-10.7';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
