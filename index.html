@@ -10353,22 +10353,31 @@ async function adminVerRegistros(){
   const ETQ = {'activo':['🟢','Activo'],'vencido':['🔴','Suscripción vencida'],'prueba':['🟡','En prueba'],'prueba-vencida':['⚪','Prueba vencida'],'sin-datos':['❔','Sin datos']};
   const f = ms => ms ? new Date(ms).toLocaleDateString('es-AR') : '—';
   const caja = (n,l) => `<div style="flex:1;min-width:110px;background:var(--bg2,#f4f4f4);border-radius:8px;padding:8px;text-align:center"><div style="font-size:1.4rem;font-weight:700">${esc(String(n))}</div><div style="font-size:.75rem;opacity:.8">${esc(l)}</div></div>`;
+  const hace = ms => { if(!ms) return 'sin datos'; const d=Math.floor((Date.now()-ms)/86400000); return d<=0?'hoy':d===1?'ayer':`hace ${d} días`; };
+  const lista = (d.clientes||[]);
+  const reales = lista.filter(x=>x.tieneRegistro), sinPl = lista.filter(x=>!x.tieneRegistro);
   let h = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">`
-    + caja(t.registrados,'Registrados')+caja(t.nuevos7dias,'Nuevos 7 días')+caja(t.nuevos30dias,'Nuevos 30 días')
-    + caja(t.enPrueba,'En prueba')+caja(t.activos,'Con suscripción')+caja(t.pruebaVencida,'Prueba vencida')
-    + caja((t.codigosUsados||0)+'/'+(t.codigosTotal||0),'Códigos usados')+`</div>`;
+    + caja(t.registrados,'Registrados (con planilla)')+caja(t.nuevos7dias,'Nuevos 7 días')+caja(t.nuevos30dias,'Nuevos 30 días')
+    + caja(t.activos7dias||0,'Activos en 7 días')+caja(t.enPrueba,'En prueba')+caja(t.activos,'Con suscripción')+caja(t.pruebaVencida,'Prueba vencida')
+    + caja(t.sinPlanilla||0,'Sin planilla')+caja((t.codigosUsados||0)+'/'+(t.codigosTotal||0),'Códigos usados')+`</div>`;
   h += `<div style="font-size:.75rem;opacity:.7;margin-bottom:6px">Actualizado ${esc(new Date(d.generado).toLocaleString('es-AR'))}. Tus propios registros de prueba también cuentan.</div>`;
-  h += `<div style="max-height:46vh;overflow:auto">`;
-  (d.clientes||[]).forEach(x=>{
+  const fila = x => {
     const e = ETQ[x.estado]||ETQ['sin-datos'];
     const dias = x.diasRestantes==null ? '' : (x.diasRestantes>0 ? ` · quedan ${x.diasRestantes} d` : ` · venció hace ${-x.diasRestantes} d`);
     const lugar = [x.localidad,x.provincia].filter(Boolean).join(', ');
-    h += `<div style="border-bottom:1px solid #8884;padding:6px 0"><b>${esc(x.establecimiento||'(sin nombre)')}</b> — ${e[0]} ${e[1]}${esc(dias)}<br>`
+    return `<div style="border-bottom:1px solid #8884;padding:6px 0"><b>${esc(x.establecimiento||'(sin nombre)')}</b> — ${e[0]} ${e[1]}${esc(dias)}<br>`
       + `<span style="opacity:.85">${esc(x.nombre||'')}${x.telefono?' · '+esc(x.telefono):''}${x.email?' · '+esc(x.email):''}${lugar?' · '+esc(lugar):''}</span><br>`
-      + `<span style="opacity:.6;font-size:.75rem">Alta: ${f(x.registrado)}${x.tieneRegistro?'':' · sin planilla de registro'}</span></div>`;
-  });
-  if(!(d.clientes||[]).length) h += '<div>Todavía no hay registros.</div>';
-  out.innerHTML = h + '</div>';
+      + `<span style="opacity:.6;font-size:.75rem">Alta: ${f(x.registrado)} · Última actividad: ${esc(hace(x.ultimaActividad))}${x.dispositivos!=null?' · '+esc(String(x.dispositivos))+' dispositivo(s)':''}</span><br>`
+      + `<span style="opacity:.5;font-size:.7rem;word-break:break-all">ID: ${esc(x.id)}</span></div>`;
+  };
+  h += `<div style="max-height:40vh;overflow:auto"><div style="font-weight:700;margin:4px 0">👥 Clientes con planilla de alta (${reales.length})</div>`;
+  h += reales.length ? reales.map(fila).join('') : '<div>Todavía no hay registros.</div>';
+  h += `</div>`;
+  if(sinPl.length){
+    h += `<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">🧪 Sin planilla de registro (${sinPl.length}) — probablemente pruebas propias</summary>`
+      + `<div style="max-height:34vh;overflow:auto">${sinPl.map(fila).join('')}</div></details>`;
+  }
+  out.innerHTML = h;
 }
 async function reiniciarTrialTitular(autorizado, codigo){
   if(!autorizado) return;
@@ -16226,7 +16235,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-18.3';
+const RF_VERSION = '2026-11-18.4';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
