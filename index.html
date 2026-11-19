@@ -452,20 +452,21 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
     const uid = firebase.auth().currentUser && firebase.auth().currentUser.uid;
     if (!uid) throw new Error('Sin sesión de Firebase Auth');
     const estabRef = rtdb.ref(`establecimientos/${estabId}`);
-    const snap = await estabRef.child('members').once('value'); // solo 'members': un no-miembro no puede leer el resto del establecimiento
-
-    if (!snap.exists()) {
-      // Establecimiento nuevo, o viejo de antes del sistema de miembros: me auto-agrego.
-      await estabRef.child('members/' + uid).set(true);
-      // Índice liviano (solo existencia, sin datos) para poder validar códigos
-      // desde unirseAEstablecimiento sin necesitar ya ser miembro para leer.
-      await rtdb.ref('estabs_index/' + estabId).set(true);
-      return;
-    }
-    if (snap.child(uid).exists()) {
+    // Solo se lee la entrada propia: la lista completa de members es privada del establecimiento
+    const mio = await estabRef.child('members/' + uid).once('value');
+    if (mio.exists()) {
       // Establecimientos anteriores al índice: se crea ahora para que otros dispositivos puedan pedir acceso con el código
       rtdb.ref('estabs_index/' + estabId).once('value').then(i => { if (!i.exists()) return rtdb.ref('estabs_index/' + estabId).set(true); }).catch(() => {});
       return; // ya soy miembro
+    }
+    const idx = await rtdb.ref('estabs_index/' + estabId).once('value');
+    if (!idx.exists()) {
+      // Establecimiento nuevo: me auto-agrego. Si ya tenía miembros (viejo, sin índice), las reglas lo rechazan y se pide acceso.
+      try {
+        await estabRef.child('members/' + uid).set(true);
+        await rtdb.ref('estabs_index/' + estabId).set(true);
+        return;
+      } catch (e) { console.warn('Alta directa rechazada, se pide acceso', e); }
     }
 
     // No soy miembro todavía: pido acceso y espero que otro dispositivo autorizado
@@ -533,7 +534,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
       if ((!s || !s.trialStart) && window._rfTrialInitPedido !== estabId && window.DB && window.DB.settings && !String(estabId).startsWith('demo-')) {
         window._rfTrialInitPedido = estabId;
         try {
-          firebase.app().functions('us-central1').httpsCallable('iniciarTrial')({ estabId, trialStartLocal: window.DB.settings.trialStart || 0 })
+          firebase.app().functions('us-central1').httpsCallable('iniciarTrial')({ estabId, trialStartLocal: window.DB.settings.trialStart || 0, cuit: String(window.DB.settings.cuitTitular || (window.DB.settings.registroUsuario && window.DB.settings.registroUsuario.cuit) || '').replace(/\D/g,'') })
             .catch(e => console.warn('iniciarTrial no disponible (se usa el inicio local):', e?.message || e));
         } catch(e) {}
       }
@@ -542,6 +543,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
       window.DB.settings.activationDate = s.activationDate || null;
       window.DB.settings.activationDays = (Number(s.activationDays) > 0) ? Number(s.activationDays) : 30; // duración del período (30, 365, etc.)
       window.DB.settings.activationCode = s.activationCode || null;
+      window._rfTrialBloqueado = !!s.trialBloqueado; // prueba bloqueada por reutilizar un rodeo o un CUIT con prueba vencida sin pagar
       if (typeof s.trialStart === 'number' && s.trialStart > 0) {
         window._rfTrialServidor = true;
         window._rfTrialStartServidor = s.trialStart;
@@ -1046,7 +1048,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
       </div>
       <div style="flex:1">
         <label>CUIT *</label>
-        <input id="setup-cuit" type="text" placeholder="20-12345678-9" inputmode="numeric">
+        <input id="setup-cuit" type="text" placeholder="20-12345678-6" inputmode="numeric">
       </div>
     </div>
     <label>Empresa / Razón social *</label>
@@ -1087,6 +1089,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
     <label>Teléfono Veterinario (opcional)</label>
     <input id="setup-tel4" type="tel" placeholder="+54 9 11 xxxx-xxxx">
     <input id="setup-pin4" type="password" inputmode="numeric" maxlength="6" placeholder="PIN (4-6 dígitos, opcional)" style="margin-bottom:14px">
+    <label for="setup-tyc" style="display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.4;margin:2px 0 14px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="checkbox" id="setup-tyc" style="width:18px;height:18px;min-width:18px;margin:1px 0 0;padding:0;flex:none"><span>Leí y acepto los <a href="#" onclick="verTerminos();return false" style="color:var(--accent);text-decoration:underline">Términos y Condiciones</a> de RodeoFlow</span></label>
     <button class="btn-trial" onclick="startTrial()">🚀 Iniciar prueba gratuita</button>
 
     <div style="text-align:center;margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
@@ -1104,17 +1107,18 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
   <div class="paywall-box">
     <div style="font-size:36px;margin-bottom:8px">⛔</div>
     <h2>Período de prueba finalizado</h2>
-    <p>Tu prueba gratuita de 30 días ha expirado. Activá tu suscripción para continuar usando RodeoFlow.</p>
-    <div class="paywall-price">USD 46 <span>/ mes</span></div>
+    <p id="paywall-motivo">Tu prueba gratuita de 30 días ha expirado. Activá tu suscripción para continuar usando RodeoFlow.</p>
+    <div class="paywall-price" id="paywall-precio">USD 46 <span>/ mes</span></div><div id="paywall-tramo" style="font-size:13px;color:var(--text2);margin-top:-8px">según la cantidad de animales activos</div>
     <p style="font-size:14px;color:var(--text3);margin-bottom:8px">≈ ARS <span id="paywall-ars-equiv">calculando...</span> al dólar oficial BNA</p>
     <p style="font-size:14px;color:var(--text3);margin-bottom:16px">Acceso completo · Sin límites · Soporte incluido</p>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:16px">📅 <strong>Plan anual:</strong> pagás 11 meses y el mes 12 va sin cargo (365 días de acceso).</p>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:16px">📅 <strong>Plan anual:</strong> pagás 10 meses y dos meses van sin cargo (365 días de acceso).</p>
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:20px;text-align:left;font-size:12px;color:var(--text3)">
       🔄 <strong style="color:var(--text2)">Renovación:</strong> al vencer tu período (30 días en el plan mensual, 365 en el anual) pagás de nuevo y enviás el comprobante por WhatsApp para recibir tu nuevo código; no hay cobro automático. Podés dar de baja cuando quieras desde Configuración → "❌ Cancelar suscripción" — la baja se procesa en hasta 2 días hábiles.
     </div>
     <button class="btn-pay" onclick="mostrarDatosPago()">💳 Ver datos de transferencia</button>
     <button class="btn-activate" onclick="checkActivation()">🔑 Ya pagué – ingresar código</button>
-    <p style="margin-top:10px"><a href="#" onclick="openModal('modal-reglas-pago');return false" style="font-size:12px;color:var(--text3);text-decoration:underline">📋 Ver reglas de pago completas</a></p>
+<div id="paywall-estabs" style="margin-top:14px"></div>
+    <p style="margin-top:10px"><a href="#" onclick="openModal('modal-reglas-pago');return false" style="font-size:12px;color:var(--text3);text-decoration:underline">📋 Ver reglas de pago completas</a> · <a href="#" onclick="verTerminos();return false" style="font-size:12px;color:var(--text3);text-decoration:underline">📄 Términos y condiciones</a></p>
   </div>
 </div>
 
@@ -1300,6 +1304,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
           <button class="btn-primary" onclick="openModalAnimal()">＋ Alta animal</button>
         </div>
       </div>
+      <div id="animales-resumen-cat" style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px"></div>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th>Foto</th><th>RP</th><th>RFID</th><th>Categoría</th><th>Raza</th><th>Sexo</th><th>F.Nac</th><th>Peso</th><th>GDP</th><th>Potrero</th><th>Preñez</th><th>Estado</th><th>Obs</th><th>Ficha</th><th>Acciones</th></tr></thead>
@@ -1576,6 +1581,16 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
             </div>
           </div>
         </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">📥 Importar sesión de balanza (Tru-Test / Gallagher)</div>
+        <div style="font-size:13px;color:var(--text3);margin-bottom:8px">Subí el CSV o Excel que exporta el indicador. Cada fila se asigna al animal por EID (RFID) o por VID/RP y se guarda como pesada. Los animales que no estén en tu rodeo se informan para darlos de alta con <b>Importar animales</b>.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:200px"><label class="form-label">Archivo de la sesión</label><input type="file" id="ses-archivo" class="form-control" accept=".csv,.txt,.xlsx,.xls" onchange="impSesionLeer(this)"></div>
+          <div style="min-width:160px"><label class="form-label">Operador</label><input type="text" id="ses-operador" class="form-control" placeholder="Opcional"></div>
+        </div>
+        <div id="ses-resumen" style="margin-top:10px"></div>
+        <button class="btn-primary" id="ses-btn-confirmar" style="display:none;margin-top:8px" onclick="impSesionConfirmar()">Importar pesadas</button>
       </div>
       <div class="card" style="margin-top:16px">
         <div class="card-title">Historial de pesadas</div>
@@ -1881,6 +1896,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
             </div>
             <div class="form-group"><label class="form-label">Fecha de inicio (Día 0)</label><input type="date" id="iatf-fecha-inicio" class="form-control"></div>
           </div>
+          <div class="form-group"><label class="form-label">Productos y dosis (indicados por el veterinario)</label><input type="text" id="iatf-indicaciones" class="form-control" maxlength="300" placeholder="Ej: dispositivo y dosis de cada hormona según el veterinario"></div>
           <button class="btn-primary" onclick="generarProtocoloIATF()">📅 Generar calendario</button>
         </div>
 
@@ -3105,6 +3121,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
             <button class="btn-activate" style="padding:10px 20px;font-size:13px" onclick="checkActivation()">🔑 Activar</button>
             <button class="btn-secondary" style="padding:10px 20px;font-size:13px;color:var(--red)" onclick="abrirModalCancelacion()">❌ Cancelar suscripción</button>
             <button class="btn-secondary" style="padding:10px 20px;font-size:13px" onclick="openModal('modal-reglas-pago')">📋 Reglas de pago</button>
+            <button class="btn-secondary" style="padding:10px 20px;font-size:13px" onclick="verTerminos()">📄 Términos y condiciones</button>
           </div>
           <p style="font-size:11px;color:var(--text3);margin-top:10px">🔄 Al vencer tu período pagás de nuevo y enviás el comprobante para recibir el nuevo código; no hay cobro automático. La baja se procesa en hasta 2 días hábiles.</p>
         </div>
@@ -3256,7 +3273,8 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
       <button class="modal-close" onclick="closeModal('modal-reglas-pago')">✕</button>
     </div>
     <div style="font-size:13px;color:var(--text2);line-height:1.7">
-      <p><strong style="color:var(--text)">💵 Precio:</strong> Plan mensual: USD 46 por mes. Plan anual: USD 506 (11 meses; el mes 12 va sin cargo) por 365 días de acceso. Ambos planes se suman a la prueba gratuita de 30 días y se cobran en su equivalente en pesos argentinos al tipo de cambio oficial BNA del día del pago.</p>
+      <p><strong style="color:var(--text)">💵 Precio:</strong> Se cobra según la cantidad de animales activos del establecimiento (se toma el máximo del mes): hasta 300 animales USD 46/mes; hasta 1000, USD 70; hasta 2000, USD 120; hasta 3000, USD 170; hasta 4000, USD 210; hasta 5000, USD 260; más de 5000, a convenir. Plan anual: se pagan 10 meses (dos meses sin cargo) por 365 días de acceso. Ambos planes se suman a la prueba gratuita de 30 días y se cobran en su equivalente en pesos argentinos al tipo de cambio oficial BNA del día del pago.</p>
+      <p><strong style="color:var(--text)">📈 Cantidad de animales y cambio de tramo:</strong> se cuentan los animales activos del establecimiento (no se cuentan los vendidos, muertos ni dados de baja) y se toma el máximo alcanzado en el mes del pago. Si durante el período pagado el establecimiento pasa a un tramo más alto, no se cobra diferencia: el precio nuevo rige desde la próxima renovación, mensual o anual. Si baja de tramo, el precio menor también se aplica desde la próxima renovación. Con más de 5000 animales activos el precio se acuerda por WhatsApp.</p>
       <p><strong style="color:var(--text)">💳 Medio de pago:</strong> transferencia bancaria al alias <code>CMORENO.agromp2</code> (CVU universal, cualquier banco/billetera).</p>
       <p><strong style="color:var(--text)">🔄 Renovación:</strong> cada activación habilita 30 días de acceso (plan mensual) o 365 días (plan anual). Al vencer, se renueva pagando de nuevo y enviando el comprobante — no hay cobro automático a tarjeta, es un proceso manual por WhatsApp.</p>
       <p><strong style="color:var(--text)">⏳ Días de gracia:</strong> 3 días después del vencimiento antes de cortar el acceso, para dar tiempo a renovar.</p>
@@ -3464,7 +3482,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Raza</label>
-          <select id="a-raza" class="form-control"><option>Aberdeen Angus</option><option>Hereford</option><option>Brangus</option><option>Braford</option><option>Shorthorn</option><option>Limousin</option><option>Brahman</option><option>Charolais</option><option>Criolla</option><option>Cruza</option></select>
+          <select id="a-raza" class="form-control"><option>Aberdeen Angus</option><option>Hereford</option><option>Brangus</option><option>Braford</option><option>Shorthorn</option><option>Criolla</option><option>Cruza</option></select>
         </div>
         <div class="form-group"><label class="form-label">Color</label><input type="text" id="a-color" class="form-control" placeholder="Negro"></div>
       </div>
@@ -3619,18 +3637,6 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
 </div>
 
 <!-- Modal: Genómica (carga manual) -->
-<div id="modal-admin" class="modal-overlay">
-  <div class="modal" style="max-width:760px">
-  <div class="modal-header"><div class="modal-title">🛠️ Administración RodeoFlow</div><button class="modal-close" onclick="closeModal('modal-admin')">✕</button></div>
-  <div class="modal-body">
-  <div class="form-group"><label class="form-label">Código del titular</label><input type="password" id="adm-codigo" class="form-control" autocomplete="off" placeholder="Código del titular"></div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-    <button class="btn btn-primary" onclick="adminVerRegistros()">👥 Ver registros y suscripciones</button>
-    <button class="btn btn-secondary" onclick="adminReiniciarPrueba()">🔄 Reiniciar prueba de este establecimiento</button>
-  </div>
-  <div id="adm-resultado" style="font-size:.9rem"></div>
-  </div></div>
-</div>
 <div id="modal-genomica" class="modal-overlay">
   <div class="modal" style="max-width:720px">
   <div class="modal-header"><div class="modal-title" id="gen-titulo">🧬 Datos genómicos</div><button class="modal-close" onclick="closeModal('modal-genomica')">✕</button></div>
@@ -4633,6 +4639,54 @@ const RFID_PESO_CORRELACION_MS = 5000; // ventana máx entre lectura RFID y peso
 // ─── TRIAL / AUTH SYSTEM ───
 const TRIAL_DAYS = 30;
 
+// ── Validación de DNI y CUIT/CUIL (sin internet) ──
+function rfCuitValido(cuit){
+  const d = String(cuit||'').replace(/\D/g,'');
+  if(d.length !== 11) return false;
+  if(!['20','23','24','27','30','33','34'].includes(d.slice(0,2))) return false;
+  const pesos = [5,4,3,2,7,6,5,4,3,2];
+  const suma = pesos.reduce((t,p,i) => t + p * Number(d[i]), 0);
+  let dv = 11 - (suma % 11);
+  if(dv === 11) dv = 0;
+  if(dv === 10) return false;
+  return dv === Number(d[10]);
+}
+function rfValidarDniCuit(dni, cuit){
+  const dd = String(dni||'').replace(/\D/g,''), dc = String(cuit||'').replace(/\D/g,'');
+  if(dd.length < 7 || dd.length > 8) return 'El DNI tiene que tener 7 u 8 números.';
+  if(dc.length !== 11) return 'El CUIT tiene que tener 11 números (ej: 20-12345678-6).';
+  if(!rfCuitValido(dc)) return 'El CUIT no es válido: revisá los números, sobre todo el último.';
+  // CUIT/CUIL de persona (20, 23, 24, 27): los 8 números del medio son el DNI
+  if(['20','23','24','27'].includes(dc.slice(0,2)) && dc.slice(2,10) !== dd.padStart(8,'0'))
+    return 'El DNI no coincide con el CUIT: los 8 números del medio del CUIT tienen que ser tu DNI.';
+  return '';
+}
+// ═══ TÉRMINOS Y CONDICIONES (texto completo dentro de la app, se ve sin conexión) ═══
+const RF_TYC_VERSION = '2026-11-10';
+const RF_TYC_HTML = `<p class="tyc-m">Última actualización: 10 de noviembre de 2026</p><p class="tyc-m">Titular: Carlos Moreno</p><p class="tyc-m">CUIT: 20-20834030-2</p><p class="tyc-m">Domicilio legal: Sáenz Peña 560, San Carlos de Bolívar, Provincia de Buenos Aires</p><p class="tyc-m">Correo electrónico de contacto: agromp@hotmail.com</p><p class="tyc-m">Teléfono / WhatsApp: 2314-446643</p><p class="tyc-m">Sitio web oficial: https://rodeoflow.github.io/index.html/</p><h4>1. Aceptación de los Términos y Condiciones</h4><p>Los presentes Términos y Condiciones regulan el acceso y uso de Rodeo Flow, una plataforma digital destinada a la gestión, administración y seguimiento de establecimientos y actividades ganaderas.</p><p>Al crear una cuenta, aceptar estos términos o contratar un plan, el usuario declara haber leído y comprendido las condiciones aplicables al servicio.</p><p>Si no está de acuerdo con estas disposiciones, deberá abstenerse de utilizar las funcionalidades sujetas a ellas.</p><p>La aceptación de estos términos no implica renunciar a derechos que sean irrenunciables conforme a la legislación vigente.</p><h4>2. Descripción de Rodeo Flow</h4><p>Rodeo Flow es una solución tecnológica para organizar y administrar información ganadera desde computadoras, teléfonos celulares y otros dispositivos compatibles, mediante el sitio web y/o la aplicación que se encuentre disponible.</p><p>La plataforma está destinada, entre otros, a productores ganaderos, cabañas, empresas agropecuarias y consignatarias.</p><p>Sus funcionalidades incluyen:</p><p class="tyc-li">• Registro individual de animales, caravanas, razas, categorías y genealogía.</p><p class="tyc-li">• Administración de establecimientos, rodeos, lotes y potreros.</p><p class="tyc-li">• Registro de nacimientos, bajas, mortandad, movimientos y existencias.</p><p class="tyc-li">• Gestión sanitaria, vacunaciones, tratamientos y reproducción.</p><p class="tyc-li">• Seguimiento de pesajes, evolución del peso y ganancia diaria.</p><p class="tyc-li">• Control de alimentación, suplementación y datos de comederos.</p><p class="tyc-li">• Integración con balanzas, bastones lectores, caravanas electrónicas y dispositivos RFID compatibles.</p><p class="tyc-li">• Registro de compras, ventas, traslados y movimientos de hacienda.</p><p class="tyc-li">• Administración de información de faena y romaneo, cuando la funcionalidad esté disponible.</p><p class="tyc-li">• Generación de reportes, estadísticas y exportación de información.</p><p class="tyc-li">• Carga de datos mediante formularios, texto, audio u otros medios habilitados.</p><p class="tyc-li">• Consulta de indicadores productivos, económicos y de mercado disponibles.</p><p>Todos los planes incluyen todas las funcionalidades; solo se diferencian por la cantidad de animales activos. Algunas funciones pueden depender del dispositivo, del navegador o de la conexión a internet.</p><h4>3. Registro y administración de cuentas</h4><p>Para utilizar las funciones que requieren una cuenta, el usuario deberá proporcionar información veraz, suficiente y actualizada.</p><p>El usuario se compromete a:</p><p class="tyc-li">a. Mantener actualizados sus datos de contacto.</p><p class="tyc-li">b. Proteger sus credenciales y evitar accesos no autorizados.</p><p class="tyc-li">c. Informar cualquier sospecha de acceso indebido a su cuenta.</p><p class="tyc-li">d. Administrar los permisos de empleados, colaboradores, asesores y demás personas autorizadas.</p><p class="tyc-li">e. Utilizar la plataforma conforme a estos términos y a la legislación aplicable.</p><p>El titular de la cuenta será responsable de gestionar los permisos que otorgue a terceros, sin perjuicio de las responsabilidades que correspondan legalmente a cada persona.</p><h4>4. Período de prueba gratuita</h4><p>Rodeo Flow ofrecerá un período de prueba gratuita de treinta (30) días, sujeto a las condiciones informadas durante el registro.</p><p>Antes de iniciar la prueba, se informará su fecha de comienzo, las funcionalidades incluidas y las condiciones de acceso.</p><p>La prueba gratuita permitirá evaluar el funcionamiento de la plataforma durante el plazo indicado, con acceso a todas sus funcionalidades.</p><p>Al finalizar los treinta días, el usuario podrá contratar un plan pago si desea continuar utilizando las funciones sujetas a suscripción.</p><p>Los precios y las condiciones de pago se detallan en el punto 12 y se informan en la plataforma antes de contratar.</p><p>Al finalizar la prueba no se realiza ningún cargo automático: la contratación se concreta solo si el usuario decide abonar un plan.</p><h4>5. Licencia de uso y restricciones</h4><p>Mientras la cuenta se encuentre habilitada, Rodeo Flow concede al usuario una autorización de uso limitada, no exclusiva y no transferible para utilizar las funcionalidades incluidas en su plan.</p><p>Esta autorización no implica la venta ni la transferencia de la plataforma, su código fuente, sus marcas, diseños o componentes tecnológicos.</p><p>Queda prohibido:</p><p class="tyc-li">• Copiar, distribuir, modificar o comercializar el software sin autorización.</p><p class="tyc-li">• Intentar acceder a sistemas, cuentas o funcionalidades sin autorización.</p><p class="tyc-li">• Eludir mecanismos de seguridad o introducir código malicioso.</p><p class="tyc-li">• Utilizar la plataforma para actividades ilícitas o fraudulentas.</p><p class="tyc-li">• Revender o sublicenciar el acceso sin autorización.</p><p class="tyc-li">• Extraer información de forma abusiva o interferir deliberadamente en el funcionamiento del servicio.</p><p class="tyc-li">• Suplantar identidades o vulnerar los derechos de otros usuarios.</p><h4>6. Propiedad intelectual</h4><p>La denominación Rodeo Flow, sus logotipos, diseños, interfaces, documentación, código fuente y demás elementos propios pertenecen a su titular o a sus respectivos licenciantes, según corresponda.</p><p>Estos elementos están sujetos a las normas de propiedad intelectual e industrial aplicables.</p><p>El uso de la plataforma no concede al usuario derechos de propiedad sobre el software ni autorización para reproducirlo o explotarlo comercialmente fuera de las condiciones permitidas.</p><p>La información incorporada por el usuario conserva el régimen de titularidad y derechos que le corresponda conforme a la legislación aplicable.</p><h4>7. Titularidad y utilización de los datos ganaderos</h4><p>El usuario conserva los derechos que le correspondan sobre los datos y archivos que incorpora a Rodeo Flow.</p><p>Esto comprende, entre otros, los registros de animales, establecimientos, rodeos, pesajes, tratamientos, alimentación, reproducción, compras, ventas y movimientos de hacienda.</p><p>Para prestar el servicio, el usuario autoriza al titular de Rodeo Flow a alojar, almacenar, organizar, procesar y transmitir la información necesaria para el funcionamiento de las funcionalidades contratadas.</p><p>Cuando sea necesario, podrán intervenir proveedores tecnológicos para alojar información, procesar pagos, realizar respaldos o prestar servicios complementarios.</p><p>Rodeo Flow no venderá información confidencial específica de una explotación ganadera.</p><p>Podrán utilizarse estadísticas agregadas o información efectivamente anonimizada para mejorar la plataforma y analizar tendencias, siempre que no permitan identificar al usuario, a su establecimiento ni a su operación.</p><p>El usuario declara contar con los derechos y autorizaciones necesarios para incorporar datos de terceros a los que tenga acceso legítimo.</p><h4>8. Seguridad y confidencialidad</h4><p>Rodeo Flow procurará implementar medidas técnicas y organizativas razonables para proteger la información frente a accesos no autorizados, alteraciones, divulgación o pérdida.</p><p>Las medidas concretas dependerán de la infraestructura y las herramientas efectivamente implementadas.</p><p>Ningún sistema informático puede garantizar una seguridad absoluta. Por ello, el usuario también deberá proteger sus credenciales y administrar adecuadamente los permisos de acceso.</p><p>El titular no declarará utilizar certificaciones, proveedores o mecanismos específicos de seguridad que no se encuentren efectivamente implementados.</p><h4>9. Responsabilidad por los datos registrados</h4><p>El usuario es responsable de la exactitud, integridad y actualidad de los datos que introduce en la plataforma.</p><p>Los registros obtenidos mediante dispositivos externos, archivos importados, reconocimiento de voz o automatizaciones deberán verificarse cuando su precisión resulte relevante para una decisión productiva, sanitaria, económica o comercial.</p><p>Rodeo Flow no garantiza que los datos introducidos por los usuarios o recibidos de fuentes externas sean correctos.</p><p>El usuario deberá revisar y corregir los errores que detecte y conservar los respaldos que considere necesarios para su actividad.</p><h4>10. Indicadores, reportes y recomendaciones</h4><p>Los indicadores, cálculos, alertas, estadísticas, proyecciones y reportes generados por Rodeo Flow tienen carácter informativo y de asistencia a la gestión.</p><p>Salvo contratación expresa de un servicio profesional específico, la plataforma no sustituye el asesoramiento veterinario, agronómico, nutricional, contable, financiero ni jurídico.</p><p>Las decisiones relativas a tratamientos, vacunaciones, reproducción, alimentación, selección genética, compras, ventas o manejo del establecimiento deberán adoptarse considerando las condiciones reales de cada explotación y, cuando corresponda, con asesoramiento profesional.</p><p>Rodeo Flow no garantiza resultados productivos o económicos determinados por el solo uso de la plataforma.</p><h4>11. Dispositivos e integraciones externas</h4><p>La conexión con balanzas, bastones lectores, caravanas electrónicas, RFID, comederos inteligentes, sistemas de mensajería y otros dispositivos o servicios dependerá de su compatibilidad y disponibilidad.</p><p>Rodeo Flow no garantiza compatibilidad universal con todos los fabricantes y modelos.</p><p>El funcionamiento de las integraciones podrá verse afectado por problemas de conectividad, configuración, sincronización, actualizaciones o fallas de terceros.</p><p>Cuando los datos obtenidos de un dispositivo puedan contener errores de lectura, duplicaciones o diferencias de sincronización, el usuario deberá verificarlos antes de utilizarlos para tomar decisiones relevantes.</p><h4>12. Precios, planes y pagos</h4><p>Todos los planes incluyen todas las funcionalidades de Rodeo Flow. El precio depende de la cantidad de animales activos del establecimiento (no se cuentan los vendidos, muertos ni dados de baja), tomando el máximo alcanzado en el mes del pago:</p><p class="tyc-li">• Hasta 300 animales: USD 46 por mes.</p><p class="tyc-li">• Hasta 1.000 animales: USD 70 por mes.</p><p class="tyc-li">• Hasta 2.000 animales: USD 120 por mes.</p><p class="tyc-li">• Hasta 3.000 animales: USD 170 por mes.</p><p class="tyc-li">• Hasta 4.000 animales: USD 210 por mes.</p><p class="tyc-li">• Hasta 5.000 animales: USD 260 por mes.</p><p class="tyc-li">• Más de 5.000 animales: precio a convenir.</p><p>Plan mensual: 30 días de acceso. Plan anual: se abonan 10 meses (dos meses sin cargo) por 365 días de acceso.</p><p>Los precios están expresados en dólares estadounidenses y se abonan en pesos argentinos al tipo de cambio oficial del Banco de la Nación Argentina del día del pago.</p><p>Medio de pago: transferencia bancaria al alias CMORENO.agromp2. Una vez recibido el comprobante por WhatsApp, se envía un código de activación que habilita el período abonado.</p><p>Renovación: no hay cobro automático. Al vencer el período, el usuario renueva abonando nuevamente. Se otorgan tres (3) días de gracia después del vencimiento antes de suspender el acceso.</p><p>Cambio de tramo: si durante el período abonado el establecimiento pasa a otro tramo, el nuevo precio rige desde la próxima renovación, sin cobro de diferencias.</p><p>Los cambios de precio se comunicarán con anticipación razonable y respetando las condiciones contratadas y la legislación aplicable.</p><p>No se efectuarán cargos recurrentes sin la información y autorización que legalmente correspondan.</p><h4>13. Cancelación de la suscripción</h4><p>El usuario podrá solicitar la cancelación mediante los mecanismos habilitados por Rodeo Flow.</p><p>Como regla general, cuando el usuario cancele una suscripción paga, el servicio permanecerá disponible hasta el final del período ya abonado.</p><p>Una vez finalizado el período abonado, no se generarán nuevas renovaciones ni cargos por períodos posteriores.</p><p>La cancelación no impedirá el ejercicio de los derechos de revocación, arrepentimiento, reembolso o restitución que correspondan legalmente.</p><p>Cuando resulte aplicable la normativa argentina sobre baja de servicios contratados digitalmente, se habilitarán los mecanismos exigibles para solicitarla, incluido el botón de baja cuando corresponda.</p><h4>14. Exportación, conservación y eliminación de datos</h4><p>Rodeo Flow procurará ofrecer herramientas para exportar los datos del usuario en los formatos disponibles, que podrán incluir planillas Excel u otros formatos habilitados.</p><p>Después de la baja, o del vencimiento sin renovación, los datos se conservan durante diez (10) días, plazo en el que el usuario puede solicitar su exportación.</p><p>Antes de cancelar la suscripción, se recomienda al usuario descargar y conservar una copia de los registros que necesite para su actividad.</p><p>Una vez vencido el plazo de recuperación que se establezca, los datos podrán eliminarse o dejar de estar disponibles, excepto aquellos que deban conservarse por obligaciones legales, resolución de controversias u otras causas legítimas.</p><p>Los respaldos residuales se gestionarán de acuerdo con los procedimientos técnicos de conservación y eliminación que efectivamente se implementen.</p><p>La eliminación de datos personales se realizará respetando las obligaciones y excepciones previstas por la legislación aplicable.</p><h4>15. Disponibilidad y mantenimiento</h4><p>Rodeo Flow procurará mantener la plataforma operativa y realizar tareas de mantenimiento, corrección de errores y actualización.</p><p>No se garantiza una disponibilidad ininterrumpida ni la ausencia absoluta de errores.</p><p>Podrán producirse interrupciones por mantenimiento, actualizaciones, incidentes de seguridad, fallas de infraestructura, problemas de conectividad o circunstancias fuera del control razonable del titular.</p><p>Cuando sea posible, se informarán previamente las interrupciones programadas que puedan afectar de manera relevante el servicio.</p><h4>16. Soporte técnico</h4><p>Rodeo Flow podrá ofrecer asistencia técnica mediante los canales que se informen al contratar o en la plataforma.</p><p>Los horarios, el alcance y los tiempos de respuesta dependerán de las condiciones del servicio y del plan contratado.</p><p>El soporte de software no implica necesariamente reparación de dispositivos externos ni prestación de asesoramiento ganadero profesional.</p><h4>17. Suspensión o restricción de cuentas</h4><p>Rodeo Flow podrá suspender o restringir temporalmente una cuenta cuando existan motivos razonables relacionados con la seguridad, el uso ilícito, la afectación de otros usuarios, el incumplimiento contractual o una obligación legal.</p><p>Cuando las circunstancias lo permitan, se informará el motivo y los pasos necesarios para regularizar la situación.</p><p>La suspensión no eliminará los derechos legales del usuario ni justificará la retención arbitraria de sus datos.</p><h4>18. Limitación de responsabilidad</h4><p>El titular de Rodeo Flow no será responsable por perjuicios originados exclusivamente en datos incorrectos introducidos por el usuario, decisiones tomadas sin verificar información relevante, fallas de equipos externos o interrupciones ajenas a su control razonable.</p><p>Esta disposición no excluye ni limita las responsabilidades que legalmente no puedan excluirse, ni los derechos del usuario derivados de incumplimientos atribuibles al titular.</p><p>En particular, no se pretende excluir responsabilidades por dolo, incumplimientos legales ni aquellas que surjan de normas imperativas de protección al consumidor.</p><h4>19. Enlaces y servicios de terceros</h4><p>Rodeo Flow podrá incluir enlaces o integraciones con sitios web, aplicaciones, proveedores de pago y otros servicios externos.</p><p>El usuario deberá revisar las condiciones y políticas de esos servicios cuando corresponda.</p><p>Las disposiciones de terceros no reemplazan las obligaciones que correspondan al titular de Rodeo Flow respecto de su propia plataforma.</p><h4>20. Modificaciones de los Términos y Condiciones</h4><p>El titular podrá actualizar estos términos para reflejar cambios normativos, técnicos, operativos o comerciales.</p><p>Las modificaciones se publicarán indicando su fecha de actualización y, cuando corresponda, se notificarán a los usuarios.</p><p>Los cambios sustanciales se implementarán respetando los plazos de notificación, las condiciones contractuales y los derechos legales de los usuarios.</p><p>Cuando la legislación exija una aceptación expresa, el uso continuado de la plataforma no la sustituirá.</p><h4>21. Fuerza mayor</h4><p>Las partes no serán responsables por incumplimientos que resulten directamente de acontecimientos imprevisibles o inevitables que reúnan los requisitos legales para ser considerados caso fortuito o fuerza mayor.</p><p>La parte afectada deberá adoptar medidas razonables para reducir sus efectos y reanudar el cumplimiento cuando resulte posible.</p><p>Esta disposición no elimina derechos irrenunciables ni excluye obligaciones cuando la legislación disponga lo contrario.</p><h4>22. Protección de datos personales</h4><p>El tratamiento de datos personales se realizará conforme a la normativa argentina aplicable, incluida la Ley 25.326 de Protección de los Datos Personales y sus disposiciones complementarias, cuando corresponda.</p><p>La infraestructura, los proveedores tecnológicos y las eventuales transferencias de datos deberán identificarse y documentarse de acuerdo con la implementación real del sistema.</p><h4>23. Legislación aplicable y resolución de controversias</h4><p>Estos términos se interpretarán conforme a las leyes de la República Argentina, sin perjuicio de las normas imperativas que resulten aplicables.</p><p>Las partes procurarán resolver de buena fe las diferencias relacionadas con la utilización de Rodeo Flow mediante los canales de contacto habilitados.</p><p>Si no se alcanzara una solución, podrán recurrir a las autoridades administrativas o judiciales competentes, respetando las reglas de competencia y los derechos que reconozca la legislación aplicable.</p><h4>24. Divisibilidad y acuerdo completo</h4><p>Si alguna disposición fuera declarada inválida o inaplicable, las restantes conservarán su vigencia en la medida en que puedan subsistir de manera compatible con la ley.</p><p>Estos términos, junto con las condiciones particulares del plan contratado, conforman la documentación aplicable al uso de Rodeo Flow.</p><p>En caso de contradicción, prevalecerán las normas imperativas y las condiciones particulares válidamente acordadas que correspondan.</p><h4>25. Contacto</h4><p>Para consultas, solicitudes o reclamos relacionados con Rodeo Flow, el usuario podrá comunicarse mediante los siguientes datos:</p><p>Titular: Carlos Moreno.</p><p>CUIT: 20-20834030-2.</p><p>Domicilio legal: Sáenz Peña 560, San Carlos de Bolívar, Provincia de Buenos Aires.</p><p>Correo electrónico: agromp@hotmail.com.</p><p>Teléfono / WhatsApp: 2314-446643.</p><p>Sitio web: https://rodeoflow.github.io/index.html/.</p><p>El titular procurará responder dentro de un plazo razonable, sin perjuicio de los plazos específicos que establezca la legislación aplicable.</p><p>Fin de los Términos y Condiciones de Uso de Rodeo Flow.</p>`;
+function verTerminos(){
+  if(document.getElementById('rf-tyc-overlay')) return;
+  const w=document.createElement('div'); w.id='rf-tyc-overlay';
+  w.style.cssText='position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,0.85);display:flex;padding:max(16px,env(safe-area-inset-top)) 12px max(16px,env(safe-area-inset-bottom))';
+  w.innerHTML=`<div class="rf-tyc-card" style="margin:auto;background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:760px;width:100%;max-height:100%;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)">
+      <div style="font-weight:700;color:var(--accent);font-size:16px">📄 Términos y Condiciones</div>
+      <button type="button" data-act="cerrar" aria-label="Cerrar" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer">✕</button>
+    </div>
+    <div class="rf-tyc-body" style="overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 20px;font-size:13.5px;line-height:1.55;color:var(--text2)">
+      <div style="text-align:center;font-weight:800;font-size:17px;color:var(--text)">TÉRMINOS Y CONDICIONES DE USO</div>
+      <div style="text-align:center;font-weight:700;color:var(--accent);margin:2px 0 12px">RODEO FLOW – Gestión Ganadera Inteligente</div>
+      ${RF_TYC_HTML}
+    </div>
+    <div style="padding:12px 18px;border-top:1px solid var(--border)"><button type="button" data-act="cerrar" class="btn-primary" style="width:100%;justify-content:center">Cerrar</button></div>
+  </div>`;
+  w.querySelectorAll('.rf-tyc-body h4').forEach(e=>e.style.cssText='color:var(--accent);font-size:15px;margin:16px 0 6px');
+  w.querySelectorAll('.rf-tyc-body p').forEach(e=>e.style.margin='0 0 8px');
+  w.querySelectorAll('.rf-tyc-body p.tyc-m').forEach(e=>e.style.margin='0 0 2px');
+  w.querySelectorAll('.rf-tyc-body p.tyc-li').forEach(e=>{e.style.margin='0 0 4px';e.style.paddingLeft='14px';});
+  w.addEventListener('click',e=>{ if(e.target.closest('[data-act="cerrar"]')||!e.target.closest('.rf-tyc-card')) w.remove(); });
+  document.body.appendChild(w);
+}
 async function startTrial() {
   const nombre    = document.getElementById('setup-nombre').value.trim();
   const email     = document.getElementById('setup-email').value.trim();
@@ -4662,6 +4716,10 @@ async function startTrial() {
     alert('Completá estos datos antes de iniciar la prueba:\n\n' + faltantes.join('\n'));
     return;
   }
+  // DNI y CUIT: se verifican al instante, sin conexión (dígito verificador y coincidencia DNI-CUIT)
+  const _errId = rfValidarDniCuit(dni, cuit);
+  if(_errId){ alert(_errId); return; }
+  if(!document.getElementById('setup-tyc')?.checked){ alert('Para iniciar la prueba tenés que aceptar los Términos y Condiciones.'); return; }
 
   // SEGURIDAD: "Iniciar prueba gratuita" tiene que crear SIEMPRE un
   // establecimiento nuevo y separado — nunca debe pisar/reutilizar el que
@@ -4689,9 +4747,12 @@ async function startTrial() {
     nombre, email, dni, cuit, empresa, localidad, provincia,
     telefono:  t1,
     establecimiento: estab,
-    fecha:     new Date().toISOString()
+    fecha:     new Date().toISOString(),
+    tycVersion: RF_TYC_VERSION
   };
   DB.settings.registroUsuario = registro;
+  DB.settings.tycAceptados = { version: RF_TYC_VERSION, fecha: registro.fecha };
+  DB.settings.cuitTitular = String(cuit||'').replace(/\D/g,'');
 
   DB.settings.phones = [
     {num: t1, name:'Titular', rol:'Dueño', pinHash: await rfHashPin(document.getElementById('setup-pin1').value)},
@@ -4794,6 +4855,7 @@ function rfLimpiarSesion() { ['rf_logged','rf_role','rf_user_name','rf_login_ts'
 })();
 
 async function checkAuth() {
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e) {}
   // Cargar desde IndexedDB (con migración automática desde localStorage)
   await loadFromStorageAsync();
   console.log('📦 checkAuth IDB - animales:', DB.animales?.length, '| potreros:', DB.potreros?.length);
@@ -4805,6 +4867,14 @@ async function checkAuth() {
     try {
       const act = (await getEstablecimientos()).find(e => e.id === window.ESTAB_ID_ACTIVO);
       if(act && act.compartido){ mostrarEspera(act.id); return false; }
+      // Establecimiento creado desde el selector en una versión anterior (sin la marca de alta): se repara
+      const lista = await getEstablecimientos();
+      if(act && !act.compartido && lista.length > 1 && (await rfGetItem('rf_setup_done')) === '1'){
+        DB.settings.hasBeenSetup = true;
+        DB.settings.establecimiento = DB.settings.establecimiento || act.nombre;
+        await saveEstabActivo();
+        return checkAuth();
+      }
     } catch(e) {}
     document.getElementById('trial-screen').style.display = 'flex';
     return false;
@@ -4824,7 +4894,7 @@ async function checkAuth() {
   // ── Decidir si bloquear ──────────────────────────────
   if(!inTrial && !subActive) {
     document.getElementById('trial-screen').style.display = 'none';
-    document.getElementById('paywall-screen').classList.add('show');
+    try{ rfPintarPaywall(); }catch(e){} document.getElementById('paywall-screen').classList.add('show');
     return false;
   }
 
@@ -4922,7 +4992,7 @@ async function doLogin() {
   if(trialDaysLeft === 0 && !subActive) {
     // Teléfono válido pero expirado: mandar al paywall
     document.getElementById('login-screen').classList.remove('show');
-    document.getElementById('paywall-screen').classList.add('show');
+    try{ rfPintarPaywall(); }catch(e){} document.getElementById('paywall-screen').classList.add('show');
     return;
   }
 
@@ -4991,7 +5061,9 @@ function _datosPagoEsc(e) { if (e.key === 'Escape') cerrarDatosPago(); }
 // si el navegador bloquea la ventana nueva, navega en la misma pestaña.
 function abrirWhatsAppComprobante() {
   const estab = (DB.settings && DB.settings.establecimiento) || '';
-  const msg = 'Hola, realicé el pago de RodeoFlow. Adjunto comprobante.' + (estab ? '\nEstablecimiento: ' + estab : '');
+  const _t = rfInfoTramo();
+  const msg = 'Hola, realicé el pago de RodeoFlow. Adjunto comprobante.' + (estab ? '\nEstablecimiento: ' + estab : '')
+    + '\nAnimales activos (máximo del mes): ' + _t.max + (_t.tramo ? ' · Plan hasta ' + _t.tramo.hasta + ': USD ' + _t.tramo.usd + '/mes (anual USD ' + _t.anual + ')' : ' · Más de 5000: a convenir');
   const link = 'https://wa.me/' + WHATSAPP_PAGO + '?text=' + encodeURIComponent(msg);
   const w = window.open(link, '_blank', 'noopener');
   if (!w) window.location.href = link;
@@ -5014,7 +5086,7 @@ function mostrarDatosPago() {
     <button type="button" data-act="cerrar" aria-label="Cerrar" style="position:absolute;top:8px;right:8px;width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:16px;cursor:pointer">✕</button>
     <div style="font-size:16px;font-weight:700;color:var(--accent);margin:0 36px 12px 0">💰 Suscripción RodeoFlow</div>
     <div style="font-size:14px;line-height:1.7;color:var(--text)">
-      Precio: <b>USD 46 / mes</b><br><br>
+      ${rfPrecioHTML()}<br><br>
       Transferí por:<br>
       • Alias: <b>${esc(CVU_ALIAS)}</b><br>
       • Banco / Billetera: cualquiera (CVU universal)<br><br>
@@ -5278,7 +5350,9 @@ function saveToStorage() {
   // Guardar localmente (IDB)
   saveEstabActivo().catch(e => console.warn('saveEstabActivo error:', e));
   // Backup en localStorage
-  try { localStorage.setItem(RF_DB_KEY, JSON.stringify(DB)); } catch(e) {}
+  try { rfActualizarMaxMes(); } catch(e) {}
+  try { rfProgramarHuellas(); } catch(e) {}
+  try { localStorage.setItem(RF_DB_KEY, JSON.stringify(DB)); localStorage.setItem('rf_bk_estab', window.ESTAB_ID_ACTIVO || ''); } catch(e) {}
   // Sync a Firebase (throttled, no bloquea)
   if (window.pushSyncFirebase) window.pushSyncFirebase();
 }
@@ -6398,6 +6472,7 @@ async function fetchBNADolar() {
   try {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('sin conexión');
     const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://www.bna.com.ar/Personas'), { signal: rfSenalTimeout(6000) });
+
     const data = await r.json();
     const html = data.contents || '';
     const matches = html.match(/U\.S\.dollar[\s\S]*?<td[^>]*>([\d,\.]+)<\/td>[\s\S]*?<td[^>]*>([\d,\.]+)<\/td>/i);
@@ -8463,6 +8538,99 @@ const RANGOS_PESO_CATEGORIA = {
   'Invernada Machos':[100,500],'Invernada Hembras':[100,450],'Invernada Vientres':[150,500]
 };
 
+// ── IMPORTAR SESIÓN DE BALANZA (CSV/Excel de Tru-Test, Gallagher, etc.) ──
+let _ses=null;
+function sesDig(v){ return String(v==null?'':v).replace(/\D/g,''); }
+function sesCol(nh, alias){ return nh.findIndex(h=>alias.includes(h)); }
+async function impSesionLeer(input){
+  const f=input.files&&input.files[0]; if(!f) return;
+  if(f.size>8*1024*1024){ toast('El archivo es muy grande (máx. 8 MB)','err'); input.value=''; return; }
+  try{
+    const buf=await f.arrayBuffer(); let filas;
+    if(/\.(csv|txt)$/i.test(f.name)){
+      let txt=new TextDecoder('utf-8').decode(buf);
+      if(txt.includes('\uFFFD')) txt=new TextDecoder('windows-1252').decode(buf);
+      filas=impParseCSV(txt);
+    } else {
+      if(typeof XLSX==='undefined'){ toast('No se pudo cargar el lector de Excel','err'); input.value=''; return; }
+      const wb=XLSX.read(buf,{type:'array'});
+      filas=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true,blankrows:false});
+    }
+    impSesionProcesar(filas, f.name);
+  }catch(e){ console.error(e); toast('No se pudo leer el archivo','err'); }
+  input.value='';
+}
+function impSesionProcesar(filas, nombre){
+  const box=document.getElementById('ses-resumen'), btn=document.getElementById('ses-btn-confirmar');
+  _ses=null; btn.style.display='none';
+  const hi=filas.slice(0,10).findIndex(r=>r.filter(c=>impTxt(c)!=='').length>=2);
+  if(hi<0){ box.innerHTML='⚠️ No se encontraron columnas.'; return; }
+  const nh=filas[hi].map(impNorm);
+  const cEid=sesCol(nh,['eid','rfid','electronicid','caravanaelectronica']);
+  const cVid=sesCol(nh,['vid','rp','visualid','caravana','caravanavisual']);
+  const cPeso=sesCol(nh,['weight','peso','pesokg','kg']);
+  const cFecha=sesCol(nh,['fecha','date']);
+  const cRec=sesCol(nh,['daterecorded','fecharegistro']);
+  if(cPeso<0||(cEid<0&&cVid<0)){ box.innerHTML='⚠️ El archivo necesita una columna de peso (Weight) y una de EID o VID.'; return; }
+  // Índices del rodeo: EID completo, últimos 12 dígitos y RP
+  const porEid={}, porSuf={}, porRp={};
+  (DB.animales||[]).forEach(a=>{
+    const d=sesDig(a.rfid); if(d){ porEid[d]=a; const s=d.slice(-12); porSuf[s]=porSuf[s]===undefined?a:null; }
+    const r=String(a.rp||'').trim(); if(r){ porRp[r]=a; const dr=sesDig(r); if(dr.length>=12&&!porEid[dr]) porEid[dr]=a; }
+  });
+  const ya=new Set((DB.pesadas||[]).map(p=>p.rp+'|'+p.fecha+'|'+p.peso));
+  const res={ok:[],sinPeso:0,sinFecha:0,noEnc:[],sinId:[],dup:0,dupArch:0};
+  const vistos=new Set();
+  filas.slice(hi+1).forEach(r=>{
+    if(!r.some(c=>impTxt(c)!=='')) return;
+    const peso=impPeso(r[cPeso]); if(!peso){ res.sinPeso++; return; }
+    let fecha=cFecha>=0?impFecha(r[cFecha]):'';
+    if(!fecha&&cRec>=0){
+      const t=impTxt(r[cRec]); fecha=impFecha(t);
+      // Tru-Test exporta la medianoche local en UTC-3 (21:00 del día anterior)
+      if(fecha&&/\s21:00(:00)?$/.test(t)){ const d=new Date(fecha+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+1); fecha=d.toISOString().slice(0,10); }
+    }
+    if(!fecha){ res.sinFecha++; return; }
+    const eid=cEid>=0?sesDig(r[cEid]):'', vid=cVid>=0?rpLimpio(impTxt(r[cVid])):'';
+    if(!eid&&!vid){ res.sinId.push(peso); return; }
+    let a=(eid&&(porEid[eid]||porSuf[eid.slice(-12)]))||(vid&&porRp[vid])||null;
+    if(!a){ res.noEnc.push(vid||impTxt(r[cEid])); return; }
+    const k=a.rp+'|'+fecha+'|'+peso;
+    if(ya.has(k)){ res.dup++; return; }
+    if(vistos.has(a.rp+'|'+fecha)){ res.dupArch++; return; }
+    vistos.add(a.rp+'|'+fecha);
+    res.ok.push({a,peso,fecha});
+  });
+  _ses={nombre,res};
+  const li=(ic,t)=>`<div style="font-size:13px;margin-bottom:4px">${ic} ${t}</div>`;
+  let h=li(res.ok.length?'✅':'⚠️',`<b>${res.ok.length}</b> pesadas listas para importar (${esc(nombre)})`);
+  if(res.noEnc.length) h+=li('⚠️',`${res.noEnc.length} caravanas que no están en tu rodeo: ${res.noEnc.slice(0,6).map(esc).join(', ')}${res.noEnc.length>6?'…':''} (dalas de alta con Importar animales y volvé a importar la sesión)`);
+  if(res.sinId.length) h+=li('⚠️',`${res.sinId.length} pesadas sin caravana leída (${res.sinId.slice(0,6).join(' kg, ')} kg): no se pueden asignar, cargalas a mano si sabés de qué animal son`);
+  if(res.dup) h+=li('ℹ️',`${res.dup} ya estaban cargadas (se omiten)`);
+  if(res.dupArch) h+=li('ℹ️',`${res.dupArch} repetidas en el archivo para el mismo animal y día (se toma la primera)`);
+  if(res.sinPeso) h+=li('ℹ️',`${res.sinPeso} filas sin peso válido (se omiten)`);
+  if(res.sinFecha) h+=li('ℹ️',`${res.sinFecha} filas sin fecha reconocida (se omiten)`);
+  box.innerHTML=h;
+  if(res.ok.length){ btn.style.display=''; btn.textContent=`Importar ${res.ok.length} pesadas`; }
+}
+function impSesionConfirmar(){
+  if(!_ses||!_ses.res.ok.length) return;
+  const ok=_ses.res.ok, operador=$v('ses-operador')||'';
+  if(!confirm(`¿Importar ${ok.length} pesadas?`)) return;
+  const base=Date.now();
+  ok.forEach(({a,peso,fecha},i)=>{
+    DB.pesadas.push({id:base+i,rp:a.rp,rfid:a.rfid||'',peso,fecha,potrero:a.potrero||'',operador});
+    if(!a.pesoHistorico) a.pesoHistorico=[];
+    a.pesoHistorico.push({fecha,kg:peso});
+    a.pesoHistorico.sort((x,y)=>String(x.fecha).localeCompare(String(y.fecha)));
+    // El peso actual solo cambia si esta pesada es la más reciente del animal
+    if(a.pesoHistorico[a.pesoHistorico.length-1].fecha===fecha) a.peso=peso;
+  });
+  addHistorial('Pesada',`Importación de sesión de balanza: ${ok.length} pesadas desde ${_ses.nombre}`,'',operador);
+  saveToStorage(); renderPesadas(); renderAnimales(); updateKPIs();
+  toast(`${ok.length} pesadas importadas`,'ok');
+  _ses=null; document.getElementById('ses-resumen').innerHTML=''; document.getElementById('ses-btn-confirmar').style.display='none';
+}
 function evaluarPesoAnormal(a, pesoNuevo){
   if(a && a.pesoHistorico && a.pesoHistorico.length>0){
     const last=a.pesoHistorico[a.pesoHistorico.length-1];
@@ -8608,7 +8776,7 @@ function quitarFotoAnimal(prefix){
 // ── IMPORTAR ANIMALES DESDE EXCEL / CSV (migración desde otra app) ──
 const IMP_CATEGORIAS=['Novillo','Novillito','Vaca','Vaquillona','Toro','Torito','Ternero M','Ternera H','Destete Macho','Destete Hembra','Recría','Invernada Machos','Invernada Hembras','Invernada Vientres'];
 const IMP_CAT_HEMBRA=['Vaca','Vaquillona','Ternera H','Destete Hembra','Invernada Hembras','Invernada Vientres'];
-const IMP_RAZAS=['Aberdeen Angus','Hereford','Brangus','Braford','Shorthorn','Limousin','Brahman','Charolais','Criolla','Cruza'];
+const IMP_RAZAS=['Aberdeen Angus','Hereford','Brangus','Braford','Shorthorn','Criolla','Cruza'];
 const IMP_CAMPOS=[
   {k:'rp',l:'RP (caravana visual) *',a:['rp','caravana','caravanavisual','idv','vid','numero','nro','n','id','caratula','tag','visual']},
   {k:'rfid',l:'RFID / EID',a:['rfid','eid','caravanaelectronica','caravanarfid','electronica','idelectronico','chip']},
@@ -8924,14 +9092,7 @@ function guardarSangrado(){
 const GEN_PLANTILLAS={
   'Angus':['Largo de gestación','Peso al nacer','Destete directo','Leche','Peso final','Circunferencia escrotal','Altura','Área de ojo de bife','Grasa dorsal','Grasa de cadera','Grasa intramuscular','% de cortes minoristas'],
   'Hereford':['Facilidad de parto directa (%)','Facilidad de parto hijas (%)','Peso al nacer (kg)','Peso al destete (kg)','Peso al final (kg)','Peso vaca adulta (kg)','Leche (kg)','Leche y crecimiento (kg)','Circunferencia escrotal (cm)','Peso carcasa (kg)','Área de ojo de bife (cm²)','Grasa dorsal (mm)','Grasa intramuscular (%)'],
-  'Limangus':['Peso al nacimiento','Peso al destete','Aptitud materna','Peso a los 18 meses','Circunferencia escrotal','Desarrollo muscular (fenotípico)','Grasa dorsal (fenotípico)','Área de ojo de bife (fenotípico)','Altura (fenotípico)','Circunferencia escrotal (fenotípico)','Evaluación reproductiva (fenotípico)','Peso al nacimiento (fenotípico)','Peso al destete (fenotípico)','Peso final (fenotípico)'],
-  // Razas sumadas: características habituales de los DEP/EPD de cada asociación. Si tu certificado trae otras, agregalas con «＋ Fila» o dejá que las lea del PDF.
-  'Limousin':['Peso al nacimiento','Peso al destete','Aptitud materna','Peso a los 18 meses','Circunferencia escrotal','Desarrollo muscular (fenotípico)','Grasa dorsal (fenotípico)','Área de ojo de bife (fenotípico)','Altura (fenotípico)','Circunferencia escrotal (fenotípico)','Evaluación reproductiva (fenotípico)','Peso al nacimiento (fenotípico)','Peso al destete (fenotípico)','Peso final (fenotípico)'],
-  'Shorthorn':['Largo de gestación','Peso al nacer','Peso al destete','Peso al final','Leche','Circunferencia escrotal','Área de ojo de bife','Grasa dorsal','Grasa intramuscular'],
-  'Braford':['Largo de gestación','Peso al nacer','Peso al destete','Peso al final','Leche','Circunferencia escrotal','Área de ojo de bife','Grasa dorsal','Grasa de cadera','Grasa intramuscular'],
-  'Brangus':['Largo de gestación','Peso al nacer','Peso al destete','Peso al final','Leche','Circunferencia escrotal','Área de ojo de bife','Grasa dorsal','Grasa de cadera','Grasa intramuscular'],
-  'Brahman':['Peso al nacer','Peso al destete','Peso al final','Leche','Circunferencia escrotal','Área de ojo de bife','Grasa dorsal','Días a parto'],
-  'Charolais':['Facilidad de parto directa','Peso al nacer','Peso al destete','Peso al final','Leche','Circunferencia escrotal','Área de ojo de bife','Grasa dorsal','Desarrollo muscular']
+  'Limangus':['Peso al nacimiento','Peso al destete','Aptitud materna','Peso a los 18 meses','Circunferencia escrotal','Desarrollo muscular (fenotípico)','Grasa dorsal (fenotípico)','Área de ojo de bife (fenotípico)','Altura (fenotípico)','Circunferencia escrotal (fenotípico)','Evaluación reproductiva (fenotípico)','Peso al nacimiento (fenotípico)','Peso al destete (fenotípico)','Peso final (fenotípico)']
 };
 // Carga todas las filas de la raza de una vez (solo queda escribir los números)
 function genPlantilla(raza){
@@ -8963,7 +9124,7 @@ function genChips(){
   const mk=(id,lista,fn)=>{const c=document.getElementById(id); if(!c) return; c.innerHTML=''; lista.forEach(n=>{const b=document.createElement('button'); b.type='button'; b.className='btn-secondary'; b.style.cssText='padding:2px 8px;font-size:12px;margin:2px'; b.textContent='＋ '+n; b.onclick=()=>fn(n); c.appendChild(b);});};
   const cv=document.getElementById('gen-chips-v');
   if(cv){
-    const col={Angus:'background:#111827;color:#fff;border:2px solid #f5c542',Hereford:'background:#b3261e;color:#fff;border:2px solid #ffd7d2',Limangus:'background:#166534;color:#fff;border:2px solid #bbf7d0',Limousin:'background:#c2410c;color:#fff;border:2px solid #fed7aa',Shorthorn:'background:#9a3412;color:#fff;border:2px solid #fdba74',Braford:'background:#7f1d1d;color:#fff;border:2px solid #fecaca',Brangus:'background:#1f2937;color:#fff;border:2px solid #9ca3af',Brahman:'background:#6b7280;color:#fff;border:2px solid #e5e7eb',Charolais:'background:#a16207;color:#fff;border:2px solid #fef08a'};
+    const col={Angus:'background:#111827;color:#fff;border:2px solid #f5c542',Hereford:'background:#b3261e;color:#fff;border:2px solid #ffd7d2',Limangus:'background:#166534;color:#fff;border:2px solid #bbf7d0'};
     cv.innerHTML='';
     Object.keys(GEN_PLANTILLAS).forEach(r=>{const b=document.createElement('button'); b.type='button'; b.className='btn-primary'; b.style.cssText='padding:12px 20px;font-size:15px;font-weight:700;border-radius:10px;cursor:pointer;flex:1;min-width:150px;box-shadow:0 2px 6px rgba(0,0,0,.35);'+(col[r]||''); b.textContent='📋 Planilla '+r; b.onclick=()=>genPlantilla(r); cv.appendChild(b);});
   }
@@ -9408,6 +9569,7 @@ function guardarTraslado(){
   // Egreso: dar de baja; Ingreso: reactivar/crear; Interno: cambiar potrero
   const allRps=[...rps];
   if(t.rp)allRps.unshift(t.rp);
+  const potrerosPrevios=allRps.map(rp=>(DB.animales.find(a=>a.rp===rp)||{}).potrero).filter(Boolean);
   allRps.forEach(function(rp){
     if(!rp)return;
     const animal=DB.animales.find(function(a){return a.rp===rp;});
@@ -9434,7 +9596,7 @@ function guardarTraslado(){
     }
   });
   addHistorial('Traslado',`${t.tipo}: ${t.rp||t.cant+' animales'} – ${esc(t.origen)}→${esc(t.destino)}`,t.rp||rps.join(', '),'');
-  actualizarSaldosPotreros(t.origen, t.destino);
+  actualizarSaldosPotreros(t.origen, t.destino, ...potrerosPrevios);
   closeModal('modal-traslado');renderTraslados();updateKPIs();if(cambios)renderAnimales();
   const msg=cambios?' · '+cambios+' RP actualizados':'';
   toast('Traslado registrado'+msg,'ok');
@@ -9450,6 +9612,7 @@ function guardarCambioPotrero(){
   actualizarSaldosPotreros(orig, dest);
   addHistorial('Traslado',`Cambio potrero: ${orig}→${dest}`,rp,'');
   closeModal('modal-cambio-potrero');renderTraslados();renderAnimales();
+  saveToStorage();
   toast('Cambio de potrero registrado','ok');
 }
 
@@ -9976,6 +10139,110 @@ function updateTrialStatus(){
   } else {
     el.innerHTML=`<div style="color:var(--red);font-size:16px;font-weight:600">⛔ Período de prueba expirado</div><div style="color:var(--text2);font-size:14px;margin-top:4px">Activá tu suscripción para continuar</div>`;
   }
+  el.insertAdjacentHTML('beforeend', rfTramoHTML());
+}
+
+// ═══ PRECIOS POR TRAMOS (animales activos, máximo del mes) ═══
+const RF_TRAMOS = [ {hasta:300,usd:46}, {hasta:1000,usd:70}, {hasta:2000,usd:120}, {hasta:3000,usd:170}, {hasta:4000,usd:210}, {hasta:5000,usd:260} ];
+const RF_MESES_PAGOS_ANUAL = 10; // pago anual: dos meses sin cargo
+function rfTramoDe(n){ return RF_TRAMOS.find(t => n <= t.hasta) || null; }
+// Registra el máximo de animales activos del mes en curso (no conviene dar de baja y volver a cargar)
+function rfActualizarMaxMes(){
+  if(!window.DB || !DB.settings || !DB.settings.hasBeenSetup) return 0;
+  const n = (DB.animales || []).filter(a => a.activo).length;
+  const mes = new Date().toISOString().slice(0,7);
+  const m = DB.settings.maxAnimalesMes;
+  if(!m || m.mes !== mes) DB.settings.maxAnimalesMes = { mes, n };
+  else if(n > m.n) m.n = n;
+  rfAvisarCambioTramo();
+  return DB.settings.maxAnimalesMes.n;
+}
+function rfInfoTramo(){
+  const activos = (DB.animales || []).filter(a => a.activo).length;
+  const max = Math.max(activos, (DB.settings && DB.settings.maxAnimalesMes && DB.settings.maxAnimalesMes.mes === new Date().toISOString().slice(0,7)) ? DB.settings.maxAnimalesMes.n : 0);
+  const tramo = rfTramoDe(max);
+  return { activos, max, tramo, anual: tramo ? tramo.usd * RF_MESES_PAGOS_ANUAL : null };
+}
+// Aviso único cuando el establecimiento pasa a un tramo más alto
+function rfAvisarCambioTramo(){
+  const { max, tramo } = rfInfoTramo();
+  const idx = tramo ? RF_TRAMOS.indexOf(tramo) : RF_TRAMOS.length;
+  const prev = DB.settings.tramoAvisado;
+  if(prev === undefined){ DB.settings.tramoAvisado = idx; return; } // primera vez: no se avisa, solo se registra
+  if(idx > prev){
+    DB.settings.tramoAvisado = idx;
+    const txt = tramo ? `Tu establecimiento llegó a ${max} animales activos: el plan pasa a USD ${tramo.usd}/mes (hasta ${tramo.hasta} animales) desde la próxima renovación.`
+                      : `Tu establecimiento superó los 5000 animales activos: escribinos para acordar el plan desde la próxima renovación.`;
+    try{ toast('📈 ' + txt, 'info'); }catch(e){}
+  } else if(idx < prev){ DB.settings.tramoAvisado = idx; }
+}
+function rfPrecioHTML(){
+  const { max, tramo, anual } = rfInfoTramo();
+  return tramo ? `Animales activos (máximo del mes): <b>${max}</b><br>Plan hasta ${tramo.hasta} animales: <b>USD ${tramo.usd} / mes</b><br>Pago anual: <b>USD ${anual}</b> (dos meses sin cargo)`
+               : `Animales activos (máximo del mes): <b>${max}</b><br>Más de 5000 animales: <b>precio a convenir</b>, escribinos por WhatsApp`;
+}
+function rfTramoHTML(){
+  const { activos, max, tramo } = rfInfoTramo();
+  const filas = RF_TRAMOS.map(t => `<tr style="${t===tramo?'color:var(--accent);font-weight:700':''}"><td style="padding:2px 10px 2px 0">Hasta ${t.hasta.toLocaleString('es-AR')}</td><td style="padding:2px 10px 2px 0">USD ${t.usd}/mes</td><td>USD ${t.usd*RF_MESES_PAGOS_ANUAL}/año</td></tr>`).join('')
+    + `<tr style="${!tramo?'color:var(--accent);font-weight:700':''}"><td>Más de 5.000</td><td colspan="2">A convenir</td></tr>`;
+  return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:13px;color:var(--text2)">
+    <div>Animales activos: <b style="color:var(--text)">${activos}</b> · máximo del mes: <b style="color:var(--text)">${max}</b></div>
+    <div style="margin:4px 0 8px">Tu plan: <b style="color:var(--accent)">${tramo ? `USD ${tramo.usd}/mes (hasta ${tramo.hasta} animales)` : 'a convenir (más de 5000 animales)'}</b></div>
+    <table style="font-size:12px;color:var(--text2)">${filas}</table>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">Pago anual: dos meses sin cargo. Precios en dólares, se pagan en pesos al tipo de cambio oficial BNA del día.</div>
+  </div>`;
+}
+// ═══ ANTI-ABUSO DE LA PRUEBA: huellas de las caravanas electrónicas ═══
+// Se mandan al servidor solo los hashes (nunca los números). Si el rodeo coincide con el de otro establecimiento
+// cuya prueba venció sin pagar, el servidor bloquea esta prueba. Un establecimiento que ya pagó no manda nada.
+let _rfHuellasTimer = null;
+function rfProgramarHuellas(){
+  if(_rfHuellasTimer) return; // el autoguardado corre cada 5 s: no se reinicia la espera
+  _rfHuellasTimer = setTimeout(()=>{ _rfHuellasTimer = null; rfEnviarHuellas().catch(e=>console.warn('Huellas:', e?.message||e)); }, 20000);
+}
+async function rfEnviarHuellas(){
+  if(!window.DB || !DB.settings || !DB.settings.hasBeenSetup) return;
+  const id = window.ESTAB_ID_ACTIVO; if(!id || String(id).startsWith('demo-')) return;
+  if(Number(DB.settings.activationDate) > 0) return;
+  if(typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length || !(window.crypto && crypto.subtle)) return;
+  const eids = [...new Set((DB.animales||[]).map(a=>String(a.rfid||'').replace(/\D/g,'')).filter(d=>d.length>=12).map(d=>d.slice(-12)))];
+  if(eids.length < 20) return;
+  const enc = new TextEncoder();
+  const hx = async t => [...new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(t)))].map(b=>b.toString(16).padStart(2,'0')).join('');
+  const firma = (await hx(eids.slice().sort().join(','))).slice(0,16);
+  const k = 'rf_huellas_' + id;
+  let prev = {}; try { prev = JSON.parse(localStorage.getItem(k)||'{}'); } catch(e) {}
+  if(prev.firma === firma && Date.now() - (prev.ts||0) < 7*86400000) return; // mismo rodeo y ya informado esta semana
+  const huellas = await Promise.all(eids.slice(0,10000).map(e => hx('rf-eid:'+e).then(h=>h.slice(0,24))));
+  await firebase.app().functions('us-central1').httpsCallable('registrarHuellas')({ estabId: id, huellas });
+  try { localStorage.setItem(k, JSON.stringify({ firma, ts: Date.now() })); } catch(e) {}
+}
+// Desde la pantalla de pago se puede pasar a otro establecimiento del dispositivo o eliminar el vencido
+async function rfPaywallEstabs(){
+  const box = document.getElementById('paywall-estabs'); if(!box) return;
+  const lista = (await getEstablecimientos()) || [];
+  if(lista.length < 2){ box.innerHTML = ''; return; }
+  box.innerHTML = '<div style="font-size:12px;color:var(--text3);margin-bottom:4px">Otros establecimientos en este dispositivo:</div>'
+    + lista.filter(e => e.id !== ESTAB_ID_ACTIVO).map(e => `<button type="button" class="btn-activate" style="margin-top:6px" data-id="${esc(e.id)}" onclick="rfPaywallIrA(this.dataset.id)">🏡 Abrir ${esc(e.nombre || 'Establecimiento')}</button>`).join('')
+    + '<p style="margin-top:10px"><a href="#" onclick="rfPaywallEliminar();return false" style="font-size:12px;color:var(--red);text-decoration:underline">🗑 Eliminar este establecimiento</a></p>';
+}
+async function rfPaywallIrA(id){ try{ await cambiarEstablecimiento(id); }catch(e){ console.warn(e); } location.reload(); }
+async function rfPaywallEliminar(){
+  const antes = ESTAB_ID_ACTIVO;
+  try{ await eliminarEstablecimiento(antes); }catch(e){ console.warn(e); }
+  if(ESTAB_ID_ACTIVO !== antes) location.reload(); // si se canceló la confirmación, no pasa nada
+}
+function rfPintarPaywall(){
+  rfPaywallEstabs().catch(()=>{});
+  const pm = document.getElementById('paywall-motivo');
+  if(pm) pm.textContent = window._rfTrialBloqueado
+    ? 'Este rodeo o este CUIT ya usaron su prueba gratuita en otro establecimiento. Para continuar, activá tu suscripción.'
+    : 'Tu prueba gratuita de 30 días ha expirado. Activá tu suscripción para continuar usando RodeoFlow.';
+  const el = document.getElementById('paywall-precio'), el2 = document.getElementById('paywall-tramo');
+  if(!el || !window.DB || !DB.settings) return;
+  const { max, tramo } = rfInfoTramo();
+  el.innerHTML = tramo ? `USD ${tramo.usd} <span>/ mes</span>` : `A convenir`;
+  if(el2) el2.textContent = tramo ? `Plan hasta ${tramo.hasta} animales (tenés ${max} activos)` : `Más de 5000 animales activos`;
 }
 
 // ── Reinicio de prueba (solo titular/desarrollador) ──
@@ -9994,54 +10261,11 @@ function trialTapSecreto(){
 }
 async function pedirCodigoTitular(){
   if(rolActual() !== 'Dueño'){ toast('Solo el Dueño puede reiniciar la prueba','err'); return; }
-  const i = document.getElementById('adm-codigo'), r = document.getElementById('adm-resultado');
-  if(i) i.value = ''; if(r) r.innerHTML = '';
-  openModal('modal-admin');
-}
-function adminCodigo(){
-  if(Date.now() < (parseInt(localStorage.getItem('rf_cod_bloq')||'0')||0)){ toast('Demasiados intentos: probá de nuevo en unos minutos','err'); return null; }
-  const c = (document.getElementById('adm-codigo').value||'').trim();
-  if(c.length < 8){ toast('Escribí el código del titular','err'); return null; }
-  return c;
-}
-function adminFallo(e){
-  const n = (parseInt(localStorage.getItem('rf_cod_fallos')||'0')||0) + 1;
-  if(n >= 5){ localStorage.setItem('rf_cod_bloq', String(Date.now()+15*60000)); localStorage.setItem('rf_cod_fallos','0'); } else localStorage.setItem('rf_cod_fallos', String(n));
-  toast(e?.message||'No se pudo completar','err');
-}
-async function adminReiniciarPrueba(){
-  const c = adminCodigo(); if(!c) return;
-  if(!confirm('¿Reiniciar la prueba gratuita de ESTE establecimiento a 30 días desde hoy?')) return;
-  await reiniciarTrialTitular(true, c); closeModal('modal-admin');
-}
-async function adminVerRegistros(){
-  const c = adminCodigo(); if(!c) return;
-  const out = document.getElementById('adm-resultado');
-  out.textContent = 'Consultando…';
-  let d;
-  try{ d = (await firebase.app().functions('us-central1').httpsCallable('adminResumen',{timeout:60000})({ codigo:c })).data; }
-  catch(e){ out.textContent=''; adminFallo(e); return; }
-  localStorage.setItem('rf_cod_fallos','0');
-  const t = d.totales||{};
-  const ETQ = {'activo':['🟢','Activo'],'vencido':['🔴','Suscripción vencida'],'prueba':['🟡','En prueba'],'prueba-vencida':['⚪','Prueba vencida'],'sin-datos':['❔','Sin datos']};
-  const f = ms => ms ? new Date(ms).toLocaleDateString('es-AR') : '—';
-  const caja = (n,l) => `<div style="flex:1;min-width:110px;background:var(--bg2,#f4f4f4);border-radius:8px;padding:8px;text-align:center"><div style="font-size:1.4rem;font-weight:700">${esc(String(n))}</div><div style="font-size:.75rem;opacity:.8">${esc(l)}</div></div>`;
-  let h = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">`
-    + caja(t.registrados,'Registrados')+caja(t.nuevos7dias,'Nuevos 7 días')+caja(t.nuevos30dias,'Nuevos 30 días')
-    + caja(t.enPrueba,'En prueba')+caja(t.activos,'Con suscripción')+caja(t.pruebaVencida,'Prueba vencida')
-    + caja((t.codigosUsados||0)+'/'+(t.codigosTotal||0),'Códigos usados')+`</div>`;
-  h += `<div style="font-size:.75rem;opacity:.7;margin-bottom:6px">Actualizado ${esc(new Date(d.generado).toLocaleString('es-AR'))}. Tus propios registros de prueba también cuentan.</div>`;
-  h += `<div style="max-height:46vh;overflow:auto">`;
-  (d.clientes||[]).forEach(x=>{
-    const e = ETQ[x.estado]||ETQ['sin-datos'];
-    const dias = x.diasRestantes==null ? '' : (x.diasRestantes>0 ? ` · quedan ${x.diasRestantes} d` : ` · venció hace ${-x.diasRestantes} d`);
-    const lugar = [x.localidad,x.provincia].filter(Boolean).join(', ');
-    h += `<div style="border-bottom:1px solid #8884;padding:6px 0"><b>${esc(x.establecimiento||'(sin nombre)')}</b> — ${e[0]} ${e[1]}${esc(dias)}<br>`
-      + `<span style="opacity:.85">${esc(x.nombre||'')}${x.telefono?' · '+esc(x.telefono):''}${x.email?' · '+esc(x.email):''}${lugar?' · '+esc(lugar):''}</span><br>`
-      + `<span style="opacity:.6;font-size:.75rem">Alta: ${f(x.registrado)}${x.tieneRegistro?'':' · sin planilla de registro'}</span></div>`;
-  });
-  if(!(d.clientes||[]).length) h += '<div>Todavía no hay registros.</div>';
-  out.innerHTML = h + '</div>';
+  if(Date.now() < (parseInt(localStorage.getItem('rf_cod_bloq')||'0')||0)){ toast('Demasiados intentos: probá de nuevo en unos minutos','err'); return; }
+  const c = prompt('Código del titular:');
+  if(c === null) return;
+  if(c.trim().length < 8){ toast('Código inválido','err'); return; }
+  if(confirm('¿Reiniciar la prueba gratuita a 30 días desde hoy?')) reiniciarTrialTitular(true, c.trim());
 }
 async function reiniciarTrialTitular(autorizado, codigo){
   if(!autorizado) return;
@@ -10613,6 +10837,51 @@ function renderAnimales(filtrados){
     <td><button class="btn-secondary" style="padding:2px 8px;font-size:14px" data-rp="${esc(a.rp)}" onclick="abrirFichaAnimal(this.dataset.rp)" title="Ver ficha completa">👁</button></td>
     <td style="white-space:nowrap"><button class="btn-secondary" style="padding:2px 8px;font-size:14px" onclick="animalEditar(${rfN(a.id)})" title="Editar datos">✏️</button> <button class="btn-danger" style="padding:2px 10px;font-size:13px" onclick="bajaAnimal(${rfN(a.id)})">🗑 Baja</button></td>
   </tr>`).join('')||emptyRow(15);
+  renderResumenCategorias();
+}
+
+// ── Cantidad de animales por categoría (respeta campo, potrero y búsqueda; no el filtro de categoría) ──
+const CATS_BASE_ANIMALES=['Novillo','Novillito','Vaca','Vaquillona','Toro','Torito','Ternero M','Ternera H','Invernada Machos','Invernada Hembras','Invernada Vientres'];
+function renderResumenCategorias(){
+  const box=document.getElementById('animales-resumen-cat'), sel=document.getElementById('filtro-categoria');
+  if(!box) return;
+  const pot=document.getElementById('filtro-potrero')?.value||'';
+  const busq=(document.getElementById('buscar-animal')?.value||'').toLowerCase();
+  const camp=document.getElementById('filtro-campo')?.value||'';
+  const cat=sel?.value||'';
+  const sx=window._filtroSexo||'';
+  const baseSinSexo=(DB.animales||[]).filter(a=>a.activo&&(!camp||campoDeAnimal(a)===camp)&&(!pot||(pot==='__sin__'?!a.potrero:a.potrero===pot))&&(!busq||String(a.rp).toLowerCase().includes(busq)||(a.nombre||'').toLowerCase().includes(busq)));
+  const base=sx?baseSinSexo.filter(a=>a.sexo===sx):baseSinSexo;
+  const nM=baseSinSexo.filter(a=>a.sexo==='Macho').length, nH=baseSinSexo.filter(a=>a.sexo==='Hembra').length;
+  const chipSx=(v,txt,n,color)=>{ const act=v===sx; return `<button type="button" data-sx="${v}" onclick="filtrarPorSexo(this.dataset.sx)" style="padding:4px 10px;border-radius:14px;font-size:13px;cursor:pointer;border:2px solid ${color};background:${act?color:'var(--bg3)'};color:${act?'#fff':'var(--text)'};font-weight:${act?'700':'500'}">${txt} <b>${n}</b></button>`; };
+  const cnt={}; base.forEach(a=>{ const c=a.categoria||'Sin categoría'; cnt[c]=(cnt[c]||0)+1; });
+  const chip=(valor,txt,n)=>{
+    const act=valor===cat;
+    return `<button type="button" data-cat="${esc(valor)}" onclick="filtrarPorCategoria(this.dataset.cat)" style="padding:4px 10px;border-radius:14px;font-size:13px;cursor:pointer;border:1px solid ${act?'var(--accent)':'var(--border)'};background:${act?'var(--accent)':'var(--bg3)'};color:${act?'#1c1f26':'var(--text)'};font-weight:${act?'700':'500'}">${esc(txt)} <b>${n}</b></button>`;
+  };
+  const orden=Object.keys(cnt).sort((x,y)=>cnt[y]-cnt[x]||x.localeCompare(y));
+  box.innerHTML=chipSx('Macho','♂ Machos',nM,'#3498db')+chipSx('Hembra','♀ Hembras',nH,'#e84393')
+    +'<span style="width:1px;background:var(--border);margin:0 4px"></span>'
+    +chip('',sx?(sx==='Macho'?'Total machos':'Total hembras'):'Total',base.length)+orden.map(c=>chip(c,c,cnt[c])).join('');
+  // El desplegable también muestra la cantidad, e incluye las categorías que no estaban en la lista fija (Destete, Recría…)
+  if(sel){
+    const todas=[...new Set([...CATS_BASE_ANIMALES,...Object.keys(cnt).filter(c=>c!=='Sin categoría')])];
+    if(cat&&!todas.includes(cat)) todas.push(cat);
+    sel.innerHTML=`<option value="">Todas las categorías (${base.length})</option>`+todas.map(c=>`<option value="${esc(c)}">${esc(c)} (${cnt[c]||0})</option>`).join('');
+    sel.value=cat;
+  }
+}
+function filtrarPorSexo(v){
+  window._filtroSexo=(window._filtroSexo===v)?'':v; // tocar el activo lo saca
+  // Si la categoría elegida no corresponde al sexo nuevo, se limpia
+  const sel=document.getElementById('filtro-categoria');
+  if(sel&&sel.value&&window._filtroSexo&&!(DB.animales||[]).some(a=>a.activo&&a.categoria===sel.value&&a.sexo===window._filtroSexo)) sel.value='';
+  filtrarAnimales();
+}
+function filtrarPorCategoria(c){
+  const sel=document.getElementById('filtro-categoria'); if(!sel) return;
+  sel.value=(sel.value===c)?'':c; // tocar la categoría activa la saca
+  filtrarAnimales();
 }
 
 // ── Ver observaciones completas del animal en un popup ──
@@ -10848,7 +11117,8 @@ function filtrarAnimales(){
   const pot=document.getElementById('filtro-potrero')?.value||'';
   const busq=(document.getElementById('buscar-animal')?.value||'').toLowerCase();
   const camp=document.getElementById('filtro-campo')?.value||'';
-  const lista=DB.animales.filter(a=>a.activo&&(!camp||campoDeAnimal(a)===camp)&&(!cat||a.categoria===cat)&&(!pot||(pot==='__sin__'?!a.potrero:a.potrero===pot))&&(!busq||a.rp.toLowerCase().includes(busq)||(a.nombre||'').toLowerCase().includes(busq)));
+  const sx=window._filtroSexo||'';
+  const lista=DB.animales.filter(a=>a.activo&&(!sx||a.sexo===sx)&&(!camp||campoDeAnimal(a)===camp)&&(!cat||a.categoria===cat)&&(!pot||(pot==='__sin__'?!a.potrero:a.potrero===pot))&&(!busq||a.rp.toLowerCase().includes(busq)||(a.nombre||'').toLowerCase().includes(busq)));
   renderAnimales(lista);
 }
 
@@ -11193,18 +11463,18 @@ const PLANTILLAS_IATF = {
   be8: {
     nombre: '8 días — Dispositivo + Benzoato de Estradiol',
     pasos: [
-      {dia:0, tarea:'Colocación de dispositivo (DIB/CIDR) + Benzoato de Estradiol (2mg IM)'},
-      {dia:8, tarea:'Retiro del dispositivo + PGF2α IM + eCG (400-500 UI, opcional en vacas con cría al pie)'},
-      {dia:9, tarea:'Cipionato de Estradiol (ECP, 0.5-1mg IM) — 24hs post-retiro'},
-      {dia:9, tarea:'Inseminación Artificial a Tiempo Fijo (IATF) — 52-56hs post-retiro', esIA:true}
+      {dia:0, tarea:'Colocación de dispositivo (DIB/CIDR) + Benzoato de Estradiol'},
+      {dia:8, tarea:'Retiro del dispositivo + PGF2α + eCG (opcional en vacas con cría al pie)'},
+      {dia:9, tarea:'Cipionato de Estradiol (ECP) — 24 hs post-retiro'},
+      {dia:10, tarea:'Inseminación Artificial a Tiempo Fijo (IATF) — 52-56 hs post-retiro', esIA:true}
     ]
   },
   gnrh9: {
     nombre: '9 días — Dispositivo + GnRH (tipo Ovsynch)',
     pasos: [
-      {dia:0, tarea:'Colocación de dispositivo (DIB/CIDR) + GnRH (100mcg IM)'},
-      {dia:9, tarea:'Retiro del dispositivo + PGF2α IM'},
-      {dia:9, tarea:'2ª dosis de GnRH + Inseminación Artificial a Tiempo Fijo (IATF) — 54-56hs post-retiro', esIA:true}
+      {dia:0, tarea:'Colocación de dispositivo (DIB/CIDR) + GnRH'},
+      {dia:9, tarea:'Retiro del dispositivo + PGF2α'},
+      {dia:11, tarea:'2ª dosis de GnRH + Inseminación Artificial a Tiempo Fijo (IATF) — 54-56 hs post-retiro', esIA:true}
     ]
   }
 };
@@ -11253,7 +11523,8 @@ function generarProtocoloIATF(){
       id: 'iatf_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
       rp: suj.valor, potrero: suj.potrero||'',
       plantillaKey, plantillaNombre: plantilla.nombre,
-      fechaInicio, pasos
+      fechaInicio, pasos,
+      indicaciones: (document.getElementById('iatf-indicaciones')?.value||'').trim()
     });
   });
 
@@ -11291,9 +11562,30 @@ function eliminarProtocoloIATF(protocoloId){
   renderProtocolosIATF();
 }
 
+// Corrige los protocolos generados con las plantillas viejas (día de IATF mal calculado y dosis fijas).
+// Es idempotente: también arregla los que lleguen sincronizados desde un dispositivo con una versión anterior.
+// Las tareas ya hechas conservan su fecha; las pendientes se recalculan desde el Día 0.
+function rfCorregirIATF(){
+  let cambio = false;
+  (DB.protocolosIATF||[]).forEach(prot=>{
+    const pl = PLANTILLAS_IATF[prot.plantillaKey];
+    if(!pl || !Array.isArray(prot.pasos) || prot.pasos.length !== pl.pasos.length || !prot.fechaInicio) return;
+    prot.pasos.forEach((paso,i)=>{
+      const np = pl.pasos[i];
+      if(paso.dia === np.dia && paso.tarea === np.tarea) return;
+      paso.dia = np.dia; paso.tarea = np.tarea; paso.esIA = !!np.esIA;
+      if(!paso.hecho){ const f = new Date(prot.fechaInicio); f.setDate(f.getDate()+np.dia); paso.fecha = f.toISOString().split('T')[0]; }
+      cambio = true;
+    });
+    if(prot.plantillaNombre !== pl.nombre){ prot.plantillaNombre = pl.nombre; cambio = true; }
+  });
+  if(cambio){ try{ saveToStorage(); }catch(e){} }
+  return cambio;
+}
 function renderTareasIATF(){
   const tbody = document.getElementById('iatf-tareas-tbody');
   if(!tbody) return;
+  rfCorregirIATF();
   const filas = [];
   (DB.protocolosIATF||[]).forEach(prot=>{
     prot.pasos.forEach((paso,idx)=>{
@@ -11311,7 +11603,7 @@ function renderTareasIATF(){
       <td class="td-mono" style="color:${color};font-weight:600">${esc(paso.fecha)}</td>
       <td class="td-mono">${esc(prot.rp)}${prot.potrero?` (${esc(prot.potrero)})`:''}</td>
       <td style="font-size:12px">${esc(prot.plantillaNombre)}</td>
-      <td>${paso.esIA?'🔵 ':''}${paso.tarea}</td>
+      <td>${paso.esIA?'🔵 ':''}${paso.tarea}${prot.indicaciones?`<div style="font-size:11px;color:var(--text3);margin-top:2px">💉 ${esc(prot.indicaciones)}</div>`:''}</td>
     </tr>`;
   }).join('');
 }
@@ -11852,6 +12144,7 @@ function recalcularSaldoPotrero(nombrePotrero){
 function actualizarSaldosPotreros(...nombres){
   const unicos = [...new Set(nombres.filter(Boolean))];
   unicos.forEach(recalcularSaldoPotrero);
+  try{ if(typeof dibujarPotrerosGuardados==='function') dibujarPotrerosGuardados(); }catch(e){} // el mapa muestra la carga al instante
 }
 
 // Lectura: usa la caché si existe: si no, la calcula una sola vez y la deja guardada
@@ -12360,7 +12653,7 @@ function dibujarPotrerosGuardados(){
     const color = colorPotrero(p.id);
     const opacidad = p.estado==='Activo' ? 0.35 : 0.15;
     const poly=L.polygon(p.poligono, {color, weight:3, fillOpacity:opacidad}).addTo(_mapaPotreros);
-    poly.bindTooltip(p.nombre, {permanent:true, direction:'center', className:'mappot-label'});
+    poly.bindTooltip(`${esc(p.nombre)} · ${animales} 🐄`, {permanent:true, direction:'center', className:'mappot-label'});
     poly.bindPopup(`<b>${esc(p.nombre)}</b><br>${(p.ha||0).toFixed(1)} ha · ${animales} animal(es)<br>Estado: ${esc(p.estado)}`);
     _capasPotreros.push(poly);
     p.poligono.forEach(pt=>bounds.push(pt));
@@ -15031,14 +15324,31 @@ function mostrarRegistrosPendientes(registros) {
         <div style="font-size:14px;color:var(--text2)">${esc(r.descripcion||JSON.stringify(r.datos))}</div>
         ${(r.rp&&['Pesada','Vacuna','Tratamiento','Tacto','Muerte','Traslado'].includes(r.tipo)&&!(DB.animales||[]).some(a=>a.rp===r.rp))?`<div style="font-size:12px;color:var(--amber)">⚠️ El RP ${esc(r.rp)} no está cargado en el rodeo</div>`:''}
         ${r.tipo==='Muerte'?`<div style="font-size:12px;color:var(--amber)">Dará de baja al animal del rodeo</div>`:''}
+        ${r.tipo==='Animal'?waSelectorAltaHTML(r,i):''}
       </div>
     </div>`).join('');
   container.style.display = 'block';
   toast(registros.length+' registros detectados — revisalos','info');
 }
 
+// Alta por voz/WhatsApp: categoría y sexo nunca se inventan; si el dictado no los dice, se piden acá
+const WA_CATS_ALTA = ['Vaca','Vaquillona','Toro','Torito','Novillo','Novillito','Ternero M','Ternera H','Destete Macho','Destete Hembra','Recría','Invernada Machos','Invernada Hembras','Invernada Vientres'];
+function waNormCat(c){ const t=String(c||'').trim().toLowerCase(); return WA_CATS_ALTA.find(x=>x.toLowerCase()===t)||(t?String(c).trim():''); }
+function waNormSexo(x){ const t=String(x||'').trim().toLowerCase(); return t.startsWith('m')?'Macho':(t.startsWith('h')?'Hembra':''); }
+function waSelectorAltaHTML(r,i){
+  const d=r.datos||{}, cat=waNormCat(d.categoria), sx=waNormSexo(d.sexo);
+  const cats=[...new Set([...WA_CATS_ALTA,...(cat?[cat]:[])])];
+  const falta=!cat||!sx;
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+    <select id="wa-cat-${i}" class="form-control" style="width:auto;padding:4px 8px;font-size:13px${!cat?';border-color:var(--amber)':''}"><option value="">Categoría…</option>${cats.map(c=>`<option ${c===cat?'selected':''}>${esc(c)}</option>`).join('')}</select>
+    <select id="wa-sexo-${i}" class="form-control" style="width:auto;padding:4px 8px;font-size:13px${!sx?';border-color:var(--amber)':''}"><option value="">Sexo…</option><option ${sx==='Macho'?'selected':''}>Macho</option><option ${sx==='Hembra'?'selected':''}>Hembra</option></select>
+  </div>${falta?`<div style="font-size:12px;color:var(--amber);margin-top:4px">⚠️ El dictado no dijo ${!cat&&!sx?'la categoría ni el sexo':!cat?'la categoría':'el sexo'}: elegilo antes de confirmar</div>`:''}`;
+}
 async function confirmarRegistrosWA() {
   let guardados = 0; const revisar = [];
+  // Ningún alta se guarda sin categoría y sexo elegidos
+  const faltan = waRegistrosPendientes.map((r,i)=>({r,i})).filter(({r,i})=>r.tipo==='Animal' && document.getElementById('wa-check-'+i)?.checked && (!document.getElementById('wa-cat-'+i)?.value || !document.getElementById('wa-sexo-'+i)?.value));
+  if(faltan.length){ toast(`Elegí la categoría y el sexo de ${faltan.length===1?'1 animal':faltan.length+' animales'} antes de confirmar`,'err'); return; }
   waRegistrosPendientes.forEach((r,i) => {
     const cb = document.getElementById('wa-check-'+i);
     if(!cb||!cb.checked) return;
@@ -15058,7 +15368,7 @@ async function confirmarRegistrosWA() {
           if(a && d.potrero){
             const _n=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/^(potrero|lote|piquete)\s+/,'').trim();
             const _q=_n(d.potrero), _pot=_q?(DB.potreros||[]).find(x=>x&&x.nombre&&_n(x.nombre)===_q):null;
-            if(_pot){ p.potrero=_pot.nombre; if(a.potrero!==_pot.nombre){ const _o=a.potrero||'Sin potrero'; a.potrero=_pot.nombre; addHistorial('Traslado',`Cambio potrero: ${_o}→${_pot.nombre} (WA/Audio)`,rp,p.operador); } }
+            if(_pot){ p.potrero=_pot.nombre; if(a.potrero!==_pot.nombre){ const _o=a.potrero||'Sin potrero'; const _prev=a.potrero; a.potrero=_pot.nombre; actualizarSaldosPotreros(_prev, _pot.nombre); addHistorial('Traslado',`Cambio potrero: ${_o}→${_pot.nombre} (WA/Audio)`,rp,p.operador); } }
           }
           guardados++;
         }
@@ -15079,7 +15389,8 @@ async function confirmarRegistrosWA() {
       } else if(r.tipo==='Animal') {
         const rp = r.rp || d.rp || 'WA-'+Date.now();
         if(!DB.animales.find(a=>a.rp===rp)) {
-          DB.animales.push({id:Date.now()+i,rp,nombre:d.nombre||'',rfid:'',categoria:d.categoria||'Novillo',sexo:d.sexo||'Macho',raza:d.raza||'Cruza',color:'',fnac:d.fnac||'',peso:parseFloat(d.peso)||0,potrero:d.potrero||'',procedencia:'Alta WA',prenada:'No',obs:'',activo:true,pesoHistorico:[]});
+          const _cat = document.getElementById('wa-cat-'+i)?.value || waNormCat(d.categoria), _sx = document.getElementById('wa-sexo-'+i)?.value || waNormSexo(d.sexo);
+          DB.animales.push({id:Date.now()+i,rp,nombre:d.nombre||'',rfid:'',categoria:_cat,sexo:_sx,raza:d.raza||'Cruza',color:'',fnac:d.fnac||'',peso:parseFloat(d.peso)||0,potrero:d.potrero||'',procedencia:'Alta WA',prenada:'No',obs:'',activo:true,pesoHistorico:[]});
           addHistorial('Animal',`Alta WA: RP ${rp} ${d.categoria||''}`,rp,'');
           guardados++;
         } else { toast(`RP ${rp} ya existe, se omitió`,'info'); }
@@ -15144,7 +15455,8 @@ async function confirmarRegistrosWA() {
         if(!a) { toast(`Traslado omitido: el RP ${rp||'?'} no está en el rodeo`,'info'); }
         else if(!_pot) { toast(`Traslado omitido: el potrero "${d.potrero||d.destino||'?'}" no existe`,'info'); }
         else {
-          const _o=a.potrero||'Sin potrero'; a.potrero=_pot.nombre;
+          const _o=a.potrero||'Sin potrero'; const _prev=a.potrero; a.potrero=_pot.nombre;
+          actualizarSaldosPotreros(_prev, _pot.nombre);
           addHistorial('Traslado',`Cambio potrero: ${_o}→${_pot.nombre} (WA/Audio)`,rp,'');
           guardados++;
         }
@@ -15851,7 +16163,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-18.1';
+const RF_VERSION = '2026-11-12.3';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -16350,6 +16662,7 @@ async function rfAnchorTrial(){
   window._rfTrialAnchor=a; return a;
 }
 function trialInicio(){
+  if(window._rfTrialBloqueado) return 1; // prueba bloqueada por el servidor: cuenta como vencida
   // El inicio es el del establecimiento (se sincroniza entre dispositivos). El anchor del dispositivo solo sirve de respaldo si falta.
   if(window._rfTrialStartServidor) return window._rfTrialStartServidor; // autoritativo (servidor)
   const ts=(window.DB&&DB.settings&&DB.settings.trialStart)||0;
@@ -16581,6 +16894,8 @@ async function cargarEstabActivo() {
   try {
     // Obtener ID activo
     let id = await idbGet(RF_ACTIVO_KEY);
+    // IndexedDB vacío (borrado por el navegador): recuperar el id del respaldo en localStorage
+    if (!id) { try { id = localStorage.getItem('rf_bk_estab') || null; } catch(e) {} }
 
     // Si no hay ID activo, migrar datos existentes o crear nuevo
     if (!id) {
@@ -16592,6 +16907,7 @@ async function cargarEstabActivo() {
 
     // Cargar DB de ese establecimiento
     const raw = await idbGet('rf_estab_' + id);
+    window._rfSinDatosLocales = !raw;
     if (raw) {
       DB = runMigrations(JSON.parse(raw));
     } else {
@@ -16605,6 +16921,25 @@ async function cargarEstabActivo() {
   } catch(e) {
     console.warn('Error cargando establecimiento activo:', e);
   }
+  rfRestaurarRespaldoLocal();
+}
+// Si IndexedDB no trajo datos (falla puntual o borrado), usar el respaldo de localStorage
+// del MISMO establecimiento, en vez de mostrar la pantalla de alta como si fuera el primer uso.
+function rfRestaurarRespaldoLocal() {
+  try {
+    if (window.DB && DB.settings && DB.settings.hasBeenSetup) return;
+    if (window._rfSinDatosLocales === false) return; // hay datos propios de este establecimiento (ej. uno recién creado): no se pisan con el respaldo
+    const id = window.ESTAB_ID_ACTIVO, bkId = localStorage.getItem('rf_bk_estab'), ls = localStorage.getItem(RF_DB_KEY);
+    if (!id || !ls || bkId !== id) return;
+    const b = runMigrations(JSON.parse(ls));
+    if (!b.settings || !b.settings.hasBeenSetup) return;
+    DB = b; window.DB = b;
+    if (!DB.encierres) DB.encierres = [];
+    if (!DB.nacimientos) DB.nacimientos = [];
+    idbSet(RF_ACTIVO_KEY, id).catch(() => {});
+    idbSet('rf_estab_' + id, ls).catch(() => {});
+    console.warn('♻️ Datos restaurados desde el respaldo local');
+  } catch(e) { console.warn('Respaldo local no disponible:', e); }
 }
 
 // ── Migración: datos existentes → primer establecimiento
@@ -16663,21 +16998,25 @@ async function saveEstabActivo() {
 async function cambiarEstablecimiento(id) {
   // Guardar estado actual antes de cambiar
   await saveEstabActivo();
-  await idbSet(RF_ACTIVO_KEY, id);
+
+  // Cargar la nueva DB ANTES de cambiar el id activo. Antes se cambiaba el id y después se esperaba la lectura:
+  // en ese hueco el autoguardado (cada 5 s) grababa los datos del establecimiento anterior con el id nuevo.
+  const raw = await idbGet('rf_estab_' + id);
+  let nuevaDB;
+  if (raw) {
+    nuevaDB = runMigrations(JSON.parse(raw));
+    if (!nuevaDB.encierres)   nuevaDB.encierres   = [];
+    if (!nuevaDB.nacimientos) nuevaDB.nacimientos = [];
+  } else {
+    nuevaDB = dbVacia('Establecimiento');
+  }
+  // Id y datos se cambian juntos, sin esperas en el medio
   ESTAB_ID_ACTIVO = id;
   window.ESTAB_ID_ACTIVO = id;
-  try{ window._iaChat=[]; window._iaChatEstab=id; }catch(e){}
-
-  // Cargar nueva DB
-  const raw = await idbGet('rf_estab_' + id);
-  if (raw) {
-    DB = runMigrations(JSON.parse(raw));
-    if (!DB.encierres)   DB.encierres   = [];
-    if (!DB.nacimientos) DB.nacimientos = [];
-  } else {
-    DB = dbVacia('Establecimiento');
-  }
+  DB = nuevaDB;
   window.DB = DB;
+  try{ window._iaChat=[]; window._iaChatEstab=id; }catch(e){}
+  await idbSet(RF_ACTIVO_KEY, id);
 
   cerrarModalEstab();
 
@@ -16694,14 +17033,19 @@ async function cambiarEstablecimiento(id) {
 // ── Crear nuevo establecimiento ───────────────────────
 async function crearNuevoEstablecimiento(nombre) {
   if (!nombre?.trim()) { toast('Ingresá un nombre', 'err'); return; }
-  const id     = genEstabId();
   const lista  = await getEstablecimientos();
+  if (lista.length && !confirm('Si es otro campo tuyo, conviene agregarlo como campo dentro de este establecimiento: así pagás un solo plan por el total de animales.\n\nUn establecimiento nuevo tiene su propia prueba gratuita y su propia suscripción.\n\n¿Crear el establecimiento nuevo igual?')) return;
+  const id     = genEstabId();
   lista.push({ id, nombre: nombre.trim(), creadoEn: Date.now() });
   await saveEstablecimientos(lista);
   const dbNueva = dbVacia(nombre.trim());
-  // El nuevo establecimiento hereda la prueba y la suscripción del dispositivo: no inicia otra prueba
-  dbNueva.settings.trialStart = (await rfAnchorTrial()) || Date.now();
-  ['subscribed','activationDate','activationDays','activationCode'].forEach(k=>{ if(DB&&DB.settings&&DB.settings[k]!==undefined) dbNueva.settings[k]=DB.settings[k]; });
+  dbNueva.settings.hasBeenSetup = true; // el titular ya completó la planilla en este dispositivo: sin esto, al recargar mostraba la pantalla de alta y no sincronizaba
+  // Cada establecimiento es independiente: arranca su propia prueba y tiene su propia suscripción (la fija el servidor).
+  // El CUIT del titular viaja con él: si ya tuvo una prueba vencida sin pagar, el servidor bloquea esta.
+  dbNueva.settings.trialStart = Date.now();
+  if (DB && DB.settings) dbNueva.settings.cuitTitular = DB.settings.cuitTitular || (DB.settings.registroUsuario && DB.settings.registroUsuario.cuit) || '';
+  // Mismos usuarios (teléfono, rol y PIN) que el establecimiento desde donde se crea: queda protegido desde el primer momento
+  if (DB && DB.settings && Array.isArray(DB.settings.phones) && DB.settings.phones.length) dbNueva.settings.phones = JSON.parse(JSON.stringify(DB.settings.phones));
   await idbSet('rf_estab_' + id, JSON.stringify(dbNueva));
   await cambiarEstablecimiento(id);
   await renderSelectorEstab();
@@ -17006,7 +17350,10 @@ async function rfVerificarDatosPerdidos(motivo){
     // B) si igual queda (casi) vacío, el backup más reciente y completo del mismo establecimiento
     const metas = JSON.parse(await idbGet(RF_BACKUP_KEY) || '[]'), nombre = String((DB.settings && DB.settings.establecimiento) || '').trim().toLowerCase();
     for(const m of metas) await rfCompletarMeta(m);
-    const cands = metas.filter(m => m.tipo !== 'antes-de-restaurar' && m.vol >= RF_RESTAURAR_MIN_VOL && (m.estabId ? m.estabId === estab : (m.nombre && m.nombre === nombre)));
+    // Solo backups de ESTE establecimiento: mismo código Y mismo nombre (un backup grabado con el código equivocado trae el nombre del otro campo).
+    // Los backups viejos sin código solo valen por nombre si hay un único establecimiento en el dispositivo.
+    const _unico = ((await getEstablecimientos()) || []).length <= 1;
+    const cands = metas.filter(m => m.tipo !== 'antes-de-restaurar' && m.vol >= RF_RESTAURAR_MIN_VOL && m.nombre === nombre && (m.estabId ? m.estabId === estab : _unico));
     let desdeBackup = null;
     if(cands.length){
       const mejor = Math.max(...cands.map(m => m.vol));
