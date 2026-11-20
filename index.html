@@ -7428,11 +7428,37 @@ async function abrirDemo(restablecer,auto){
   if(typeof recalcularTodosLosSaldosPotreros==='function') recalcularTodosLosSaldosPotreros();
   toast(restablecer?'Demo restablecida':'Modo demo: datos de ejemplo','ok');
 }
+// Link directo ?demo=1: abre la demo de ejemplo sin pasar por registro, login ni paywall (la demo es 100% local: no toca Firebase ni datos reales).
+// Al salir de la demo se vuelve a recargar la app normal, que sí aplica registro/login/paywall.
+async function rfArrancarDemoURL(){
+  try{
+    await loadFromStorageAsync();
+    await abrirDemo(false,true);
+    if(!esDemo()) return await checkAuth();
+    try{ sessionStorage.setItem('rf_demo_url','1'); }catch(e){}
+    if(!sessionStorage.getItem('rf_logged')){ // no se marca como "sesión iniciada": al salir de la demo se pide el acceso de siempre
+      sessionStorage.setItem('rf_role','Dueño'); sessionStorage.setItem('rf_user_name','Visitante (demo)');
+    }
+    ['paywall-screen','login-screen','espera-screen'].forEach(id=>{ const e=document.getElementById(id); if(e) e.classList.remove('show'); });
+    const ts=document.getElementById('trial-screen'); if(ts) ts.style.display='none';
+    document.getElementById('app').style.display='grid';
+    const en=document.getElementById('estab-name'); if(en) en.value=DB.settings.establecimiento||'';
+    return true;
+  }catch(e){ console.warn('Demo directa falló, flujo normal:',e); return await checkAuth(); }
+}
 async function salirDeDemo(){
   const lista=await getEstablecimientos();
   let volver=await idbGet('rf_demo_volver');
   if(!volver||!lista.some(e=>e.id===volver&&!e.demo)) volver=(lista.find(e=>!e.demo)||{}).id;
-  if(volver){ await cambiarEstablecimiento(volver); return; }
+  const _desdeLink=(()=>{ try{ return !!sessionStorage.getItem('rf_demo_url'); }catch(e){ return false; } })();
+  if(volver){
+    await cambiarEstablecimiento(volver);
+    if(_desdeLink||!(DB&&DB.settings&&DB.settings.hasBeenSetup)){
+      try{ ['rf_demo_url','rf_role','rf_user_name'].forEach(k=>{ if(!sessionStorage.getItem('rf_logged')||k==='rf_demo_url') sessionStorage.removeItem(k); }); }catch(e){}
+      location.replace(location.pathname); // vuelve al flujo normal: registro, login o paywall según corresponda
+    }
+    return;
+  }
   await crearNuevoEstablecimiento('Mi Establecimiento');
 }
 async function borrarDemo(){
@@ -16626,7 +16652,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-20.3';
+const RF_VERSION = '2026-11-20.4';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
@@ -16979,7 +17005,8 @@ window.addEventListener('load', async ()=>{
     mostrarErrorBoundary('Funciones faltantes: ' + smoke.fallidos.join(', '), null);
     return;
   }
-  const ok = await checkAuth();
+  let _demoURL=false; try{ _demoURL=new URLSearchParams(location.search).get('demo')==='1'; }catch(e){}
+  const ok = _demoURL ? await rfArrancarDemoURL() : await checkAuth();
   if(ok) {
     healthCheckDB(); // reparar inconsistencias antes de renderizar
     init();
