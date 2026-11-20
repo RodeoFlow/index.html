@@ -2098,6 +2098,8 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
   <div id="rep-genomica" class="tab-content">
   <div class="toolbar">
   <div class="toolbar-right">
+  <button class="btn-secondary" onclick="genExportarExcel()">📊 Excel</button>
+  <button class="btn-secondary" onclick="genExportarPDF()">📑 PDF</button>
   <button class="btn-secondary" onclick="document.getElementById('gen-pdf-input').click()">📄 Leer PDF</button>
   <button class="btn-primary" onclick="genAbrir()">＋ Genómica</button>
   <input type="file" id="gen-pdf-input" accept="application/pdf,.pdf" style="display:none" onchange="genLeerPDF(this)">
@@ -9487,8 +9489,65 @@ function renderGenomica(){
   <td>${esc(g.registro||'--')}${g.nombre?`<div style="font-size:12px;color:var(--text3)">${esc(g.nombre)}</div>`:''}${(g.catAsoc||g.color||g.grupo)?`<div style="font-size:12px;color:var(--text3)">${esc([g.catAsoc,g.color,g.grupo?'Grupo '+g.grupo:''].filter(Boolean).join(' · '))}</div>`:''}</td>
   <td>${resumen(g)}</td><td>${enfs(g)}</td>
   <td style="font-size:12px;color:var(--text3)">${g.fuente==='pdf'?'📄 PDF':'✍️ Manual'}${g.lab?'<br>'+esc(g.lab):''}</td>
-  <td style="white-space:nowrap"><button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="genAbrir(${rfN(g.id)})">✏️</button> <button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarGenomica(${rfN(g.id)})">🗑</button></td>
+  <td style="white-space:nowrap"><button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="genExportarPDF(${rfN(g.id)})" title="PDF de este animal">📑</button> <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="genAbrir(${rfN(g.id)})">✏️</button> <button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarGenomica(${rfN(g.id)})">🗑</button></td>
   </tr>`).join('');
+}
+// ── Genómica: exportar a Excel y PDF ──
+function _genInforme(g){
+  const a=(DB.animales||[]).find(x=>String(x.rp)===String(g.rp))||{};
+  return {g,a,raza:a.raza||'',sexo:g.sexo||a.sexo||'',fnac:g.fnac||a.fnac||a.fechaNac||''};
+}
+function genExportarExcel(){
+  const lista=[...(DB.genomica||[])].sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
+  if(!lista.length){toast('No hay datos genómicos para exportar','err');return;}
+  if(typeof XLSX==='undefined'){toast('No se pudo cargar el generador de Excel','err');return;}
+  const cars=[...new Set(lista.flatMap(g=>(g.valores||[]).map(x=>x.c)))];
+  const enfs=[...new Set(lista.flatMap(g=>(g.enfermedades||[]).map(x=>x.c)))];
+  const conPerc=cars.filter(c=>lista.some(g=>(g.valores||[]).some(x=>x.c===c&&x.per)));
+  const filas=lista.map(g=>{
+    const i=_genInforme(g), f={'Fecha informe':g.fecha||'','RP':g.rp||'','Registro':g.registro||'','Nombre':g.nombre||'','Raza':i.raza,'Sexo':i.sexo,'Nacimiento':i.fnac,'Laboratorio':g.lab||'','Grupo':g.grupo||'','Origen':g.fuente==='pdf'?'PDF':'Manual'};
+    cars.forEach(c=>{const x=(g.valores||[]).find(v=>v.c===c); f[c]=x?x.v:'';});
+    conPerc.forEach(c=>{const x=(g.valores||[]).find(v=>v.c===c); f[c+' (percentil)']=x&&x.per?String(x.per).replace(/%/g,''):'';});
+    enfs.forEach(c=>{const x=(g.enfermedades||[]).find(v=>v.c===c); f[c]=x?x.e:'';});
+    return f;
+  });
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(filas),'Genómica');
+  XLSX.writeFile(wb,nombreArchivoExport('Genomica','xlsx'));
+  toast('Excel de Genómica generado','ok');
+}
+function genExportarPDF(id){
+  if(typeof window.jspdf==='undefined'){toast('No se pudo cargar el generador de PDF','err');return;}
+  let lista=[...(DB.genomica||[])].sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
+  if(id) lista=lista.filter(g=>g.id===id);
+  if(!lista.length){toast('No hay datos genómicos para exportar','err');return;}
+  const {jsPDF}=window.jspdf, doc=new jsPDF();
+  lista.forEach((g,n)=>{
+    if(n>0) doc.addPage();
+    const i=_genInforme(g);
+    doc.setFontSize(16); doc.setFont(undefined,'bold'); doc.text(DB.settings.establecimiento||'Mi Establecimiento',14,15);
+    doc.setFontSize(12); doc.setFont(undefined,'normal'); doc.text('Informe genómico — RP '+(g.rp||'--')+(g.nombre?' · '+g.nombre:''),14,22);
+    doc.setFontSize(9); doc.setTextColor(120); doc.text('Generado el '+new Date().toLocaleDateString('es-AR')+' con RodeoFlow',14,28); doc.setTextColor(0);
+    const datos=[['Fecha del informe',g.fecha||'--'],['Registro',g.registro||'--'],['Raza',i.raza||'--'],['Sexo',i.sexo||'--'],['Nacimiento',i.fnac||'--'],['Laboratorio',g.lab||'--']];
+    if(g.grupo) datos.push(['Grupo',g.grupo]);
+    if(g.panel||g.marcadores) datos.push(['ADN',[g.panel?'panel '+g.panel:'',g.marcadores?g.marcadores+' marcadores':''].filter(Boolean).join(' · ')]);
+    doc.autoTable({startY:33,body:datos,theme:'plain',styles:{fontSize:9,cellPadding:1.2},columnStyles:{0:{fontStyle:'bold',cellWidth:38}},margin:{left:14,right:14}});
+    let y=doc.lastAutoTable.finalY+4;
+    const v=g.valores||[];
+    if(v.length){
+      doc.autoTable({startY:y,head:[['DEP / EPD e índices','Valor','Precisión','Percentil','Prom. raza']],
+        body:v.map(x=>[x.c,String(x.v==null?'':x.v),x.p?String(x.p):'',x.per?String(x.per).replace(/%/g,'')+'%':'',x.prom?String(x.prom):'']),
+        styles:{fontSize:8.5},headStyles:{fillColor:[232,163,33],textColor:20},margin:{left:14,right:14}});
+      y=doc.lastAutoTable.finalY+4;
+    }
+    const e=g.enfermedades||[];
+    if(e.length){
+      doc.autoTable({startY:y,head:[['Enfermedad genética','Estado']],body:e.map(x=>[x.c,String(x.e||'')]),
+        styles:{fontSize:8.5},headStyles:{fillColor:[46,204,113],textColor:20},margin:{left:14,right:14}});
+    }
+  });
+  doc.save(nombreArchivoExport(id&&lista[0]?('Genomica_RP'+lista[0].rp):'Genomica','pdf'));
+  toast('PDF de Genómica generado','ok');
 }
 function genomicaCardHtml(rp){
   const l=(DB.genomica||[]).filter(g=>g.rp===rp).sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
@@ -16416,7 +16475,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-20.1';
+const RF_VERSION = '2026-11-20.2';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
