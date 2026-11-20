@@ -169,7 +169,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
     function walk(v, depth, campo, enLista) {
       if (depth > 12) return undefined;
       if (typeof v === 'string') {
-        if (campo === 'foto')     { if (RF_FOTO_OK(v)) return v; st.peligro++; return ''; }
+        if (campo === 'foto' || campo === 'fotos') { if (RF_FOTO_OK(v)) return v; st.peligro++; return ''; }
         if (campo === 'base64')   { if (v.length < 8000000 && /^[A-Za-z0-9+\/=]*$/.test(v)) return v; st.peligro++; return ''; }
         if (campo === 'mimeType') { return /^audio\/[a-z0-9.+-]{1,30}$/.test(v) ? v : 'audio/webm'; }
         return window.rfTextoSeguro(v, st);
@@ -2098,6 +2098,8 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
   <div id="rep-genomica" class="tab-content">
   <div class="toolbar">
   <div class="toolbar-right">
+  <button class="btn-secondary" onclick="document.getElementById('gen-xls-input').click()">📥 Importar Excel</button>
+  <input type="file" id="gen-xls-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="genImportarExcel(this)">
   <button class="btn-secondary" onclick="genExportarExcel()">📊 Excel</button>
   <button class="btn-secondary" onclick="genExportarPDF()">📑 PDF</button>
   <button class="btn-secondary" onclick="document.getElementById('gen-pdf-input').click()">📄 Leer PDF</button>
@@ -3865,6 +3867,11 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
   <div id="gen-enfs"></div>
   <div id="gen-chips-e" style="margin:4px 0"></div>
   <button type="button" class="btn-secondary" style="font-size:12px" onclick="genAddEnf('','Libre')">＋ Otra enfermedad</button>
+  <div class="form-group" style="margin-top:12px"><label class="form-label">📷 Fotos del animal (hasta 4)</label>
+  <div id="gen-fotos" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px"></div>
+  <button type="button" class="btn-secondary" style="font-size:12px" onclick="document.getElementById('gen-fotos-input').click()">📷 Agregar fotos</button>
+  <input type="file" id="gen-fotos-input" accept="image/*" multiple style="display:none" onchange="genAgregarFotos(this)">
+  <div style="font-size:11px;color:var(--text3);margin-top:4px">Salen en la ficha y en el PDF de exportación.</div></div>
   <div class="form-group" style="margin-top:12px"><label class="form-label">Observaciones</label><textarea id="gen-obs" class="form-control" rows="2"></textarea></div>
   </div>
   <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('modal-genomica')">Cancelar</button><button class="btn-primary" onclick="guardarGenomica()">💾 Guardar</button></div>
@@ -9430,6 +9437,7 @@ function genAbrir(id){
   ((g&&g.valores)||[]).forEach(x=>genAddValor(x.c,x.v,x.p,x.per,x.prom)); ((g&&g.enfermedades)||[]).forEach(x=>genAddEnf(x.c,x.e));
   genChips();
   const tit=document.getElementById('gen-titulo'); if(tit) tit.textContent=g?'🧬 Editar datos genómicos':'🧬 Datos genómicos';
+  window._genFotos=(g&&Array.isArray(g.fotos))?g.fotos.slice(0,4):[]; genPintarFotos();
   openModal('modal-genomica');
 }
 function genTraerAnimal(){
@@ -9458,13 +9466,14 @@ function genLeerFilas(){
   const enfermedades=[...document.querySelectorAll('#gen-enfs .gen-fila')].map(f=>({c:f.querySelector('.gen-e-c').value.trim(),e:f.querySelector('.gen-e-e').value})).filter(x=>x.c);
   return {valores,enfermedades};
 }
-function guardarGenomica(){
+async function guardarGenomica(){
+  if(window._genPend&&window._genPend.length){ toast('Subiendo fotos…','info'); await Promise.race([Promise.allSettled(window._genPend),new Promise(r=>setTimeout(r,10000))]); }
   const rp=String($v('gen-rp')||'').trim();
   if(!rp){toast('RP obligatorio','err');return;}
   const {valores,enfermedades}=genLeerFilas();
   if(!valores.length&&!enfermedades.length){toast('Cargá al menos un valor o una enfermedad genética','err');return;}
   const idEdit=parseInt($v('gen-id'))||0;
-  const g={id:idEdit||Date.now(),rp,fecha:$v('gen-fecha')||new Date().toISOString().split('T')[0],lab:$v('gen-lab'),registro:$v('gen-registro'),padre:$v('gen-padre'),madre:$v('gen-madre'),fnac:$v('gen-fnac'),sexo:$v('gen-sexo'),servicio:$v('gen-servicio'),grupo:$v('gen-grupo'),panel:$v('gen-panel'),marcadores:$v('gen-marcadores'),parentesco:$v('gen-parentesco'),valores,enfermedades,obs:$v('gen-obs'),fuente:'manual'};
+  const g={id:idEdit||Date.now(),rp,fecha:$v('gen-fecha')||new Date().toISOString().split('T')[0],lab:$v('gen-lab'),registro:$v('gen-registro'),padre:$v('gen-padre'),madre:$v('gen-madre'),fnac:$v('gen-fnac'),sexo:$v('gen-sexo'),servicio:$v('gen-servicio'),grupo:$v('gen-grupo'),panel:$v('gen-panel'),marcadores:$v('gen-marcadores'),parentesco:$v('gen-parentesco'),valores,enfermedades,obs:$v('gen-obs'),fotos:(window._genFotos||[]).slice(0,4),fuente:'manual'};
   if(!DB.genomica)DB.genomica=[];
   const k=idEdit?DB.genomica.findIndex(x=>x.id===idEdit):-1;
   if(k>=0){ DB.genomica[k]=Object.assign({},DB.genomica[k],g); } else DB.genomica.push(g);
@@ -9488,7 +9497,7 @@ function renderGenomica(){
   <td class="td-mono"><a href="#" onclick="abrirFichaAnimal(${rfJs(g.rp)});return false">${esc(g.rp)}</a></td>
   <td>${esc(g.registro||'--')}${g.nombre?`<div style="font-size:12px;color:var(--text3)">${esc(g.nombre)}</div>`:''}${(g.catAsoc||g.color||g.grupo)?`<div style="font-size:12px;color:var(--text3)">${esc([g.catAsoc,g.color,g.grupo?'Grupo '+g.grupo:''].filter(Boolean).join(' · '))}</div>`:''}</td>
   <td>${resumen(g)}</td><td>${enfs(g)}</td>
-  <td style="font-size:12px;color:var(--text3)">${g.fuente==='pdf'?'📄 PDF':'✍️ Manual'}${g.lab?'<br>'+esc(g.lab):''}</td>
+  <td style="font-size:12px;color:var(--text3)">${g.fuente==='pdf'?'📄 PDF':g.fuente==='excel'?'📊 Excel':'✍️ Manual'}${g.lab?'<br>'+esc(g.lab):''}</td>
   <td style="white-space:nowrap"><button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="genExportarPDF(${rfN(g.id)})" title="PDF de este animal">📑</button> <button class="btn-secondary" style="padding:2px 8px;font-size:12px" onclick="genAbrir(${rfN(g.id)})">✏️</button> <button class="btn-danger" style="padding:2px 8px;font-size:12px" onclick="eliminarGenomica(${rfN(g.id)})">🗑</button></td>
   </tr>`).join('');
 }
@@ -9505,34 +9514,105 @@ function genExportarExcel(){
   const enfs=[...new Set(lista.flatMap(g=>(g.enfermedades||[]).map(x=>x.c)))];
   const conPerc=cars.filter(c=>lista.some(g=>(g.valores||[]).some(x=>x.c===c&&x.per)));
   const filas=lista.map(g=>{
-    const i=_genInforme(g), f={'Fecha informe':g.fecha||'','RP':g.rp||'','Registro':g.registro||'','Nombre':g.nombre||'','Raza':i.raza,'Sexo':i.sexo,'Nacimiento':i.fnac,'Laboratorio':g.lab||'','Grupo':g.grupo||'','Origen':g.fuente==='pdf'?'PDF':'Manual'};
+    const i=_genInforme(g), f={'Fecha informe':g.fecha||'','RP':g.rp||'','Registro':g.registro||'','Nombre':g.nombre||'','Raza':i.raza,'Sexo':i.sexo,'Nacimiento':i.fnac,'Laboratorio':g.lab||'','Grupo':g.grupo||'','Origen':g.fuente==='pdf'?'PDF':g.fuente==='excel'?'Excel':'Manual'};
     cars.forEach(c=>{const x=(g.valores||[]).find(v=>v.c===c); f[c]=x?x.v:'';});
     conPerc.forEach(c=>{const x=(g.valores||[]).find(v=>v.c===c); f[c+' (percentil)']=x&&x.per?String(x.per).replace(/%/g,''):'';});
     enfs.forEach(c=>{const x=(g.enfermedades||[]).find(v=>v.c===c); f[c]=x?x.e:'';});
+    const fl=(g.fotos||[]).filter(u=>/^https:/.test(u)); if(fl.length) f['Fotos (enlaces)']=fl.join(' | ');
     return f;
   });
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(filas),'Genómica');
   XLSX.writeFile(wb,nombreArchivoExport('Genomica','xlsx'));
-  toast('Excel de Genómica generado','ok');
+  toast('Excel de Genómica generado (las fotos van en el PDF)','ok');
 }
-function genExportarPDF(id){
+// ── Fotos del animal en Genómica ──
+function genPintarFotos(){
+  const c=document.getElementById('gen-fotos'); if(!c) return;
+  c.innerHTML='';
+  (window._genFotos||[]).forEach((u,k)=>{
+    const d=document.createElement('div'); d.style.cssText='position:relative;width:84px;height:84px';
+    const im=document.createElement('img'); im.src=u; im.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:8px;border:1px solid var(--border)';
+    const x=document.createElement('button'); x.type='button'; x.textContent='✕'; x.style.cssText='position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:none;background:#e74c3c;color:#fff;cursor:pointer;font-size:12px';
+    x.onclick=()=>{ window._genFotos.splice(k,1); genPintarFotos(); };
+    d.appendChild(im); d.appendChild(x); c.appendChild(d);
+  });
+}
+function genComprimirFoto(file,maxLado,calidad){
+  return new Promise((ok,fail)=>{
+    const lector=new FileReader();
+    lector.onerror=()=>fail(new Error('lectura'));
+    lector.onload=e=>{
+      const img=new Image();
+      img.onerror=()=>fail(new Error('imagen'));
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(w>=h&&w>maxLado){h=Math.round(h*maxLado/w);w=maxLado;} else if(h>w&&h>maxLado){w=Math.round(w*maxLado/h);h=maxLado;}
+        const cv=document.createElement('canvas'); cv.width=w; cv.height=h; cv.getContext('2d').drawImage(img,0,0,w,h);
+        ok(cv.toDataURL('image/jpeg',calidad));
+      };
+      img.src=e.target.result;
+    };
+    lector.readAsDataURL(file);
+  });
+}
+async function genAgregarFotos(input){
+  const files=[...(input&&input.files||[])]; if(input) input.value='';
+  if(!window._genFotos) window._genFotos=[]; if(!window._genPend) window._genPend=[];
+  for(const f of files){
+    if(window._genFotos.length>=4){toast('Máximo 4 fotos','info');break;}
+    if(!f.type.startsWith('image/')){toast('Elegí imágenes','err');continue;}
+    let data; try{ data=await genComprimirFoto(f,1000,0.82); }catch(e){ toast('No se pudo leer una foto','err'); continue; }
+    window._genFotos.push(data); genPintarFotos();
+    const pr=subirFotoAStorage(data).then(url=>{ const k=window._genFotos.indexOf(data); if(k>=0){ window._genFotos[k]=url; genPintarFotos(); } }).catch(e=>console.warn('Foto queda local hasta poder subirla:',e));
+    window._genPend.push(pr); pr.finally(()=>{ window._genPend=(window._genPend||[]).filter(x=>x!==pr); });
+  }
+}
+function genVerFoto(u){
+  const w=document.createElement('div');
+  w.style.cssText='position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;cursor:pointer';
+  const im=document.createElement('img'); im.src=u; im.style.cssText='max-width:92vw;max-height:88vh;border-radius:10px;border:2px solid var(--accent)';
+  w.appendChild(im); w.onclick=()=>w.remove(); document.body.appendChild(w);
+}
+// Devuelve la foto como data URL (para el PDF). Las de Storage necesitan permiso CORS del bucket.
+async function genFotoADataUrl(u){
+  try{
+    if(/^data:image\//.test(u)) return u;
+    const r=await fetch(u); if(!r.ok) return null;
+    const b=await r.blob();
+    return await new Promise((ok,no)=>{ const fr=new FileReader(); fr.onload=()=>ok(fr.result); fr.onerror=no; fr.readAsDataURL(b); });
+  }catch(e){ return null; }
+}
+function genDimensionesImg(dataUrl){
+  return new Promise(ok=>{ const i=new Image(); i.onload=()=>ok({w:i.width,h:i.height}); i.onerror=()=>ok(null); i.src=dataUrl; });
+}
+async function genExportarPDF(id){
   if(typeof window.jspdf==='undefined'){toast('No se pudo cargar el generador de PDF','err');return;}
   let lista=[...(DB.genomica||[])].sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
   if(id) lista=lista.filter(g=>g.id===id);
   if(!lista.length){toast('No hay datos genómicos para exportar','err');return;}
-  const {jsPDF}=window.jspdf, doc=new jsPDF();
-  lista.forEach((g,n)=>{
-    if(n>0) doc.addPage();
+  toast('Generando PDF…','info');
+  const {jsPDF}=window.jspdf, doc=new jsPDF(); let sinFoto=0;
+  const poner=async(dataUrl,x,y,mw,mh)=>{
+    const d=await genDimensionesImg(dataUrl); if(!d) return null;
+    let w=mw,h=w*d.h/d.w; if(h>mh){h=mh;w=h*d.w/d.h;}
+    try{ doc.addImage(dataUrl,'JPEG',x,y,w,h); doc.setDrawColor(200); doc.rect(x,y,w,h); return {w,h}; }catch(e){ return null; }
+  };
+  for(let n=0;n<lista.length;n++){
+    const g=lista[n]; if(n>0) doc.addPage();
     const i=_genInforme(g);
+    const fuentes=(Array.isArray(g.fotos)&&g.fotos.length)?g.fotos:(i.a.foto?[i.a.foto]:[]);
+    const fotos=[]; for(const u of fuentes.slice(0,4)){ const d=await genFotoADataUrl(u); if(d) fotos.push(d); else sinFoto++; }
     doc.setFontSize(16); doc.setFont(undefined,'bold'); doc.text(DB.settings.establecimiento||'Mi Establecimiento',14,15);
     doc.setFontSize(12); doc.setFont(undefined,'normal'); doc.text('Informe genómico — RP '+(g.rp||'--')+(g.nombre?' · '+g.nombre:''),14,22);
     doc.setFontSize(9); doc.setTextColor(120); doc.text('Generado el '+new Date().toLocaleDateString('es-AR')+' con RodeoFlow',14,28); doc.setTextColor(0);
     const datos=[['Fecha del informe',g.fecha||'--'],['Registro',g.registro||'--'],['Raza',i.raza||'--'],['Sexo',i.sexo||'--'],['Nacimiento',i.fnac||'--'],['Laboratorio',g.lab||'--']];
     if(g.grupo) datos.push(['Grupo',g.grupo]);
     if(g.panel||g.marcadores) datos.push(['ADN',[g.panel?'panel '+g.panel:'',g.marcadores?g.marcadores+' marcadores':''].filter(Boolean).join(' · ')]);
-    doc.autoTable({startY:33,body:datos,theme:'plain',styles:{fontSize:9,cellPadding:1.2},columnStyles:{0:{fontStyle:'bold',cellWidth:38}},margin:{left:14,right:14}});
-    let y=doc.lastAutoTable.finalY+4;
+    let yFoto=33, hFoto=0;
+    if(fotos.length){ const r=await poner(fotos[0],140,33,56,52); if(r) hFoto=r.h; }
+    doc.autoTable({startY:33,body:datos,theme:'plain',styles:{fontSize:9,cellPadding:1.2},columnStyles:{0:{fontStyle:'bold',cellWidth:34}},margin:{left:14,right:hFoto?70:14}});
+    let y=Math.max(doc.lastAutoTable.finalY,hFoto?yFoto+hFoto:0)+5;
     const v=g.valores||[];
     if(v.length){
       doc.autoTable({startY:y,head:[['DEP / EPD e índices','Valor','Precisión','Percentil','Prom. raza']],
@@ -9544,10 +9624,81 @@ function genExportarPDF(id){
     if(e.length){
       doc.autoTable({startY:y,head:[['Enfermedad genética','Estado']],body:e.map(x=>[x.c,String(x.e||'')]),
         styles:{fontSize:8.5},headStyles:{fillColor:[46,204,113],textColor:20},margin:{left:14,right:14}});
+      y=doc.lastAutoTable.finalY+4;
     }
-  });
+    if(fotos.length>1){
+      if(y+48>285){ doc.addPage(); y=15; }
+      let x=14; for(const f of fotos.slice(1)){ const r=await poner(f,x,y,56,44); x+=(r?r.w:56)+4; }
+    }
+  }
   doc.save(nombreArchivoExport(id&&lista[0]?('Genomica_RP'+lista[0].rp):'Genomica','pdf'));
-  toast('PDF de Genómica generado','ok');
+  toast(sinFoto?'PDF generado, pero '+sinFoto+' foto(s) no se pudieron incluir (ver LEEME de fotos)':'PDF de Genómica generado','ok');
+}
+// ── Genómica: importar desde una planilla Excel / CSV ──
+function _genNormEstado(t){
+  const x=String(t||'').trim().toLowerCase();
+  if(/^(libre|normal|limpio|clear|free|n\/n)\b/.test(x)) return 'Libre';
+  if(/^(portador|carrier|heterocig|hetero)/.test(x)) return 'Portador';
+  if(/^(afectado|affected|homocig|homo)/.test(x)) return 'Afectado';
+  return '';
+}
+function _genFechaISO(v){
+  if(v instanceof Date&&!isNaN(v)) return v.toISOString().slice(0,10);
+  const t=String(v==null?'':v).trim(); if(!t) return '';
+  let m=/^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(t); if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  m=/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/.exec(t); if(m){ const a=m[3].length===2?'20'+m[3]:m[3]; return a+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+  return '';
+}
+function genImportarExcel(input){
+  const file=input&&input.files&&input.files[0]; if(input) input.value='';
+  if(!file) return;
+  if(typeof XLSX==='undefined'){toast('No se pudo cargar el lector de Excel','err');return;}
+  if(file.size>8*1024*1024){toast('El archivo pesa más de 8 MB','err');return;}
+  const fr=new FileReader();
+  fr.onerror=()=>toast('No se pudo leer el archivo','err');
+  fr.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      const filas=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
+      const hi=filas.findIndex(r=>r.some(c=>String(c).trim().toLowerCase()==='rp'));
+      if(hi<0){toast('No encontré la columna "RP" en la primera fila de la planilla','err');return;}
+      const enc=filas[hi].map(c=>String(c||'').trim());
+      const idx=n=>enc.findIndex(c=>c.toLowerCase()===n);
+      const col={rp:idx('rp'),fecha:enc.findIndex(c=>/^fecha( informe)?$/i.test(c)),reg:enc.findIndex(c=>/^registro$/i.test(c)),nom:enc.findIndex(c=>/^nombre$/i.test(c)),lab:enc.findIndex(c=>/^laboratorio$/i.test(c)),grupo:enc.findIndex(c=>/^grupo$/i.test(c)),sexo:enc.findIndex(c=>/^sexo$/i.test(c)),fnac:enc.findIndex(c=>/^(nacimiento|fnac)$/i.test(c))};
+      const ignorar=new Set(Object.values(col).filter(k=>k>=0)); enc.forEach((c,k)=>{ if(/^(raza|origen|fotos?\b.*)$/i.test(c)||!c) ignorar.add(k); });
+      const hoy=new Date().toISOString().slice(0,10); const nuevos=[]; let fueraDeRodeo=0;
+      filas.slice(hi+1).forEach((r,n)=>{
+        const rp=String(r[col.rp]==null?'':r[col.rp]).trim().replace(/\.0$/,''); if(!rp) return;
+        const g={id:Date.now()+n,rp:rp.slice(0,40),fecha:(col.fecha>=0&&_genFechaISO(r[col.fecha]))||hoy,registro:col.reg>=0?String(r[col.reg]||'').trim().slice(0,60):'',nombre:col.nom>=0?String(r[col.nom]||'').trim().slice(0,80):'',lab:col.lab>=0?String(r[col.lab]||'').trim().slice(0,80):'',grupo:col.grupo>=0?String(r[col.grupo]||'').trim().slice(0,60):'',sexo:col.sexo>=0?String(r[col.sexo]||'').trim().slice(0,20):'',fnac:col.fnac>=0?_genFechaISO(r[col.fnac]):'',valores:[],enfermedades:[],fuente:'excel'};
+        enc.forEach((c,k)=>{
+          if(ignorar.has(k)) return;
+          const t=r[k]; if(t===''||t==null) return;
+          const txt=(t instanceof Date?'':String(t)).trim().slice(0,40); if(!txt) return;
+          const pm=/^(.*)\s*\(percentil\)$/i.exec(c);
+          if(pm){ const v=g.valores.find(x=>x.c===pm[1].trim()); if(v) v.per=txt.replace(/%/g,''); else g.valores.push({c:pm[1].trim().slice(0,80),v:'',p:'',per:txt.replace(/%/g,'')}); return; }
+          const est=_genNormEstado(txt);
+          if(est) g.enfermedades.push({c:c.slice(0,80),e:est}); else g.valores.push({c:c.slice(0,80),v:txt,p:'',per:''});
+        });
+        if(!g.valores.length&&!g.enfermedades.length) return;
+        if(!(DB.animales||[]).some(a=>a.rp===g.rp)) fueraDeRodeo++;
+        nuevos.push(g);
+      });
+      if(!nuevos.length){toast('No encontré datos genómicos en la planilla','err');return;}
+      if(nuevos.length>2000){toast('Máximo 2000 filas por importación','err');return;}
+      const act=nuevos.filter(g=>(DB.genomica||[]).some(x=>x.rp===g.rp&&x.fecha===g.fecha)).length;
+      const msg='Se van a importar '+nuevos.length+' informes genómicos ('+(nuevos.length-act)+' nuevos'+(act?' y '+act+' que actualizan informes existentes de la misma fecha':'')+').'+(fueraDeRodeo?'\n\nAtención: '+fueraDeRodeo+' RP no están en tu rodeo (se cargan igual).':'')+'\n\n¿Continuar?';
+      if(!confirm(msg)) return;
+      if(!DB.genomica) DB.genomica=[];
+      nuevos.forEach(g=>{
+        const k=DB.genomica.findIndex(x=>x.rp===g.rp&&x.fecha===g.fecha);
+        if(k>=0){ const v=DB.genomica[k]; DB.genomica[k]=Object.assign({},v,g,{id:v.id,fotos:v.fotos,obs:v.obs}); } else DB.genomica.push(g);
+      });
+      addHistorial('Genómica',nuevos.length+' informes importados desde Excel','','');
+      renderGenomica(); saveToStorage();
+      toast(nuevos.length+' informes importados ✅','ok');
+    }catch(err){ console.warn(err); toast('No se pudo leer la planilla: '+(err.message||'formato no válido'),'err'); }
+  };
+  fr.readAsArrayBuffer(file);
 }
 function genomicaCardHtml(rp){
   const l=(DB.genomica||[]).filter(g=>g.rp===rp).sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
@@ -9555,7 +9706,7 @@ function genomicaCardHtml(rp){
   const g=l[0], v=g.valores||[];
   const vals=v.slice(0,10).map(x=>`<span class="badge badge-gray" style="margin:1px">${esc(x.c)} <b>${esc(x.v)}</b>${(x.p||x.per||x.prom)?` <span style="font-size:11px;color:var(--text3)">(${[x.p?'prec '+esc(x.p):'',x.per?'perc '+esc(String(x.per).replace(/%/g,''))+'%':'',x.prom?'prom raza '+esc(x.prom):''].filter(Boolean).join(' · ')})</span>`:''}</span>`).join('');
   const enfs=(g.enfermedades||[]).map(x=>`<span class="badge ${genBadgeEstado(x.e)}" style="margin:1px">${esc(x.c)}: ${esc(x.e)}</span>`).join('');
-  return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--green,#2ecc71)"><b>🧬 Genómica</b> · informe ${esc(g.fecha||'--')}${g.lab?' · '+esc(g.lab):''}${g.registro?' · Reg. '+esc(g.registro):''}${g.catAsoc?' · '+esc(g.catAsoc):''}${g.evaluacion?' · Evaluación '+esc(g.evaluacion):''}<div style="margin-top:6px">${vals}</div><div style="margin-top:4px">${enfs}</div>${(g.panel||g.marcadores||g.parentesco)?`<div style="margin-top:4px;font-size:12px;color:var(--text2)">🧬 ADN: ${esc([g.panel?'panel '+g.panel:'',g.marcadores?g.marcadores+' marcadores':'',g.parentesco?'parentesco '+g.parentesco.toLowerCase():''].filter(Boolean).join(' · '))}</div>`:''}${v.length>10?`<div style="font-size:12px;color:var(--text3)">+${v.length-10} valores más (Sanidad → Genómica)</div>`:''}</div>`;
+  return `<div class="card" style="margin-bottom:14px;border-left:3px solid var(--green,#2ecc71)"><b>🧬 Genómica</b> · informe ${esc(g.fecha||'--')}${g.lab?' · '+esc(g.lab):''}${g.registro?' · Reg. '+esc(g.registro):''}${g.catAsoc?' · '+esc(g.catAsoc):''}${g.evaluacion?' · Evaluación '+esc(g.evaluacion):''}<div style="margin-top:6px">${vals}</div><div style="margin-top:4px">${enfs}</div>${(g.panel||g.marcadores||g.parentesco)?`<div style="margin-top:4px;font-size:12px;color:var(--text2)">🧬 ADN: ${esc([g.panel?'panel '+g.panel:'',g.marcadores?g.marcadores+' marcadores':'',g.parentesco?'parentesco '+g.parentesco.toLowerCase():''].filter(Boolean).join(' · '))}</div>`:''}${v.length>10?`<div style="font-size:12px;color:var(--text3)">+${v.length-10} valores más (Reproducción → Genómica)</div>`:''}${(Array.isArray(g.fotos)&&g.fotos.length)?`<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${g.fotos.map(u=>`<img src="${esc(u)}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="genVerFoto(this.src)">`).join('')}</div>`:''}</div>`;
 }
 // ── Lectura de un PDF con IA ──
 async function genLeerPDF(input){
@@ -16475,7 +16626,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-20.2';
+const RF_VERSION = '2026-11-20.3';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
