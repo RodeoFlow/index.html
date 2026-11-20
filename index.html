@@ -3049,6 +3049,18 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
             <button class="btn-primary" style="width:100%" onclick="exportarDDJJExistenciasPDF()">📄 Generar Declaración Jurada (PDF)</button>
           </div>
         </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:14px;margin-top:16px">
+          <div style="font-weight:700;font-size:14px;margin-bottom:6px">📤 Exportar para SIGSA / DT-e</div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Archivos listos para subir o copiar en el portal de SENASA (se ingresa con tu clave fiscal). RodeoFlow no se conecta directo con SIGSA: genera los archivos para que no tengas que tipear.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn-primary" onclick="abrirSigsa()">🏷️ Caravanas para SIGSA (.txt)</button>
+            <button class="btn-secondary" onclick="exportarExistenciasExcel()">📊 Existencias por categoría y raza (Excel)</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+            <select id="dte-potrero" class="form-control" style="max-width:240px"><option value="">Todos los potreros</option></select>
+            <button class="btn-secondary" onclick="exportarApoyoDTE()">📊 Planilla de apoyo para DT-e (Excel)</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -3775,6 +3787,23 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
 <p>Sitio web: https://rodeoflow.github.io/index.html/.</p>
 <p>El titular procurará responder dentro de un plazo razonable, sin perjuicio de los plazos específicos que establezca la legislación aplicable.</p>
 <p>Fin de los Términos y Condiciones de Uso de Rodeo Flow.</p>
+  </div></div>
+</div>
+<div id="modal-sigsa" class="modal-overlay">
+  <div class="modal" style="max-width:780px">
+  <div class="modal-header"><div class="modal-title">🏷️ Caravanas para SIGSA</div><button class="modal-close" onclick="closeModal('modal-sigsa')">✕</button></div>
+  <div class="modal-body" style="max-height:72vh;overflow:auto;font-size:13px">
+    <div id="sigsa-resumen" style="margin-bottom:12px"></div>
+    <div style="font-weight:700;margin-bottom:4px">Código de raza en SIGSA</div>
+    <div style="font-size:12px;opacity:.8;margin-bottom:8px">Cargá el código que muestra SIGSA para cada raza (lista desplegable al declarar). Solo letras y números, hasta 4 caracteres. Sin código, esos animales no se incluyen.</div>
+    <div id="sigsa-codigos" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-bottom:10px"></div>
+    <button class="btn-secondary" onclick="sigsaGuardarCodigos()">💾 Guardar códigos y actualizar</button>
+    <div id="sigsa-excluidos" style="margin-top:14px"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+      <button class="btn-primary" onclick="sigsaDescargar()">⬇️ Descargar .txt</button>
+      <button class="btn-secondary" onclick="sigsaCopiar()">📋 Copiar contenido</button>
+    </div>
+    <div style="margin-top:14px;font-size:12px;opacity:.85;line-height:1.5"><b>Cómo se usa:</b> en SIGSA entrá a <i>Existencias → Dispositivos de Identificación → Nueva Declaración</i>, cargá el RENSPA, la fecha de aplicación y el motivo, elegí <i>Subir Archivo</i>, adjuntá el .txt y tocá <i>Procesar dispositivos</i>. Revisá lo que muestra SIGSA antes de declarar. Formato: <code>DISPOSITIVO-SEXO-RAZA-MM/AAAA</code> separado por «;».</div>
   </div></div>
 </div>
 <div id="modal-admin" class="modal-overlay">
@@ -8381,6 +8410,12 @@ function renderSenasaResumen(){
       }).join('') + (pendientes.length>25?`<div style="font-size:11px;color:var(--text3);margin-top:6px">…y ${pendientes.length-25} más</div>`:'');
     }
   }
+  const dteSel = document.getElementById('dte-potrero');
+  if(dteSel){
+    const prev = dteSel.value;
+    dteSel.innerHTML = '<option value="">Todos los potreros</option>' + (DB.potreros||[]).map(p=>`<option value="${esc(p.nombre)}">${esc(p.nombre)}</option>`).join('');
+    dteSel.value = prev;
+  }
   if(ddjjBox){
     const porCategoria={};
     DB.animales.filter(a=>a.activo).forEach(a=>{porCategoria[a.categoria]=(porCategoria[a.categoria]||0)+1;});
@@ -8446,6 +8481,151 @@ function exportarDDJJExistenciasPDF(){
 
   doc.save(nombreArchivoExport('DDJJ_Existencias','pdf'));
   toast('Declaración Jurada de Existencias generada ✅','ok');
+}
+
+// ═══ EXPORTACIÓN PARA SIGSA / DT-e ═══
+// Formato de la carga masiva de dispositivos (según la guía de uso de SIGSA): un archivo .txt con
+// DISPOSITIVO-SEXO-RAZA-MM/AAAA separados por ";". El dispositivo tiene 15 dígitos. Los códigos de raza
+// los carga el usuario (los de SIGSA); solo "AA" (Aberdeen Angus) viene confirmado.
+const SIGSA_RAZAS = ['Aberdeen Angus','Hereford','Brangus','Braford','Shorthorn','Limousin','Brahman','Charolais','Criolla','Cruza'];
+const SIGSA_CODIGOS_CONFIRMADOS = { 'Aberdeen Angus':'AA' };
+function sigsaCodigos(){
+  const g = (DB.settings.senasa && DB.settings.senasa.codigosRaza) || {};
+  const o = {};
+  SIGSA_RAZAS.forEach(r => { o[r] = (g[r] !== undefined ? g[r] : (SIGSA_CODIGOS_CONFIRMADOS[r] || '')); });
+  return o;
+}
+function sigsaRazaNorm(r){
+  const t = String(r||'').trim().toLowerCase();
+  if(!t) return '';
+  if(t==='angus' || t==='aberdeen' || t==='aberdeen angus') return 'Aberdeen Angus';
+  return SIGSA_RAZAS.find(x => x.toLowerCase()===t) || '';
+}
+function sigsaConstruir(){
+  const cod = sigsaCodigos(), ok = [], excl = [], vistos = new Set();
+  (DB.animales||[]).filter(a=>a.activo).forEach(a=>{
+    const motivos = [];
+    const rfid = String(a.rfid||'').replace(/[\s-]/g,'');
+    if(!rfid) motivos.push('sin RFID');
+    else if(!/^\d{15}$/.test(rfid)) motivos.push('RFID sin 15 dígitos ('+rfid.length+')');
+    else if(vistos.has(rfid)) motivos.push('RFID repetido');
+    const sx = a.sexo==='Macho' ? 'M' : a.sexo==='Hembra' ? 'H' : '';
+    if(!sx) motivos.push('sin sexo');
+    const rz = sigsaRazaNorm(a.raza);
+    const c = rz ? String(cod[rz]||'').trim().toUpperCase() : '';
+    if(!rz) motivos.push(a.raza ? 'raza «'+a.raza+'» no reconocida' : 'raza no informada');
+    else if(!/^[A-Z0-9]{1,4}$/.test(c)) motivos.push('raza «'+rz+'» sin código SIGSA');
+    const m = /^(\d{4})-(\d{2})/.exec(a.fnac||'');
+    if(!m) motivos.push('sin fecha de nacimiento');
+    if(motivos.length) excl.push({a, motivos});
+    else { vistos.add(rfid); ok.push({a, rfid, linea: `${rfid}-${sx}-${c}-${m[2]}/${m[1]}`}); }
+  });
+  ok.sort((x,y)=> x.rfid < y.rfid ? -1 : 1);
+  return { ok, excl, cod };
+}
+function abrirSigsa(){
+  const r = sigsaConstruir();
+  const cod = r.cod;
+  document.getElementById('sigsa-codigos').innerHTML = SIGSA_RAZAS.map((n,i)=>
+    `<label style="display:flex;gap:6px;align-items:center"><span style="flex:1">${esc(n)}</span><input type="text" id="sigsa-cod-${i}" class="form-control" maxlength="4" value="${esc(cod[n]||'')}" placeholder="código" style="width:80px;text-transform:uppercase"></label>`).join('');
+  sigsaPintar(r);
+  openModal('modal-sigsa');
+}
+function sigsaPintar(r){
+  const tot = r.ok.length + r.excl.length;
+  document.getElementById('sigsa-resumen').innerHTML =
+    `<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:130px;background:var(--bg3);border-radius:8px;padding:8px;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--green)">${r.ok.length}</div><div style="font-size:.75rem">Listos para exportar</div></div>`
+    + `<div style="flex:1;min-width:130px;background:var(--bg3);border-radius:8px;padding:8px;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:${r.excl.length?'var(--red)':'inherit'}">${r.excl.length}</div><div style="font-size:.75rem">Excluidos (revisar)</div></div>`
+    + `<div style="flex:1;min-width:130px;background:var(--bg3);border-radius:8px;padding:8px;text-align:center"><div style="font-size:1.4rem;font-weight:700">${tot}</div><div style="font-size:.75rem">Animales activos</div></div></div>`;
+  const ex = document.getElementById('sigsa-excluidos');
+  if(!r.excl.length){ ex.innerHTML = '<div style="color:var(--green)">✅ Todos los animales activos están listos.</div>'; return; }
+  ex.innerHTML = `<div style="font-weight:700;margin-bottom:4px">Animales que no se incluyen (${r.excl.length})</div><div style="max-height:200px;overflow:auto">`
+    + r.excl.slice(0,80).map(x=>`<div style="padding:3px 0;border-bottom:1px solid #8883"><span class="td-mono">RP ${esc(x.a.rp)}</span> — <span style="color:var(--red)">${esc(x.motivos.join(', '))}</span></div>`).join('')
+    + (r.excl.length>80?`<div style="opacity:.7;margin-top:4px">…y ${r.excl.length-80} más</div>`:'') + '</div>';
+}
+function sigsaGuardarCodigos(){
+  const nuevo = {};
+  for(let i=0;i<SIGSA_RAZAS.length;i++){
+    const v = (document.getElementById('sigsa-cod-'+i).value||'').trim().toUpperCase();
+    if(v && !/^[A-Z0-9]{1,4}$/.test(v)){ toast('Código inválido en '+SIGSA_RAZAS[i]+': solo letras y números (máx. 4)','err'); return; }
+    nuevo[SIGSA_RAZAS[i]] = v;
+  }
+  DB.settings.senasa = Object.assign({}, DB.settings.senasa||{}, { codigosRaza: nuevo });
+  saveToStorage();
+  sigsaPintar(sigsaConstruir());
+  toast('Códigos guardados ✅','ok');
+}
+function sigsaTexto(){ return sigsaConstruir().ok.map(x=>x.linea).join(';'); }
+function sigsaDescargar(){
+  const txt = sigsaTexto();
+  if(!txt){ toast('No hay animales listos para exportar','err'); return; }
+  const blob = new Blob([txt], {type:'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const l = document.createElement('a'); l.href = url; l.download = nombreArchivoExport('SIGSA_caravanas','txt');
+  document.body.appendChild(l); l.click(); l.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  toast('Archivo para SIGSA generado ✅','ok');
+}
+function sigsaCopiar(){
+  const txt = sigsaTexto();
+  if(!txt){ toast('No hay animales listos para exportar','err'); return; }
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(()=>toast('Contenido copiado','ok'),()=>toast('No se pudo copiar: usá Descargar','err'));
+  else toast('Tu navegador no permite copiar: usá Descargar','err');
+}
+function _senasaCabecera(titulo){
+  const s = DB.settings.senasa || {};
+  return [[titulo],['Establecimiento', DB.settings.establecimiento||''],['RENSPA', s.renspa||''],['Titular', s.titular||''],['Fecha', new Date().toLocaleDateString('es-AR')],[]];
+}
+function exportarExistenciasExcel(){
+  const act = (DB.animales||[]).filter(a=>a.activo);
+  if(!act.length){ toast('No hay animales activos','err'); return; }
+  const cats = [...new Set(act.map(a=>a.categoria||'Sin categoría'))].sort();
+  const raz = a => sigsaRazaNorm(a.raza) || a.raza || 'Sin raza';
+  const razas = [...new Set(act.map(raz))].sort();
+  const wb = XLSX.utils.book_new();
+  const r1 = _senasaCabecera('EXISTENCIAS POR CATEGORÍA');
+  r1.push(['Categoría','Machos','Hembras','Total']);
+  cats.forEach(c=>{
+    const x = act.filter(a=>(a.categoria||'Sin categoría')===c);
+    r1.push([c, x.filter(a=>a.sexo==='Macho').length, x.filter(a=>a.sexo==='Hembra').length, x.length]);
+  });
+  r1.push(['TOTAL', act.filter(a=>a.sexo==='Macho').length, act.filter(a=>a.sexo==='Hembra').length, act.length]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(r1), 'Existencias');
+  const r2 = _senasaCabecera('EXISTENCIAS POR CATEGORÍA Y RAZA');
+  r2.push(['Categoría', ...razas, 'Total']);
+  cats.forEach(c=>{
+    const x = act.filter(a=>(a.categoria||'Sin categoría')===c);
+    r2.push([c, ...razas.map(rz=>x.filter(a=>raz(a)===rz).length), x.length]);
+  });
+  r2.push(['TOTAL', ...razas.map(rz=>act.filter(a=>raz(a)===rz).length), act.length]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(r2), 'Categoría x Raza');
+  XLSX.writeFile(wb, nombreArchivoExport('Existencias_SENASA','xlsx'));
+  toast('Excel de existencias generado ✅','ok');
+}
+function exportarApoyoDTE(){
+  const pot = (document.getElementById('dte-potrero')||{}).value || '';
+  const act = (DB.animales||[]).filter(a=>a.activo && (!pot || a.potrero===pot));
+  if(!act.length){ toast('No hay animales activos en esa selección','err'); return; }
+  const s = DB.settings.senasa || {}, cod = sigsaCodigos();
+  const wb = XLSX.utils.book_new();
+  const r1 = _senasaCabecera('PLANILLA DE APOYO PARA DT-e' + (pot ? ' — Potrero ' + pot : ''));
+  r1.push(['Categoría','Machos','Hembras','Total']);
+  [...new Set(act.map(a=>a.categoria||'Sin categoría'))].sort().forEach(c=>{
+    const x = act.filter(a=>(a.categoria||'Sin categoría')===c);
+    r1.push([c, x.filter(a=>a.sexo==='Macho').length, x.filter(a=>a.sexo==='Hembra').length, x.length]);
+  });
+  r1.push(['TOTAL', act.filter(a=>a.sexo==='Macho').length, act.filter(a=>a.sexo==='Hembra').length, act.length]);
+  r1.push([]); r1.push(['Esta planilla es de apoyo: el DT-e se completa en el portal de SENASA con tu clave fiscal.']);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(r1), 'Resumen');
+  const r2 = [['RENSPA origen','RP','Dispositivo (RFID)','Categoría','Sexo','Raza','Código raza SIGSA','Nacimiento (MM/AAAA)','Peso kg','Potrero']];
+  act.forEach(a=>{
+    const rz = sigsaRazaNorm(a.raza);
+    const m = /^(\d{4})-(\d{2})/.exec(a.fnac||'');
+    r2.push([s.renspa||'', String(a.rp||''), String(a.rfid||'').replace(/[\s-]/g,''), a.categoria||'', a.sexo||'', rz||a.raza||'', rz?(cod[rz]||''):'', m?`${m[2]}/${m[1]}`:'', a.peso||'', a.potrero||'']);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(r2), 'Animales');
+  XLSX.writeFile(wb, nombreArchivoExport('Apoyo_DTe','xlsx'));
+  toast('Planilla de apoyo para DT-e generada ✅','ok');
 }
 
 // ═══ RENTABILIDAD POR ANIMAL / LOTE ═══
@@ -10179,7 +10359,8 @@ function guardarDatosSenasa(){
   DB.settings.senasa = {
     renspa: $v('config-renspa'),
     marca: $v('config-marca'),
-    titular: $v('config-titular-renspa')
+    titular: $v('config-titular-renspa'),
+    codigosRaza: (DB.settings.senasa && DB.settings.senasa.codigosRaza) || {}
   };
   saveToStorage();
   toast('Datos SENASA guardados ✅','ok');
@@ -16235,7 +16416,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-18.4';
+const RF_VERSION = '2026-11-20.1';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
