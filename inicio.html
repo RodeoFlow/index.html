@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rodeo Flow · Gestión ganadera inteligente</title>
+<meta name="description" content="Rodeo Flow: hacienda, balanza, reproducción, genómica, sanidad, potreros, nutrición y rentabilidad en un solo sistema. Funciona sin señal. Probá la demo.">
+<link rel="icon" href="web/logo.jpg">
+<meta property="og:type" content="website"><meta property="og:locale" content="es_AR">
+<meta property="og:title" content="Rodeo Flow · Gestión ganadera inteligente">
+<meta property="og:description" content="Hacienda, balanza, reproducción, genómica, sanidad, potreros y rentabilidad en un solo sistema. Funciona sin señal. Probá la demo.">
+<meta property="og:image" content="https://rodeoflow.github.io/index.html/web/dashboard.jpg">
+<meta property="og:url" content="https://rodeoflow.github.io/index.html/inicio.html">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0f1218">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f1218;--bg2:#161a23;--card:#1b2030;--line:#2a3042;--txt:#eef1f7;--mut:#a9b1c4;--gold:#e8a321;--gold2:#f2c24f;--green:#2ecc71;--cream:#fbf8f2;--ink:#12151c}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);line-height:1.55;-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+a{color:inherit}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+/* nav */
+nav{position:sticky;top:0;z-index:50;background:rgba(15,18,24,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:14px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:800;font-size:19px}
+.brand img{width:38px;height:38px;border-radius:50%;border:2px solid var(--gold)}
+nav .links{margin-left:auto;display:flex;gap:22px;font-size:14px;color:var(--mut)}
+nav .links a{text-decoration:none}nav .links a:hover{color:var(--gold)}
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:12px;padding:13px 22px;font-weight:700;font-size:15px;text-decoration:none;border:2px solid transparent;cursor:pointer;transition:.15s}
+.btn.gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:var(--ink)}
+.btn.gold:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(232,163,33,.35)}
+.btn.line{border-color:var(--gold);color:var(--gold)}
+.btn.line:hover{background:rgba(232,163,33,.12)}
+.btn.sm{padding:9px 16px;font-size:13.5px}
+/* hero */
+.hero{padding:70px 0 40px;background:radial-gradient(circle at 85% 0,#2a2410 0,transparent 55%),radial-gradient(circle at 0 100%,#10261a 0,transparent 45%)}
+.kicker{display:inline-block;color:var(--gold);font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:14px}
+h1{font-size:clamp(36px,6vw,64px);line-height:1.04;letter-spacing:-.03em;font-weight:800}
+h1 b{color:var(--gold)}
+.hero p.sub{font-size:clamp(16px,2vw,19px);color:var(--mut);max-width:620px;margin:20px 0 28px}
+.cta{display:flex;gap:12px;flex-wrap:wrap}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px}
+.pills span{border:1px solid var(--line);background:var(--bg2);color:var(--mut);border-radius:20px;padding:6px 14px;font-size:12.5px;font-weight:600}
+.frame{margin-top:46px;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(232,163,33,.15)}
+.frame .bar{height:30px;background:#0a0c11;display:flex;align-items:center;gap:6px;padding:0 12px}
+.frame .bar i{width:10px;height:10px;border-radius:50%;background:#2c3345}
+/* secciones */
+section{padding:84px 0}
+section.alt{background:var(--bg2)}
+.head{max-width:700px;margin-bottom:44px}
+h2{font-size:clamp(28px,4vw,42px);line-height:1.1;letter-spacing:-.02em;font-weight:800}
+h2::after{content:"";display:block;width:60px;height:5px;background:var(--gold);border-radius:3px;margin-top:14px}
+.head p{color:var(--mut);margin-top:16px;font-size:17px}
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:-8px}
+.stat{background:var(--card);border:1px solid var(--line);border-bottom:4px solid var(--gold);border-radius:14px;padding:22px 12px;text-align:center}
+.stat b{display:block;font-size:34px;color:var(--gold);font-weight:800}
+.stat span{font-size:13px;color:var(--mut)}
+/* videos */
+.vids{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:22px}
+.vid{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.vid .player{aspect-ratio:16/9;background:#0a0c11;display:flex;align-items:center;justify-content:center;position:relative}
+.vid iframe,.vid video{width:100%;height:100%;border:0;display:block}
+.vid .ph{text-align:center;color:var(--mut);font-size:14px;padding:20px}
+.vid .ph .play{width:64px;height:64px;border-radius:50%;background:rgba(232,163,33,.15);border:2px solid var(--gold);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 10px}
+.vid .txt{padding:18px 20px 22px}
+.vid h3{font-size:18px;margin-bottom:6px}
+.vid p{color:var(--mut);font-size:14.5px}
+/* features */
+.feat{display:grid;grid-template-columns:1fr 1.15fr;gap:46px;align-items:center;margin-bottom:76px}
+.feat:last-child{margin-bottom:0}
+.feat.rev{grid-template-columns:1.15fr 1fr}.feat.rev .t{order:2}
+.feat .tag{display:inline-block;background:rgba(232,163,33,.14);color:var(--gold);font-size:11.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:5px 12px;border-radius:20px;margin-bottom:12px}
+.feat h3{font-size:clamp(24px,3vw,32px);line-height:1.15;letter-spacing:-.02em;margin-bottom:12px}
+.feat p{color:var(--mut);margin-bottom:14px}
+ul.ck{list-style:none}
+ul.ck li{position:relative;padding:7px 0 7px 30px;color:#d3d8e6;font-size:15.5px}
+ul.ck li::before{content:"✓";position:absolute;left:0;top:9px;width:20px;height:20px;border-radius:50%;background:var(--green);color:#0b2a17;font-size:12px;font-weight:800;text-align:center;line-height:20px}
+.shot{border-radius:14px;overflow:hidden;border:1px solid var(--line);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+/* cabañas */
+.cab{background:linear-gradient(135deg,#1d1a0d,#12151c 60%);border:1px solid rgba(232,163,33,.4);border-radius:22px;padding:44px;display:grid;grid-template-columns:1fr 1.1fr;gap:40px;align-items:center}
+.cab .tag{background:var(--gold);color:var(--ink)}
+.breeds{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.breeds span{background:rgba(232,163,33,.12);border:1px solid rgba(232,163,33,.35);color:var(--gold2);border-radius:20px;padding:5px 13px;font-size:13px;font-weight:600}
+/* grid modulos */
+.mods{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.mod{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px}
+.mod .i{font-size:28px;margin-bottom:8px}
+.mod h4{font-size:17px;margin-bottom:6px}
+.mod p{color:var(--mut);font-size:14.5px}
+/* pasos */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.step{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px}
+.step .n{width:42px;height:42px;border-radius:50%;background:var(--gold);color:var(--ink);font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.step h4{font-size:18px;margin-bottom:6px}.step p{color:var(--mut);font-size:15px}
+/* demo + qr */
+.demo{background:linear-gradient(135deg,var(--gold),var(--gold2));color:var(--ink);border-radius:24px;padding:48px;display:grid;grid-template-columns:1.3fr 1fr;gap:36px;align-items:center}
+.demo h2{color:var(--ink)}.demo h2::after{background:var(--ink)}
+.demo p{margin:16px 0 22px;font-size:17px}
+.demo .btn.dark{background:var(--ink);color:var(--gold2)}
+.demo .btn.dark2{border-color:var(--ink);color:var(--ink)}
+.qrbox{background:#fff;border-radius:18px;padding:18px;text-align:center;max-width:250px;margin:0 auto;box-shadow:0 14px 40px rgba(0,0,0,.25)}
+.qrbox b{display:block;color:var(--ink);margin-top:8px}.qrbox span{font-size:12.5px;color:#6b7184}
+/* planes */
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.plan{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;text-align:center}
+.plan small{color:var(--mut);display:block;font-size:13px}
+.plan b{display:block;font-size:28px;color:var(--gold);margin-top:4px}
+.plan span{font-size:12px;color:var(--mut)}
+.note{color:var(--mut);font-size:13.5px;margin-top:16px}
+/* contacto */
+.contact{display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:center}
+.contact .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px}
+.contact .card p{margin:8px 0;color:var(--mut)}.contact .card p b{color:var(--txt)}
+.wa{background:#25d366;color:#06361a}
+footer{border-top:1px solid var(--line);padding:30px 0;color:var(--mut);font-size:13.5px}
+footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
+.wa-float{position:fixed;right:18px;bottom:18px;z-index:60;width:56px;height:56px;border-radius:50%;background:#25d366;display:flex;align-items:center;justify-content:center;font-size:28px;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+/* historia / faq / formulario */
+.about{display:grid;grid-template-columns:240px 1fr;gap:38px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:36px}
+.about .av{width:100%;aspect-ratio:1;border-radius:50%;border:4px solid var(--gold);background:var(--bg2);overflow:hidden;display:flex;align-items:center;justify-content:center}
+.about .av img{width:100%;height:100%;object-fit:cover}
+.about .av.logo img{width:70%;height:70%;object-fit:contain;border-radius:50%}
+.about p{color:#d3d8e6;font-size:17px;margin:14px 0}
+.about .firma{color:var(--gold);font-weight:700}
+.faq{max-width:820px}
+.faq details{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.faq summary{cursor:pointer;list-style:none;padding:17px 22px;font-weight:700;font-size:16.5px;display:flex;justify-content:space-between;gap:14px;align-items:center}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";color:var(--gold);font-size:24px;font-weight:400;line-height:1}
+.faq details[open] summary::after{content:"–"}
+.faq details p{padding:0 22px 18px;color:var(--mut);font-size:15.5px}
+.formbox{display:grid;grid-template-columns:1fr 1.1fr;gap:34px;align-items:start}
+.formcard{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px}
+.formcard label{display:block;font-size:13px;font-weight:600;color:var(--mut);margin:12px 0 5px}
+.formcard input,.formcard select,.formcard textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;color:var(--txt);font:inherit;font-size:15px}
+.formcard input:focus,.formcard select:focus,.formcard textarea:focus{outline:2px solid var(--gold);border-color:transparent}
+.formcard .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.formcard button{margin-top:18px;width:100%;justify-content:center}
+.formcard .msg{margin-top:12px;font-size:14px;color:var(--green)}
+.dl{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}
+.hp{position:absolute;left:-9999px;opacity:0}
+/* banners publicitarios */
+.ad{display:block;text-decoration:none;position:relative;border-radius:12px;overflow:hidden;background:var(--card);border:1px dashed #3a4258}
+.ad img{width:100%;height:100%;object-fit:cover}
+.ad .lab{position:absolute;top:6px;left:8px;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#8d95aa;background:rgba(10,12,17,.7);padding:2px 7px;border-radius:10px;z-index:2}
+.ad .ph{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--mut);font-size:14px;text-align:center;padding:14px}
+.ad .ph b{color:var(--gold);font-size:15px;margin-bottom:4px}.ad .ph small{font-size:12px;opacity:.8}
+.ad.fade{animation:adfade .6s}@keyframes adfade{from{opacity:.2}to{opacity:1}}
+.with-side{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:34px;align-items:start}
+.side{position:sticky;top:84px}
+.side .ad{width:300px;height:600px}
+.pie-ads{padding:36px 0;background:var(--bg2);border-top:1px solid var(--line)}
+.pie-ads .ad{max-width:728px;height:90px;margin:0 auto}
+.pie-ads h6{text-align:center;font-weight:600;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#7d8599;margin-bottom:12px}
+@media(max-width:1180px){.with-side{grid-template-columns:minmax(0,1fr)}.side{display:none}}
+@media(max-width:860px){.pie-ads .ad{height:84px}.pie-ads .ad img{object-fit:contain;background:#0a0c11}}
+@media(max-width:860px){
+ .about,.formbox{grid-template-columns:1fr}.about{padding:26px 20px}.about .av{max-width:180px}.formcard .row2{grid-template-columns:1fr}
+ nav .links{display:none}nav .btn{margin-left:auto}
+ .stats{grid-template-columns:repeat(2,1fr)}
+ .feat,.feat.rev,.cab,.demo,.contact,.steps{grid-template-columns:1fr}.feat.rev .t{order:0}
+ .cab,.demo{padding:28px 22px}
+ section{padding:60px 0}.hero{padding:44px 0 30px}
+}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <a class="brand" href="#inicio"><img src="web/logo.jpg" alt="Rodeo Flow"><span>Rodeo Flow</span></a>
+  <div class="links"><a href="#videos">Videos</a><a href="#modulos">Módulos</a><a href="#cabanas">Cabañas</a><a href="#demo">Demo</a><a href="#faq">Preguntas</a><a href="#contacto">Contacto</a></div>
+  <a class="btn gold sm" href="https://rodeoflow.github.io/index.html/?demo=1" target="_blank" rel="noopener">Probar la demo</a>
+</div></nav>
+
+<header class="hero" id="inicio"><div class="wrap">
+  <span class="kicker">Gestión ganadera inteligente</span>
+  <h1>Tu campo,<br><b>bajo control</b><br>desde el celular.</h1>
+  <p class="sub">Hacienda, balanza, reproducción, genómica, sanidad, potreros, nutrición, compra-venta y rentabilidad en un solo sistema. Creado por un periodista agropecuario que recorre el campo hace 17 años y conoce las necesidades de cada productor ganadero de Argentina y la región.</p>
+  <div class="cta">
+    <a class="btn gold" href="https://rodeoflow.github.io/index.html/?demo=1" target="_blank" rel="noopener">▶ Probar la demo</a>
+    <a class="btn line" href="https://rodeoflow.github.io/index.html/" target="_blank" rel="noopener">Entrar a la app</a>
+  </div>
+  <div class="pills"><span>📶 Funciona sin señal</span><span>📱 Celular, tablet y PC</span><span>🎙️ Carga por voz con IA</span><span>🧬 Genómica para cabañas</span></div>
+  <div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="web/dashboard.jpg" alt="Panel principal de Rodeo Flow" width="1440" height="900"></div>
+</div></header>
+
+<section style="padding-top:60px"><div class="wrap">
+  <div class="stats">
+    <div class="stat"><b>15+</b><span>módulos integrados</span></div>
+    <div class="stat"><b>9</b><span>razas con genómica</span></div>
+    <div class="stat"><b>0</b><span>señal necesaria para cargar</span></div>
+    <div class="stat"><b>3</b><span>roles de usuario</span></div>
+  </div>
+</div></section>
+
+<section class="alt" id="videos"><div class="wrap">
+  <div class="head"><h2>Mirá Rodeo Flow en acción</h2><p>Videos cortos para ver cómo se trabaja en el corral, en el escritorio y en la cabaña.</p></div>
+  <div class="vids" id="vids"></div>
+</div></section>
+
+<section id="modulos"><div class="wrap" style="max-width:1280px"><div class="with-side"><div class="main">
+  <div class="head"><h2>Todo el campo en un solo lugar</h2><p>Cada módulo está pensado para el trabajo diario del productor argentino.</p></div>
+
+  <div class="feat"><div class="t"><span class="tag">Hacienda</span><h3>Cada animal, con su historia completa</h3><p>Registrá el rodeo una vez y tené la ficha de cada animal siempre a mano.</p>
+    <ul class="ck"><li>Ficha con fotos, historial y genealogía</li><li>Importación del rodeo desde Excel</li><li>Filtros por categoría, potrero y estado</li><li>Exportación a Excel y PDF</li></ul></div>
+    <div class="shot"><img loading="lazy" src="web/animales.jpg" alt="Listado de animales"></div></div>
+
+  <div class="feat rev"><div class="t"><span class="tag">Balanza / RFID</span><h3>Pesá una vez, la app hace el resto</h3><p>Conectá el bastón y la balanza, o importá la sesión de Tru-Test o Gallagher.</p>
+    <ul class="ck"><li>Modo Tropa para pesar lotes completos</li><li>Ganancia diaria de peso automática</li><li>Conversión alimenticia por lote</li><li>Funciona también en iPhone</li></ul></div>
+    <div class="shot"><img loading="lazy" src="web/scanner.jpg" alt="Balanza y RFID"></div></div>
+
+  <div class="feat"><div class="t"><span class="tag">Reproducción</span><h3>Del servicio al destete, sin olvidarte de nada</h3><p>Un tablero completo del ciclo reproductivo, con alertas y proyecciones.</p>
+    <ul class="ck"><li>Servicio, celo, IATF y preñez</li><li>Nacimientos, abortos y recría</li><li>Proyección de peso al entore</li><li>Calendario con vencimientos</li></ul></div>
+    <div class="shot"><img loading="lazy" src="web/reproduccion.jpg" alt="Reproducción"></div></div>
+
+  <div class="feat rev"><div class="t"><span class="tag">Sanidad</span><h3>Plan sanitario ordenado y a tiempo</h3><p>Vacunas, tratamientos y controles con avisos antes de cada vencimiento.</p>
+    <ul class="ck"><li>Calendario preventivo con alertas</li><li>Tratamientos con días de carencia</li><li>Mortandad por causa y potrero</li><li>Stock de insumos</li></ul></div>
+    <div class="shot"><img loading="lazy" src="web/sanidad.jpg" alt="Sanidad"></div></div>
+
+  <div class="feat"><div class="t"><span class="tag">Campo</span><h3>Potreros, pasto y alimentación</h3><p>Sabé cuántos animales hay en cada potrero y cuánto te cuesta producir cada kilo.</p>
+    <ul class="ck"><li>Mapas satelitales de cada lote</li><li>Rotación y carga animal</li><li>Ración de menor costo</li><li>Clima y lluvias</li></ul></div>
+    <div class="shot"><img loading="lazy" src="web/potreros.jpg" alt="Potreros"></div></div>
+
+  <div class="feat rev"><div class="t"><span class="tag">Comercial</span><h3>Comprá y vendé con números en la mano</h3><p>Operaciones, cobros y pagos, y cotizaciones del mercado en la misma pantalla.</p>
+    <ul class="ck"><li>Compras, ventas, traslados y romaneo</li><li>Precios MAG y dólar</li><li>Valor de tu hacienda</li><li>Resultado por operación y por hectárea</li></ul></div>
+    <div class="shot"><img loading="lazy" src="web/precios.jpg" alt="Precios MAG"></div></div>
+
+  <div class="feat"><div class="t"><span class="tag">Reportes</span><h3>Sabé si ganás plata</h3><p>Rentabilidad por animal y por lote, y un asistente de inteligencia artificial al que le preguntás en castellano.</p>
+    <ul class="ck"><li>Rentabilidad y costo de producción</li><li>Preguntale a Rodeo Flow</li><li>Cumplimiento SENASA/RENSPA</li><li>Planillas para SIGSA y DT-e</li></ul></div>
+    <div class="shot"><img loading="lazy" src="web/rentabilidad.jpg" alt="Rentabilidad"></div></div>
+</div><aside class="side" id="ad-lateral" data-lugar="lateral"></aside></div></div></section>
+
+<section class="alt" id="cabanas"><div class="wrap">
+  <div class="cab">
+    <div><span class="tag" style="display:inline-block;padding:5px 12px;border-radius:20px;font-size:11.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px">Exclusivo para cabañas</span>
+    <h2>Genómica para cabañas</h2>
+    <p style="color:var(--mut);margin:18px 0 12px;font-size:17px">Cargá los certificados genómicos de tus reproductores y decidí la selección con datos.</p>
+    <ul class="ck"><li>Lectura de certificados en PDF con inteligencia artificial</li><li>DEP/EPD, índices y enfermedades genéticas</li><li>Hasta 4 fotos por reproductor</li><li>Importación desde planilla y exportación a Excel y PDF con fotos</li></ul>
+    <div class="breeds"><span>Angus</span><span>Hereford</span><span>Limangus</span><span>Shorthorn</span><span>Limousin</span><span>Braford</span><span>Brangus</span><span>Brahman</span><span>Charolais</span></div></div>
+    <div class="shot"><img loading="lazy" src="web/genomica.jpg" alt="Genómica (datos de ejemplo)"><div style="font-size:11.5px;color:var(--mut);padding:8px 14px;background:#0a0c11">Pantalla con datos de ejemplo</div></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="head"><h2>Y además…</h2></div>
+  <div class="mods">
+    <div class="mod"><div class="i">📶</div><h4>Modo sin conexión</h4><p>Cargá datos en el corral sin señal; se sincroniza cuando vuelve la conexión.</p></div>
+    <div class="mod"><div class="i">🎙️</div><h4>Hablale a la app</h4><p>Dictá una pesada, un nacimiento o un tratamiento y la IA lo carga por vos.</p></div>
+    <div class="mod"><div class="i">👥</div><h4>Equipo con roles</h4><p>Dueño, Peón y Veterinario: cada uno ve y hace lo que le corresponde.</p></div>
+    <div class="mod"><div class="i">🔄</div><h4>Tiempo real</h4><p>Lo que carga el peón lo ve el dueño al instante, desde cualquier dispositivo.</p></div>
+    <div class="mod"><div class="i">💾</div><h4>Respaldo propio</h4><p>Exportá una copia completa de tus datos cuando quieras.</p></div>
+    <div class="mod"><div class="i">🏡</div><h4>Varios establecimientos</h4><p>Manejá más de un campo desde la misma cuenta.</p></div>
+  </div>
+</div></section>
+
+<section class="alt"><div class="wrap">
+  <div class="head"><h2>Empezás hoy, en tres pasos</h2></div>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><h4>Entrá a la app</h4><p>Abrila desde el navegador de tu celular o computadora. No hay que instalar nada de tiendas.</p></div>
+    <div class="step"><div class="n">2</div><h4>Cargá tu rodeo</h4><p>Importalo desde Excel o cargalo animal por animal. Te ayudamos con la carga inicial.</p></div>
+    <div class="step"><div class="n">3</div><h4>Tomá decisiones</h4><p>Mirá el panel, los reportes y las alertas, y trabajá con datos reales de tu campo.</p></div>
+  </div>
+</div></section>
+
+<section class="alt" id="historia"><div class="wrap">
+  <div class="about">
+    <div class="av logo" id="autor-av"><img src="web/logo.jpg" alt="Rodeo Flow"></div>
+    <div><span class="kicker" style="margin-bottom:6px">Quién está detrás</span>
+      <h2>Hecho por alguien que conoce el campo</h2>
+      <p>Soy Carlos Moreno, periodista agropecuario. Hace 17 años que recorro el campo y converso con productores ganaderos de toda la región, y conozco de cerca lo que necesita cada uno.</p>
+      <p>Rodeo Flow nace de ese recorrido: una herramienta práctica, pensada para el trabajo real del corral y del escritorio, y que se mejora escuchando a quienes la usan.</p>
+      <span class="firma">Carlos Moreno · San Carlos de Bolívar, Buenos Aires</span></div>
+  </div>
+</div></section>
+
+<section id="demo"><div class="wrap">
+  <div class="demo">
+    <div><h2>Probá la app ahora</h2>
+      <p>Recorrela con datos de ejemplo, sin registrarte. O escaneá el código con tu celular y entrá directo.</p>
+      <div class="cta"><a class="btn dark" href="https://rodeoflow.github.io/index.html/?demo=1" target="_blank" rel="noopener">▶ Abrir la demo</a><a class="btn dark2" href="https://rodeoflow.github.io/index.html/" target="_blank" rel="noopener">Entrar a la app</a></div></div>
+    <div class="qrbox"><img src="web/qr.png" alt="Código QR para abrir Rodeo Flow" width="214" height="214"><b>Escaneá y entrá</b><span>rodeoflow.github.io/index.html</span></div>
+  </div>
+</div></section>
+
+<section id="faq"><div class="wrap">
+  <div class="head"><h2>Preguntas frecuentes</h2></div>
+  <div class="faq" id="faq-lista">
+    <details><summary>¿Funciona sin internet?</summary><p>Sí. Podés cargar pesadas, nacimientos, tratamientos y más en el corral sin señal. Cuando vuelve la conexión, la app sincroniza sola. Solo necesitás internet para sincronizar y para consultar precios del mercado.</p></details>
+    <details><summary>¿Tengo que instalar algo?</summary><p>No. Se abre desde el navegador del celular, la tablet o la computadora, y podés agregarla a la pantalla de inicio para usarla como cualquier otra app.</p></details>
+    <details><summary>¿Funciona en iPhone?</summary><p>Sí, funciona en iPhone, en Android y en computadora.</p></details>
+    <details><summary>¿Puedo cargar mi rodeo desde una planilla de Excel?</summary><p>Sí. Importás tus animales desde Excel en minutos, y te ayudamos con la carga inicial si lo necesitás.</p></details>
+    <details><summary>¿Se conecta con la balanza y el bastón?</summary><p>Se puede conectar un bastón o balanza por Bluetooth, serie o USB, y además importar las sesiones de pesada de balanzas Tru-Test y Gallagher. Si tenés otro equipo, consultanos.</p></details>
+    <details><summary>¿Sirve para cabañas?</summary><p>Sí. Tiene un módulo de Genómica para cargar certificados (incluso desde el PDF), ver DEP/EPD y enfermedades genéticas, guardar fotos de cada reproductor y exportar la ficha a PDF o Excel.</p></details>
+    <details><summary>¿Mis datos son míos?</summary><p>Sí. Podés exportar una copia completa de tu información cuando quieras, y cada usuario ve solo lo que le corresponde según su rol: Dueño, Peón o Veterinario.</p></details>
+    <details id="faq-precio" hidden><summary>¿Cómo se paga?</summary><p>Tenés 30 días de prueba gratis, sin cargar tarjeta ni cobros automáticos. Después el pago es por transferencia y se activa con un código. El precio depende de la cantidad de animales activos.</p></details>
+    <details><summary>¿Sirve fuera de Argentina?</summary><p>Está pensada para Argentina y la región. Si producís en un país limítrofe, consultanos por la adaptación local.</p></details>
+  </div>
+</div></section>
+
+<section class="alt" id="planes" hidden><div class="wrap">
+  <div class="head"><h2>Un precio simple, según tu rodeo</h2><p>Solo se cuentan los animales activos. Probalo 30 días gratis, sin tarjeta ni cobros automáticos.</p></div>
+  <div class="plans">
+    <div class="plan"><small>Hasta 300</small><b>US$ 46</b><span>por mes</span></div>
+    <div class="plan"><small>Hasta 1.000</small><b>US$ 70</b><span>por mes</span></div>
+    <div class="plan"><small>Hasta 2.000</small><b>US$ 120</b><span>por mes</span></div>
+    <div class="plan"><small>Hasta 3.000</small><b>US$ 170</b><span>por mes</span></div>
+    <div class="plan"><small>Hasta 4.000</small><b>US$ 210</b><span>por mes</span></div>
+    <div class="plan"><small>Hasta 5.000</small><b>US$ 260</b><span>por mes</span></div>
+    <div class="plan"><small>Más de 5.000</small><b>A convenir</b><span>&nbsp;</span></div>
+  </div>
+  <p class="note">Plan anual: pagás 10 meses y tenés 12. Pago por transferencia con código de activación. Valores en dólares estadounidenses; el pago se realiza en pesos al dólar oficial BNA.</p>
+</div></section>
+
+<section class="alt" id="demostracion"><div class="wrap">
+  <div class="formbox">
+    <div><h2>Pedí una demostración</h2>
+      <p style="color:var(--mut);margin:18px 0 20px;font-size:17px">Contanos de tu campo y te mostramos Rodeo Flow funcionando, con datos de ejemplo, sin compromiso.</p>
+      <ul class="ck"><li>Te respondemos por WhatsApp o por mail</li><li>Recorremos solo los módulos que te sirven</li><li>Te ayudamos con la carga inicial del rodeo</li></ul>
+      <div class="dl"><a class="btn line" id="dl-pdf" href="web/RodeoFlow_Presentacion.pdf" download>⬇ Descargar la presentación (PDF)</a></div></div>
+    <form class="formcard" id="form-demo" novalidate>
+      <div class="row2"><div><label for="f-nombre">Nombre y apellido *</label><input id="f-nombre" name="nombre" required maxlength="80" autocomplete="name"></div>
+      <div><label for="f-tel">Teléfono / WhatsApp *</label><input id="f-tel" name="telefono" required maxlength="30" inputmode="tel" autocomplete="tel"></div></div>
+      <label for="f-mail">Email</label><input id="f-mail" name="email" type="email" maxlength="100" autocomplete="email">
+      <div class="row2"><div><label for="f-tipo">Tipo de establecimiento</label><select id="f-tipo" name="tipo"><option value="">Elegí una opción</option><option>Cría</option><option>Invernada</option><option>Ciclo completo</option><option>Cabaña</option><option>Otro</option></select></div>
+      <div><label for="f-cant">Cantidad de animales (aprox.)</label><input id="f-cant" name="cantidad" maxlength="12" inputmode="numeric"></div></div>
+      <label for="f-msg">Mensaje</label><textarea id="f-msg" name="mensaje" rows="3" maxlength="500"></textarea>
+      <input class="hp" type="text" name="web" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <button class="btn gold" type="submit" id="f-btn">Enviar consulta</button>
+      <div class="msg" id="f-msg-ok" role="status" hidden></div>
+    </form>
+  </div>
+</div></section>
+
+<section id="contacto"><div class="wrap">
+  <div class="contact">
+    <div><h2>Hablemos de tu campo</h2><p style="color:var(--mut);margin:18px 0 22px;font-size:17px">Te mostramos la app con datos de ejemplo y te acompañamos en la carga inicial. Si producís en un país limítrofe, consultanos por la adaptación local.</p>
+      <a class="btn gold wa" href="https://wa.me/5492314446643?text=Hola%2C%20quiero%20conocer%20Rodeo%20Flow" target="_blank" rel="noopener">💬 Escribinos por WhatsApp</a></div>
+    <div class="card"><h4 style="font-size:19px">Carlos Moreno</h4>
+      <p><b>Teléfono / WhatsApp:</b> 2314-446643</p>
+      <p><b>Email:</b> <a href="mailto:agromp@hotmail.com">agromp@hotmail.com</a></p>
+      <p><b>Ubicación:</b> San Carlos de Bolívar, Buenos Aires, Argentina</p></div>
+  </div>
+</div></section>
+
+<div class="pie-ads" id="ad-pie-wrap" hidden><div class="wrap"><h6>Auspiciantes</h6><div id="ad-pie" data-lugar="pie"></div></div></div>
+<footer><div class="wrap"><span>© <span id="anio"></span> Rodeo Flow · Gestión ganadera inteligente</span><span>Hecho en Bolívar, Buenos Aires 🇦🇷</span></div></footer>
+<a class="wa-float" href="https://wa.me/5492314446643?text=Hola%2C%20quiero%20conocer%20Rodeo%20Flow" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
+
+<script>
+/* ═══════ CONFIGURACIÓN (lo único que hay que tocar) ═══════ */
+// Pegá el link de cada video (YouTube, Vimeo o un .mp4). Si dejás la url vacía, queda el espacio "Tu video acá".
+var VIDEOS=[
+  {titulo:'Rodeo Flow en 60 segundos',  texto:'Qué es, para quién es y cómo se usa. La mejor manera de empezar.', url:''},
+  {titulo:'Pesada y balanza en el corral', texto:'Pesá con bastón y balanza, aunque no haya señal, y mirá la ganancia diaria.', url:''},
+  {titulo:'Genómica para cabañas',         texto:'Subí el certificado, cargá las fotos y exportá la ficha del reproductor.', url:''}
+];
+var MOSTRAR_BANNERS=true;   // true = muestra los espacios publicitarios; false = los oculta (por ejemplo para una ONG)
+// lugar: 'lateral' (300x600, a la derecha) o 'pie' (728x90, al pie). imagen: archivo o link de la imagen. link: a dónde lleva al hacer clic.
+// Si ponés varios banners en el mismo lugar, rotan cada 8 segundos. Sin imagen, queda el espacio "Tu publicidad acá".
+var BANNERS=[
+  {lugar:'lateral', imagen:'', link:'', alt:'Auspiciante'},
+  {lugar:'pie',     imagen:'', link:'', alt:'Auspiciante'}
+];
+var FOTO_AUTOR='';           // opcional: ruta de tu foto, por ejemplo 'web/carlos.jpg'. Vacía = se muestra el logo
+var FORM_ENDPOINT='';        // opcional: dirección de Formspree (https://formspree.io/f/xxxx). Vacío = la consulta se envía por WhatsApp
+var WHATSAPP='5492314446643';
+var MOSTRAR_PRECIOS=false;   // true = muestra la sección de planes y precios; false = la oculta (por ejemplo para una ONG)
+/* ═══════════════════════════════════════════════════════════ */
+(function(){
+  document.getElementById('anio').textContent=new Date().getFullYear();
+  if(MOSTRAR_PRECIOS){ document.getElementById('planes').hidden=false; document.getElementById('faq-precio').hidden=false; document.getElementById('dl-pdf').href='web/RodeoFlow_Presentacion_con_precios.pdf'; }
+  if(FOTO_AUTOR){ var av=document.getElementById('autor-av'); av.className='av'; av.innerHTML=''; var fi=document.createElement('img'); fi.src=FOTO_AUTOR; fi.alt='Carlos Moreno'; av.appendChild(fi); }
+  (function formulario(){
+    var f=document.getElementById('form-demo'), ok=document.getElementById('f-msg-ok'), btn=document.getElementById('f-btn');
+    f.addEventListener('submit',function(e){
+      e.preventDefault(); var d=new FormData(f);
+      if(d.get('web')) return;
+      var n=String(d.get('nombre')||'').trim(), t=String(d.get('telefono')||'').trim();
+      if(!n||!t){ ok.hidden=false; ok.style.color='#ff8a7a'; ok.textContent='Completá tu nombre y tu teléfono.'; return; }
+      var datos={nombre:n,telefono:t,email:String(d.get('email')||'').trim(),tipo:d.get('tipo')||'',cantidad:String(d.get('cantidad')||'').trim(),mensaje:String(d.get('mensaje')||'').trim()};
+      ok.style.color='var(--green)';
+      if(FORM_ENDPOINT){
+        btn.disabled=true; btn.textContent='Enviando…';
+        fetch(FORM_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(datos)})
+          .then(function(r){ if(!r.ok) throw 0; f.reset(); ok.hidden=false; ok.textContent='¡Gracias! Recibimos tu consulta y te respondemos a la brevedad.'; })
+          .catch(function(){ ok.hidden=false; ok.style.color='#ff8a7a'; ok.textContent='No pudimos enviarla. Escribinos por WhatsApp al 2314-446643.'; })
+          .finally(function(){ btn.disabled=false; btn.textContent='Enviar consulta'; });
+      } else {
+        var txt='Hola, quiero una demostración de Rodeo Flow.\n\nNombre: '+datos.nombre+'\nTeléfono: '+datos.telefono+(datos.email?'\nEmail: '+datos.email:'')+(datos.tipo?'\nEstablecimiento: '+datos.tipo:'')+(datos.cantidad?'\nAnimales: '+datos.cantidad:'')+(datos.mensaje?'\nMensaje: '+datos.mensaje:'');
+        window.open('https://wa.me/'+WHATSAPP+'?text='+encodeURIComponent(txt),'_blank','noopener');
+        ok.hidden=false; ok.textContent='Se abrió WhatsApp con tu consulta lista para enviar.';
+      }
+    });
+  })();
+  (function banners(){
+    var medidas={lateral:'300 × 600',pie:'728 × 90'};
+    ['lateral','pie'].forEach(function(lugar){
+      var cont=document.getElementById(lugar==='lateral'?'ad-lateral':'ad-pie');
+      if(!cont) return;
+      if(!MOSTRAR_BANNERS){ if(lugar==='lateral') cont.style.display='none'; return; }
+      if(lugar==='pie') document.getElementById('ad-pie-wrap').hidden=false;
+      var lista=BANNERS.filter(function(b){return b.lugar===lugar;}); if(!lista.length) lista=[{lugar:lugar,imagen:'',link:'',alt:''}];
+      var k=0;
+      function pintar(){
+        var b=lista[k%lista.length], a=document.createElement(b.link?'a':'div'); a.className='ad fade';
+        if(b.link){ a.href=b.link; a.target='_blank'; a.rel='noopener sponsored'; }
+        var lab=document.createElement('span'); lab.className='lab'; lab.textContent='Publicidad'; a.appendChild(lab);
+        if(b.imagen){ var im=document.createElement('img'); im.src=b.imagen; im.alt=b.alt||'Publicidad'; im.loading='lazy'; a.appendChild(im); }
+        else { var ph=document.createElement('div'); ph.className='ph'; ph.innerHTML='<b>Tu publicidad acá</b><small>Banner '+medidas[lugar]+' px</small>'; a.appendChild(ph); }
+        cont.innerHTML=''; cont.appendChild(a);
+      }
+      pintar(); if(lista.length>1) setInterval(function(){k++;pintar();},8000);
+    });
+  })();
+  function embed(u){
+    u=String(u||'').trim(); if(!u) return null;
+    var m=u.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
+    if(m) return {t:'i',s:'https://www.youtube-nocookie.com/embed/'+m[1]+'?rel=0'};
+    m=u.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if(m) return {t:'i',s:'https://player.vimeo.com/video/'+m[1]};
+    if(/\.(mp4|webm|mov)(\?|$)/i.test(u)) return {t:'v',s:u};
+    return null;
+  }
+  var cont=document.getElementById('vids');
+  VIDEOS.forEach(function(v){
+    var d=document.createElement('div'); d.className='vid';
+    var p=document.createElement('div'); p.className='player';
+    var e=embed(v.url);
+    if(e&&e.t==='i'){ var f=document.createElement('iframe'); f.src=e.s; f.loading='lazy'; f.allow='accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen'; f.allowFullscreen=true; f.title=v.titulo; p.appendChild(f); }
+    else if(e&&e.t==='v'){ var vi=document.createElement('video'); vi.src=e.s; vi.controls=true; vi.preload='metadata'; vi.playsInline=true; p.appendChild(vi); }
+    else { p.innerHTML='<div class="ph"><div class="play">▶</div>Tu video acá</div>'; }
+    var t=document.createElement('div'); t.className='txt';
+    var h=document.createElement('h3'); h.textContent=v.titulo;
+    var pr=document.createElement('p'); pr.textContent=v.texto;
+    t.appendChild(h); t.appendChild(pr); d.appendChild(p); d.appendChild(t); cont.appendChild(d);
+  });
+})();
+</script>
+</body>
+</html>
