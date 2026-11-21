@@ -665,6 +665,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
     overflow-y:auto; -webkit-overflow-scrolling:touch;
   }
   #paywall-screen.show { display:flex; }
+  #modal-admin { z-index:1200; }
   .paywall-box {
     background:var(--bg2); border:1px solid var(--border); border-radius:12px;
     padding:40px; max-width:480px; width:100%; text-align:center; margin:auto;
@@ -1104,7 +1105,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
 ════════════════════════════════════════════════════ -->
 <div id="paywall-screen">
   <div class="paywall-box">
-    <div style="font-size:36px;margin-bottom:8px">⛔</div>
+    <div id="paywall-icono" onclick="trialTapSecreto()" style="font-size:36px;margin-bottom:8px">⛔</div>
     <h2>Período de prueba finalizado</h2>
     <p>Tu prueba gratuita de 30 días ha expirado. Activá tu suscripción para continuar usando RodeoFlow.</p>
     <div class="paywall-price" id="paywall-precio">USD 46 <span>/ mes</span></div><div id="paywall-tramo" style="font-size:13px;color:var(--text2);margin-top:-8px">según la cantidad de animales activos</div>
@@ -10756,7 +10757,8 @@ function trialTapSecreto(){
   pedirCodigoTitular();
 }
 async function pedirCodigoTitular(){
-  if(rolActual() !== 'Dueño'){ toast('Solo el Dueño puede reiniciar la prueba','err'); return; }
+  const _enPaywall = (document.getElementById('paywall-screen')||{classList:{contains:()=>false}}).classList.contains('show'); // desde el paywall el servidor igual exige código del titular y dispositivo Dueño
+  if(!_enPaywall && rolActual() !== 'Dueño'){ toast('Solo el Dueño puede reiniciar la prueba','err'); return; }
   const i = document.getElementById('adm-codigo'), r = document.getElementById('adm-resultado');
   if(i) i.value = ''; if(r) r.innerHTML = '';
   openModal('modal-admin');
@@ -10817,7 +10819,7 @@ async function adminVerRegistros(){
 }
 async function reiniciarTrialTitular(autorizado, codigo){
   if(!autorizado) return;
-  if(window._rfTrialServidor){ // con servidor: la Cloud Function valida el código y reinicia; el listener actualiza la UI
+  if(window._rfTrialServidor || navigator.onLine !== false){ // con servidor: la Cloud Function valida el código y reinicia; el listener actualiza la UI
     try{ await firebase.app().functions('us-central1').httpsCallable('reiniciarTrial')({ estabId: window.ESTAB_ID_ACTIVO, codigo }); }
     catch(e){
       const n = (parseInt(localStorage.getItem('rf_cod_fallos')||'0')||0) + 1;
@@ -10826,6 +10828,14 @@ async function reiniciarTrialTitular(autorizado, codigo){
     }
     localStorage.setItem('rf_cod_fallos','0');
     toast('Prueba reiniciada: 30 días desde hoy','ok');
+    try{ // si la app está en el paywall todavía no sincronizó: se trae el nuevo inicio del servidor y se vuelve a arrancar
+      const sn = (await firebase.database().ref('suscripciones/' + window.ESTAB_ID_ACTIVO).once('value')).val() || {};
+      if(typeof sn.trialStart === 'number' && sn.trialStart > 0 && window.DB && DB.settings){
+        DB.settings.trialStart = sn.trialStart; DB.settings.trialEpoch = sn.trialEpoch || 0; window._rfTrialStartServidor = sn.trialStart;
+        await saveToStorage();
+        if(document.getElementById('paywall-screen').classList.contains('show')) setTimeout(()=>location.reload(), 600);
+      }
+    }catch(e){ console.warn('No se pudo traer el nuevo inicio de prueba:', e); }
     return;
   }
   toast('El reinicio de la prueba solo funciona con conexión al servidor','err'); // sin servidor ya no se puede reiniciar desde la app
@@ -16671,7 +16681,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-21.1';
+const RF_VERSION = '2026-11-21.2';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
