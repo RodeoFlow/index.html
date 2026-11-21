@@ -25,7 +25,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="xlsx.full.min.js" onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';document.head.appendChild(s);"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -5643,6 +5643,15 @@ function esc(s) {
 // Para datos dentro de un atributo onclick="...": rfN() entrega SIEMPRE un número y rfJs() un texto JS entre comillas, ya escapado.
 // (esc() solo no alcanza: el navegador vuelve a convertir &#39; en comilla antes de ejecutar el código.)
 function rfN(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+// Lectura de Excel con defensa: SheetJS 0.18.5 (la última de cdnjs) tiene una falla conocida (CVE-2023-30533): un archivo armado a propósito puede
+// "contaminar" Object.prototype. Si después de leer aparece alguna propiedad nueva ahí, se limpia y se rechaza el archivo.
+function rfXlsxLeer(datos, opciones) {
+  const wb = XLSX.read(datos, opciones);
+  let sucio = false;
+  for (const k in Object.prototype) { sucio = true; try { delete Object.prototype[k]; } catch (e) {} }
+  if (sucio) throw new Error('El archivo Excel es sospechoso y no se importó');
+  return wb;
+}
 function rfJs(v) { return esc(JSON.stringify(String(v ?? ''))); }
 
 function toast(msg, type='info') {
@@ -8093,7 +8102,7 @@ function enviarResumenWA(){
   const url=num
     ? `https://wa.me/${num}?text=${encodeURIComponent(box.value)}`
     : `https://api.whatsapp.com/send?text=${encodeURIComponent(box.value)}`;
-  window.open(url,'_blank');
+  window.open(url,'_blank','noopener');
 }
 
 // ── Panel de vencimientos y recordatorios ──
@@ -8876,7 +8885,7 @@ async function impSesionLeer(input){
       filas=impParseCSV(txt);
     } else {
       if(typeof XLSX==='undefined'){ toast('No se pudo cargar el lector de Excel','err'); input.value=''; return; }
-      const wb=XLSX.read(buf,{type:'array'});
+      const wb=rfXlsxLeer(buf,{type:'array'});
       filas=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true,blankrows:false});
     }
     impSesionProcesar(filas, f.name);
@@ -9155,7 +9164,7 @@ async function impLeerArchivo(input){
       filas=impParseCSV(txt);
     } else {
       if(typeof XLSX==='undefined'){ toast('No se pudo cargar el lector de Excel','err'); input.value=''; return; }
-      const wb=XLSX.read(buf,{type:'array'});
+      const wb=rfXlsxLeer(buf,{type:'array'});
       filas=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true,blankrows:false});
     }
     impCargarFilas(filas, f.name);
@@ -9694,7 +9703,7 @@ function genImportarExcel(input){
   fr.onerror=()=>toast('No se pudo leer el archivo','err');
   fr.onload=e=>{
     try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      const wb=rfXlsxLeer(new Uint8Array(e.target.result),{type:'array',cellDates:true});
       const filas=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
       const hi=filas.findIndex(r=>r.some(c=>String(c).trim().toLowerCase()==='rp'));
       if(hi<0){toast('No encontré la columna "RP" en la primera fila de la planilla','err');return;}
@@ -16662,7 +16671,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-20.5';
+const RF_VERSION = '2026-11-21.1';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
