@@ -7447,19 +7447,29 @@ async function rfArrancarDemoURL(){
   }catch(e){ console.warn('Demo directa falló, flujo normal:',e); return await checkAuth(); }
 }
 async function salirDeDemo(){
-  const lista=await getEstablecimientos();
-  let volver=await idbGet('rf_demo_volver');
-  if(!volver||!lista.some(e=>e.id===volver&&!e.demo)) volver=(lista.find(e=>!e.demo)||{}).id;
-  const _desdeLink=(()=>{ try{ return !!sessionStorage.getItem('rf_demo_url'); }catch(e){ return false; } })();
-  if(volver){
-    await cambiarEstablecimiento(volver);
-    if(_desdeLink||!(DB&&DB.settings&&DB.settings.hasBeenSetup)){
-      try{ ['rf_demo_url','rf_role','rf_user_name'].forEach(k=>{ if(!sessionStorage.getItem('rf_logged')||k==='rf_demo_url') sessionStorage.removeItem(k); }); }catch(e){}
-      location.replace(location.pathname); // vuelve al flujo normal: registro, login o paywall según corresponda
+  if(window._saliendoDemo) return; // un solo clic alcanza: los siguientes se ignoran mientras sale
+  window._saliendoDemo=true;
+  try{
+    const btn=document.querySelector('#demo-pill button'); if(btn){ btn.disabled=true; btn.textContent='Saliendo…'; btn.style.opacity='.7'; }
+    toast('Saliendo de la demo…','info');
+    const lista=await getEstablecimientos();
+    let volver=await idbGet('rf_demo_volver');
+    if(!volver||!lista.some(e=>e.id===volver&&!e.demo)) volver=(lista.find(e=>!e.demo)||{}).id;
+    if(volver){
+      // Sin cambiar de establecimiento "en caliente" (era lento por la sincronización): se deja activo el real y se recarga.
+      // La recarga aplica el flujo normal: registro, login o paywall según corresponda.
+      await idbSet(RF_ACTIVO_KEY, volver);
+      try{ localStorage.setItem('rf_bk_estab', volver); }catch(e){}
+      try{ sessionStorage.removeItem('rf_demo_url'); if(!sessionStorage.getItem('rf_logged')){ sessionStorage.removeItem('rf_role'); sessionStorage.removeItem('rf_user_name'); } }catch(e){}
+      location.replace(location.pathname);
+      return;
     }
-    return;
-  }
-  await crearNuevoEstablecimiento('Mi Establecimiento');
+    await crearNuevoEstablecimiento('Mi Establecimiento');
+  }catch(e){
+    console.warn('No se pudo salir de la demo:',e);
+    toast('No se pudo salir de la demo. Probá de nuevo.','err');
+    const btn=document.querySelector('#demo-pill button'); if(btn){ btn.disabled=false; btn.textContent='Salir'; btn.style.opacity=''; }
+  }finally{ window._saliendoDemo=false; }
 }
 async function borrarDemo(){
   const lista=await getEstablecimientos(), d=lista.find(e=>e.demo);
@@ -16652,7 +16662,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-20.4';
+const RF_VERSION = '2026-11-20.5';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
