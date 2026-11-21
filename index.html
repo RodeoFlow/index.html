@@ -10777,7 +10777,9 @@ function adminFallo(e){
 async function adminReiniciarPrueba(){
   const c = adminCodigo(); if(!c) return;
   if(!confirm('¿Reiniciar la prueba gratuita de ESTE establecimiento a 30 días desde hoy?')) return;
-  await reiniciarTrialTitular(true, c); closeModal('modal-admin');
+  const r = document.getElementById('adm-resultado'); if(r) r.textContent = 'Reiniciando…';
+  const ok = await reiniciarTrialTitular(true, c);
+  if(ok) closeModal('modal-admin');
 }
 async function adminVerRegistros(){
   const c = adminCodigo(); if(!c) return;
@@ -10824,21 +10826,26 @@ async function reiniciarTrialTitular(autorizado, codigo){
     catch(e){
       const n = (parseInt(localStorage.getItem('rf_cod_fallos')||'0')||0) + 1;
       if(n >= 5){ localStorage.setItem('rf_cod_bloq', String(Date.now()+15*60000)); localStorage.setItem('rf_cod_fallos','0'); } else localStorage.setItem('rf_cod_fallos', String(n));
-      toast(e?.message||'No se pudo reiniciar la prueba','err'); return;
+      toast(e?.message||'No se pudo reiniciar la prueba','err');
+      const r = document.getElementById('adm-resultado'); if(r) r.innerHTML = '<b style="color:#e74c3c">❌ ' + esc(e?.message || 'No se pudo reiniciar la prueba') + '</b>';
+      return false;
     }
     localStorage.setItem('rf_cod_fallos','0');
     toast('Prueba reiniciada: 30 días desde hoy','ok');
-    try{ // si la app está en el paywall todavía no sincronizó: se trae el nuevo inicio del servidor y se vuelve a arrancar
-      const sn = (await firebase.database().ref('suscripciones/' + window.ESTAB_ID_ACTIVO).once('value')).val() || {};
-      if(typeof sn.trialStart === 'number' && sn.trialStart > 0 && window.DB && DB.settings){
-        DB.settings.trialStart = sn.trialStart; DB.settings.trialEpoch = sn.trialEpoch || 0; window._rfTrialStartServidor = sn.trialStart;
+    try{ // si la app está en el paywall todavía no sincronizó: se aplica el nuevo inicio (el del servidor; si no se puede leer, el de ahora) y se vuelve a arrancar
+      let ini = Date.now(), ep = (DB.settings.trialEpoch || 0) + 1;
+      try{ const sn = (await firebase.database().ref('suscripciones/' + window.ESTAB_ID_ACTIVO).once('value')).val() || {}; if(typeof sn.trialStart === 'number' && sn.trialStart > 0){ ini = sn.trialStart; ep = sn.trialEpoch || ep; } }catch(e){ console.warn('No se pudo leer el nuevo inicio de prueba, se usa la hora actual:', e); }
+      if(window.DB && DB.settings){
+        DB.settings.trialStart = ini; DB.settings.trialEpoch = ep; window._rfTrialStartServidor = ini;
         await saveToStorage();
-        if(document.getElementById('paywall-screen').classList.contains('show')) setTimeout(()=>location.reload(), 600);
+        if(document.getElementById('paywall-screen').classList.contains('show')) setTimeout(()=>location.reload(), 800);
       }
-    }catch(e){ console.warn('No se pudo traer el nuevo inicio de prueba:', e); }
-    return;
+    }catch(e){ console.warn('No se pudo aplicar el nuevo inicio de prueba:', e); }
+    return true;
   }
   toast('El reinicio de la prueba solo funciona con conexión al servidor','err'); // sin servidor ya no se puede reiniciar desde la app
+  const r2 = document.getElementById('adm-resultado'); if(r2) r2.innerHTML = '<b style="color:#e74c3c">❌ Sin conexión: el reinicio necesita internet</b>';
+  return false;
 }
 
 // ── Recordatorio de prueba gratuita por vencer ──
@@ -16681,7 +16688,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-21.2';
+const RF_VERSION = '2026-11-21.3';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
