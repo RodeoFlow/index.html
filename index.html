@@ -953,7 +953,9 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
   /* ── PHONE SLOTS CONFIG ── */
   .phone-slot { display:flex; align-items:center; gap:12px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:8px; }
   .phone-slot-num { width:24px; height:24px; border-radius:50%; background:var(--amber); color:#000; font-weight:800; font-size:16px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-  .phone-slot input { flex:1; }
+  .phone-slot { flex-wrap:wrap; }
+  .phone-slot input { flex:1 1 150px; min-width:0; }
+  .phone-slot input[type=password] { flex:1 1 110px; max-width:none !important; }
   .phone-slot-role { font-size:15px; color:var(--text3); white-space:nowrap; }
 
   /* ── RESPONSIVE MOBILE ── */
@@ -16688,7 +16690,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-21.3';
+const RF_VERSION = '2026-11-22.1';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
