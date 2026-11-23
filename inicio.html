@@ -145,20 +145,20 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
 .dl{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}
 .hp{position:absolute;left:-9999px;opacity:0}
 /* banners publicitarios */
-.ad{display:block;text-decoration:none;position:relative;border-radius:12px;overflow:hidden;background:var(--card);border:1px dashed #3a4258}
-.ad img{width:100%;height:100%;object-fit:cover}
-.ad .lab{position:absolute;top:6px;left:8px;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#8d95aa;background:rgba(10,12,17,.7);padding:2px 7px;border-radius:10px;z-index:2}
-.ad .ph{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--mut);font-size:14px;text-align:center;padding:14px}
-.ad .ph b{color:var(--gold);font-size:15px;margin-bottom:4px}.ad .ph small{font-size:12px;opacity:.8}
-.ad.fade{animation:adfade .6s}@keyframes adfade{from{opacity:.2}to{opacity:1}}
-.adband{padding:40px 0;background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.adband h6{text-align:center;font-weight:600;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#7d8599;margin-bottom:14px}
-.adrow{display:flex;flex-wrap:wrap;justify-content:center;gap:24px}
-.adband .ad{width:300px;max-width:100%;height:400px;flex:none}
-.pie-ads{padding:36px 0;background:var(--bg2);border-top:1px solid var(--line)}
-.pie-ads .ad{max-width:728px;height:90px;margin:0 auto}
-.pie-ads h6{text-align:center;font-weight:600;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#7d8599;margin-bottom:12px}
-@media(max-width:860px){.pie-ads .ad{height:84px}.pie-ads .ad img{object-fit:contain;background:#0a0c11}}
+.aus{display:block;text-decoration:none;position:relative;border-radius:12px;overflow:hidden;background:var(--card);border:1px dashed #3a4258}
+.aus img{width:100%;height:100%;object-fit:cover}
+.aus .lab{position:absolute;top:6px;left:8px;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#8d95aa;background:rgba(10,12,17,.7);padding:2px 7px;border-radius:10px;z-index:2}
+.aus .ph{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--mut);font-size:14px;text-align:center;padding:14px}
+.aus .ph b{color:var(--gold);font-size:15px;margin-bottom:4px}.aus .ph small{font-size:12px;opacity:.8}
+.aus.fade{animation:ausfade .6s}@keyframes ausfade{from{opacity:.2}to{opacity:1}}
+.aus-franja{padding:40px 0;background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.aus-franja h6{text-align:center;font-weight:600;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#7d8599;margin-bottom:14px}
+.aus-fila{display:flex;flex-wrap:wrap;justify-content:center;gap:24px}
+.aus-franja .aus{width:300px;max-width:100%;height:400px;flex:none}
+.aus-pie{padding:36px 0;background:var(--bg2);border-top:1px solid var(--line)}
+.aus-pie .aus{max-width:728px;height:90px;margin:0 auto}
+.aus-pie h6{text-align:center;font-weight:600;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#7d8599;margin-bottom:12px}
+@media(max-width:860px){.aus-pie .aus{height:84px}.aus-pie .aus img{object-fit:contain;background:#0a0c11}}
 @media(max-width:860px){
  .about,.formbox{grid-template-columns:1fr}.about{padding:26px 20px}.about .av{max-width:180px}.formcard .row2{grid-template-columns:1fr}
  nav .links{display:none}nav .btn{margin-left:auto}
@@ -357,7 +357,7 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
   </div>
 </div></section>
 
-<div class="pie-ads" id="ad-pie-wrap" hidden><div class="wrap"><h6>Auspiciantes</h6><div id="ad-pie" data-lugar="pie"></div></div></div>
+<div class="aus-pie" id="aus-pie-caja" hidden><div class="wrap"><h6>Auspiciantes</h6><div id="aus-pie-lugar" data-lugar="pie"></div></div></div>
 <footer><div class="wrap"><span>© <span id="anio"></span> Rodeo Flow · Gestión ganadera inteligente</span><span>Hecho en Bolívar, Buenos Aires 🇦🇷</span></div></footer>
 <a class="wa-float" href="https://wa.me/5492314446643?text=Hola%2C%20quiero%20conocer%20Rodeo%20Flow" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
 
@@ -411,7 +411,7 @@ var MOSTRAR_PRECIOS=true;    // true = muestra la sección de planes y precios; 
   })();
   (function banners(){
     function crear(b,medida){
-      var a=document.createElement(b.link?'a':'div'); a.className='ad fade';
+      var a=document.createElement(b.link?'a':'div'); a.className='aus fade';
       if(b.link){ a.href=b.link; a.target='_blank'; a.rel='noopener sponsored'; }
       var lab=document.createElement('span'); lab.className='lab'; lab.textContent='Publicidad'; a.appendChild(lab);
       if(b.imagen){ var im=document.createElement('img'); im.src=b.imagen; im.alt=b.alt||'Publicidad'; im.loading='lazy'; a.appendChild(im); }
@@ -419,9 +419,9 @@ var MOSTRAR_PRECIOS=true;    // true = muestra la sección de planes y precios; 
       return a;
     }
     // Pie (728 × 90): rota si hay varios
-    var contP=document.getElementById('ad-pie');
+    var contP=document.getElementById('aus-pie-lugar');
     if(contP && MOSTRAR_BANNERS){
-      document.getElementById('ad-pie-wrap').hidden=false;
+      document.getElementById('aus-pie-caja').hidden=false;
       var listaP=BANNERS.filter(function(b){return b.lugar==='pie';}); if(!listaP.length) listaP=[{imagen:'',link:'',alt:''}];
       var kP=0;
       (function pintarP(){ contP.innerHTML=''; contP.appendChild(crear(listaP[kP%listaP.length],'728 × 90')); })();
@@ -432,11 +432,11 @@ var MOSTRAR_PRECIOS=true;    // true = muestra la sección de planes y precios; 
     var lat=BANNERS.filter(function(b){return b.lugar==='lateral';}), total=Math.max(0,MAX_LATERALES), franjas=Math.ceil(total/3);
     for(var bi=0;bi<franjas;bi++){
       var ancla=document.getElementById(ADS_DESPUES[bi%ADS_DESPUES.length]); if(!ancla) continue;
-      var sec=document.createElement('section'); sec.className='adband'; sec.setAttribute('aria-label','Publicidad');
-      sec.innerHTML='<div class="wrap"><h6>Publicidad</h6><div class="adrow"></div></div>';
-      var fila=sec.querySelector('.adrow');
+      var sec=document.createElement('section'); sec.className='aus-franja'; sec.setAttribute('aria-label','Publicidad');
+      sec.innerHTML='<div class="wrap"><h6>Publicidad</h6><div class="aus-fila"></div></div>';
+      var fila=sec.querySelector('.aus-fila');
       for(var q=bi*3;q<Math.min(total,bi*3+3);q++) fila.appendChild(crear(lat[q]||{imagen:'',link:'',alt:''},'300 × 400'));
-      var ref=ancla; while(ref.nextElementSibling && ref.nextElementSibling.classList.contains('adband')) ref=ref.nextElementSibling;
+      var ref=ancla; while(ref.nextElementSibling && ref.nextElementSibling.classList.contains('aus-franja')) ref=ref.nextElementSibling;
       ref.parentNode.insertBefore(sec,ref.nextSibling);
     }
   })();
