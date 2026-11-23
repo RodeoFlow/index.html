@@ -151,13 +151,10 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
 .ad .ph{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--mut);font-size:14px;text-align:center;padding:14px}
 .ad .ph b{color:var(--gold);font-size:15px;margin-bottom:4px}.ad .ph small{font-size:12px;opacity:.8}
 .ad.fade{animation:adfade .6s}@keyframes adfade{from{opacity:.2}to{opacity:1}}
-.railed{position:relative}
-.rail{display:none}
-@media(min-width:1180px){
- .railed.con-rail .wrap{max-width:1280px;padding-right:354px}
- .railed.con-rail .rail{display:flex;flex-direction:column;gap:24px;position:absolute;top:84px;bottom:40px;width:300px;right:max(20px,calc((100% - 1280px)/2 + 20px));z-index:1;overflow:hidden}
- .rail .ad{width:300px;height:400px;flex:none}
-}
+.adband{padding:40px 0;background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.adband h6{text-align:center;font-weight:600;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#7d8599;margin-bottom:14px}
+.adrow{display:flex;flex-wrap:wrap;justify-content:center;gap:24px}
+.adband .ad{width:300px;max-width:100%;height:400px;flex:none}
 .pie-ads{padding:36px 0;background:var(--bg2);border-top:1px solid var(--line)}
 .pie-ads .ad{max-width:728px;height:90px;margin:0 auto}
 .pie-ads h6{text-align:center;font-weight:600;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#7d8599;margin-bottom:12px}
@@ -206,7 +203,6 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
   <div class="vids" id="vids"></div>
 </div></section>
 
-<div class="railed" id="railed"><aside class="rail" id="rail" aria-label="Publicidad"></aside>
 <section id="modulos"><div class="wrap"><div class="with-side"><div class="main">
   <div class="head"><h2>Todo el campo en un solo lugar</h2><p>Cada módulo está pensado para el trabajo diario del productor argentino.</p></div>
 
@@ -361,7 +357,6 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
   </div>
 </div></section>
 
-</div><!-- /railed -->
 <div class="pie-ads" id="ad-pie-wrap" hidden><div class="wrap"><h6>Auspiciantes</h6><div id="ad-pie" data-lugar="pie"></div></div></div>
 <footer><div class="wrap"><span>© <span id="anio"></span> Rodeo Flow · Gestión ganadera inteligente</span><span>Hecho en Bolívar, Buenos Aires 🇦🇷</span></div></footer>
 <a class="wa-float" href="https://wa.me/5492314446643?text=Hola%2C%20quiero%20conocer%20Rodeo%20Flow" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
@@ -375,9 +370,10 @@ var VIDEOS=[
   {titulo:'Genómica para cabañas',         texto:'Subí el certificado, cargá las fotos y exportá la ficha del reproductor.', url:''}
 ];
 var MOSTRAR_BANNERS=true;   // true = muestra los espacios publicitarios; false = los oculta (por ejemplo para una ONG)
-// lugar: 'lateral' (300x400, columna a la derecha, de arriba hacia abajo) o 'pie' (728x90, al pie). imagen: archivo o link de la imagen. link: a dónde lleva al hacer clic.
-// Lateral: cada banner 'lateral' ocupa un espacio de la columna, en el orden en que los escribas; los espacios que sobran muestran "Tu publicidad acá". Pie: si ponés varios, rotan cada 8 segundos.
-var MAX_LATERALES=6;        // tope de espacios en la columna derecha
+// lugar: 'lateral' (300x400, en franjas entre secciones, de a 3 por franja) o 'pie' (728x90, al pie). imagen: archivo o link de la imagen. link: a dónde lleva al hacer clic.
+// Lateral: cada banner 'lateral' ocupa un espacio, en el orden en que los escribas; los espacios que sobran muestran "Tu publicidad acá". Pie: si ponés varios, rotan cada 8 segundos.
+var ADS_DESPUES=['modulos','historia'];   // después de qué secciones aparecen las franjas de publicidad (se usan de a una, en orden)
+var MAX_LATERALES=6;        // cantidad total de espacios 300 × 400 (de a 3 por franja: 6 = 2 franjas)
 var BANNERS=[
   {lugar:'lateral', imagen:'', link:'', alt:'Auspiciante'},
   {lugar:'pie',     imagen:'', link:'', alt:'Auspiciante'}
@@ -431,20 +427,18 @@ var MOSTRAR_PRECIOS=true;    // true = muestra la sección de planes y precios; 
       (function pintarP(){ contP.innerHTML=''; contP.appendChild(crear(listaP[kP%listaP.length],'728 × 90')); })();
       if(listaP.length>1) setInterval(function(){kP++; contP.innerHTML=''; contP.appendChild(crear(listaP[kP%listaP.length],'728 × 90'));},8000);
     }
-    // Lateral (300 × 400): columna a la derecha, tantos espacios como entren hasta el final de la página
-    var rail=document.getElementById('rail'), railed=document.getElementById('railed');
-    if(!rail||!railed) return;
-    if(!MOSTRAR_BANNERS){ rail.remove(); return; }
-    railed.classList.add('con-rail');
-    var lat=BANNERS.filter(function(b){return b.lugar==='lateral';}), n=0;
-    function ajustar(){
-      if(!rail.offsetParent) return;
-      var cant=Math.max(1,Math.min(MAX_LATERALES,Math.floor((rail.clientHeight+24)/424)));
-      if(cant===n) return; n=cant; rail.innerHTML='';
-      for(var q=0;q<cant;q++) rail.appendChild(crear(lat[q]||{imagen:'',link:'',alt:''},'300 × 400'));
+    // Lateral (300 × 400): franjas entre secciones, de a 3 espacios por franja (en celular se apilan)
+    if(!MOSTRAR_BANNERS) return;
+    var lat=BANNERS.filter(function(b){return b.lugar==='lateral';}), total=Math.max(0,MAX_LATERALES), franjas=Math.ceil(total/3);
+    for(var bi=0;bi<franjas;bi++){
+      var ancla=document.getElementById(ADS_DESPUES[bi%ADS_DESPUES.length]); if(!ancla) continue;
+      var sec=document.createElement('section'); sec.className='adband'; sec.setAttribute('aria-label','Publicidad');
+      sec.innerHTML='<div class="wrap"><h6>Publicidad</h6><div class="adrow"></div></div>';
+      var fila=sec.querySelector('.adrow');
+      for(var q=bi*3;q<Math.min(total,bi*3+3);q++) fila.appendChild(crear(lat[q]||{imagen:'',link:'',alt:''},'300 × 400'));
+      var ref=ancla; while(ref.nextElementSibling && ref.nextElementSibling.classList.contains('adband')) ref=ref.nextElementSibling;
+      ref.parentNode.insertBefore(sec,ref.nextSibling);
     }
-    ajustar(); window.addEventListener('load',ajustar);
-    var rt; window.addEventListener('resize',function(){clearTimeout(rt); rt=setTimeout(ajustar,150);});
   })();
   function embed(u){
     u=String(u||'').trim(); if(!u) return null;
