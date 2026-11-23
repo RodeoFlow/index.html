@@ -151,13 +151,16 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
 .ad .ph{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--mut);font-size:14px;text-align:center;padding:14px}
 .ad .ph b{color:var(--gold);font-size:15px;margin-bottom:4px}.ad .ph small{font-size:12px;opacity:.8}
 .ad.fade{animation:adfade .6s}@keyframes adfade{from{opacity:.2}to{opacity:1}}
-.with-side{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:34px;align-items:start}
-.side{position:sticky;top:84px}
-.side .ad{width:300px;height:600px}
+.railed{position:relative}
+.rail{display:none}
+@media(min-width:1180px){
+ .railed.con-rail .wrap{max-width:1280px;padding-right:354px}
+ .railed.con-rail .rail{display:flex;flex-direction:column;gap:24px;position:absolute;top:84px;bottom:40px;width:300px;right:max(20px,calc((100% - 1280px)/2 + 20px));z-index:1;overflow:hidden}
+ .rail .ad{width:300px;height:400px;flex:none}
+}
 .pie-ads{padding:36px 0;background:var(--bg2);border-top:1px solid var(--line)}
 .pie-ads .ad{max-width:728px;height:90px;margin:0 auto}
 .pie-ads h6{text-align:center;font-weight:600;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#7d8599;margin-bottom:12px}
-@media(max-width:1180px){.with-side{grid-template-columns:minmax(0,1fr)}.side{display:none}}
 @media(max-width:860px){.pie-ads .ad{height:84px}.pie-ads .ad img{object-fit:contain;background:#0a0c11}}
 @media(max-width:860px){
  .about,.formbox{grid-template-columns:1fr}.about{padding:26px 20px}.about .av{max-width:180px}.formcard .row2{grid-template-columns:1fr}
@@ -203,7 +206,8 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
   <div class="vids" id="vids"></div>
 </div></section>
 
-<section id="modulos"><div class="wrap" style="max-width:1280px"><div class="with-side"><div class="main">
+<div class="railed" id="railed"><aside class="rail" id="rail" aria-label="Publicidad"></aside>
+<section id="modulos"><div class="wrap"><div class="with-side"><div class="main">
   <div class="head"><h2>Todo el campo en un solo lugar</h2><p>Cada módulo está pensado para el trabajo diario del productor argentino.</p></div>
 
   <div class="feat"><div class="t"><span class="tag">Hacienda</span><h3>Cada animal, con su historia completa</h3><p>Registrá el rodeo una vez y tené la ficha de cada animal siempre a mano.</p>
@@ -233,7 +237,7 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
   <div class="feat"><div class="t"><span class="tag">Reportes</span><h3>Sabé si ganás plata</h3><p>Rentabilidad por animal y por lote, y un asistente de inteligencia artificial al que le preguntás en castellano.</p>
     <ul class="ck"><li>Rentabilidad y costo de producción</li><li>Preguntale a Rodeo Flow</li><li>Cumplimiento SENASA/RENSPA</li><li>Planillas para SIGSA y DT-e</li></ul></div>
     <div class="shot"><img loading="lazy" src="web/rentabilidad.jpg" alt="Rentabilidad"></div></div>
-</div><aside class="side" id="ad-lateral" data-lugar="lateral"></aside></div></div></section>
+</div></div></div></section>
 
 <section class="alt" id="cabanas"><div class="wrap">
   <div class="cab">
@@ -357,6 +361,7 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
   </div>
 </div></section>
 
+</div><!-- /railed -->
 <div class="pie-ads" id="ad-pie-wrap" hidden><div class="wrap"><h6>Auspiciantes</h6><div id="ad-pie" data-lugar="pie"></div></div></div>
 <footer><div class="wrap"><span>© <span id="anio"></span> Rodeo Flow · Gestión ganadera inteligente</span><span>Hecho en Bolívar, Buenos Aires 🇦🇷</span></div></footer>
 <a class="wa-float" href="https://wa.me/5492314446643?text=Hola%2C%20quiero%20conocer%20Rodeo%20Flow" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
@@ -370,8 +375,9 @@ var VIDEOS=[
   {titulo:'Genómica para cabañas',         texto:'Subí el certificado, cargá las fotos y exportá la ficha del reproductor.', url:''}
 ];
 var MOSTRAR_BANNERS=true;   // true = muestra los espacios publicitarios; false = los oculta (por ejemplo para una ONG)
-// lugar: 'lateral' (300x600, a la derecha) o 'pie' (728x90, al pie). imagen: archivo o link de la imagen. link: a dónde lleva al hacer clic.
-// Si ponés varios banners en el mismo lugar, rotan cada 8 segundos. Sin imagen, queda el espacio "Tu publicidad acá".
+// lugar: 'lateral' (300x400, columna a la derecha, de arriba hacia abajo) o 'pie' (728x90, al pie). imagen: archivo o link de la imagen. link: a dónde lleva al hacer clic.
+// Lateral: cada banner 'lateral' ocupa un espacio de la columna, en el orden en que los escribas; los espacios que sobran muestran "Tu publicidad acá". Pie: si ponés varios, rotan cada 8 segundos.
+var MAX_LATERALES=30;       // tope de espacios en la columna derecha
 var BANNERS=[
   {lugar:'lateral', imagen:'', link:'', alt:'Auspiciante'},
   {lugar:'pie',     imagen:'', link:'', alt:'Auspiciante'}
@@ -408,24 +414,37 @@ var MOSTRAR_PRECIOS=true;    // true = muestra la sección de planes y precios; 
     });
   })();
   (function banners(){
-    var medidas={lateral:'300 × 600',pie:'728 × 90'};
-    ['lateral','pie'].forEach(function(lugar){
-      var cont=document.getElementById(lugar==='lateral'?'ad-lateral':'ad-pie');
-      if(!cont) return;
-      if(!MOSTRAR_BANNERS){ if(lugar==='lateral') cont.style.display='none'; return; }
-      if(lugar==='pie') document.getElementById('ad-pie-wrap').hidden=false;
-      var lista=BANNERS.filter(function(b){return b.lugar===lugar;}); if(!lista.length) lista=[{lugar:lugar,imagen:'',link:'',alt:''}];
-      var k=0;
-      function pintar(){
-        var b=lista[k%lista.length], a=document.createElement(b.link?'a':'div'); a.className='ad fade';
-        if(b.link){ a.href=b.link; a.target='_blank'; a.rel='noopener sponsored'; }
-        var lab=document.createElement('span'); lab.className='lab'; lab.textContent='Publicidad'; a.appendChild(lab);
-        if(b.imagen){ var im=document.createElement('img'); im.src=b.imagen; im.alt=b.alt||'Publicidad'; im.loading='lazy'; a.appendChild(im); }
-        else { var ph=document.createElement('div'); ph.className='ph'; ph.innerHTML='<b>Tu publicidad acá</b><small>Banner '+medidas[lugar]+' px</small>'; a.appendChild(ph); }
-        cont.innerHTML=''; cont.appendChild(a);
-      }
-      pintar(); if(lista.length>1) setInterval(function(){k++;pintar();},8000);
-    });
+    function crear(b,medida){
+      var a=document.createElement(b.link?'a':'div'); a.className='ad fade';
+      if(b.link){ a.href=b.link; a.target='_blank'; a.rel='noopener sponsored'; }
+      var lab=document.createElement('span'); lab.className='lab'; lab.textContent='Publicidad'; a.appendChild(lab);
+      if(b.imagen){ var im=document.createElement('img'); im.src=b.imagen; im.alt=b.alt||'Publicidad'; im.loading='lazy'; a.appendChild(im); }
+      else { var ph=document.createElement('div'); ph.className='ph'; ph.innerHTML='<b>Tu publicidad acá</b><small>Banner '+medida+' px</small>'; a.appendChild(ph); }
+      return a;
+    }
+    // Pie (728 × 90): rota si hay varios
+    var contP=document.getElementById('ad-pie');
+    if(contP && MOSTRAR_BANNERS){
+      document.getElementById('ad-pie-wrap').hidden=false;
+      var listaP=BANNERS.filter(function(b){return b.lugar==='pie';}); if(!listaP.length) listaP=[{imagen:'',link:'',alt:''}];
+      var kP=0;
+      (function pintarP(){ contP.innerHTML=''; contP.appendChild(crear(listaP[kP%listaP.length],'728 × 90')); })();
+      if(listaP.length>1) setInterval(function(){kP++; contP.innerHTML=''; contP.appendChild(crear(listaP[kP%listaP.length],'728 × 90'));},8000);
+    }
+    // Lateral (300 × 400): columna a la derecha, tantos espacios como entren hasta el final de la página
+    var rail=document.getElementById('rail'), railed=document.getElementById('railed');
+    if(!rail||!railed) return;
+    if(!MOSTRAR_BANNERS){ rail.remove(); return; }
+    railed.classList.add('con-rail');
+    var lat=BANNERS.filter(function(b){return b.lugar==='lateral';}), n=0;
+    function ajustar(){
+      if(!rail.offsetParent) return;
+      var cant=Math.max(1,Math.min(MAX_LATERALES,Math.floor((rail.clientHeight+24)/424)));
+      if(cant===n) return; n=cant; rail.innerHTML='';
+      for(var q=0;q<cant;q++) rail.appendChild(crear(lat[q]||{imagen:'',link:'',alt:''},'300 × 400'));
+    }
+    ajustar(); window.addEventListener('load',ajustar);
+    var rt; window.addEventListener('resize',function(){clearTimeout(rt); rt=setTimeout(ajustar,150);});
   })();
   function embed(u){
     u=String(u||'').trim(); if(!u) return null;
