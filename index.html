@@ -961,7 +961,7 @@ if (window.top !== window.self) { document.documentElement.style.display = 'none
   /* ── RESPONSIVE MOBILE ── */
   @media(max-width:768px){
     #app { grid-template-columns:1fr; }
-    #sidebar { position:fixed; left:-240px; top:72px; z-index:300; transition:left 0.3s; height:calc(100vh - 72px); width:220px; }
+    #sidebar { position:fixed; left:-240px; top:72px; z-index:300; transition:left 0.3s; height:calc(100vh - 72px); height:calc(100dvh - 72px); width:220px; padding-bottom:110px; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
     #sidebar.mobile-open { left:0; box-shadow:4px 0 20px rgba(0,0,0,0.5); }
     .hamburger { display:block; }
     .grid-4 { grid-template-columns:1fr 1fr; }
@@ -16690,7 +16690,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-22.2';
+const RF_VERSION = '2026-11-22.3';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
