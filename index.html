@@ -11716,13 +11716,14 @@ function edadMesesAnimal(a){
 
 // Devuelve null si el protocolo todavía no le corresponde al animal (o sin datos de edad/sexo/categoría),
 // o {estado, ultima, diasDesde/diasFaltan} si aplica.
+let _vacIdxSan=null; // índice rp→vacunas, solo durante renderCalendarioSanitario (evita recorrer todas las vacunas por cada animal)
 function evaluarProtocoloAnimal(protocolo, animal){
   if(!protocolo.aplicaA(animal)) return null;
   const edadMeses = edadMesesAnimal(animal);
   if(edadMeses===null) return null;
   if(edadMeses < protocolo.edadMinMeses) return null;
 
-  const vacunasAnimal = (DB.vacunas||[]).filter(v=>v.rp===animal.rp && protocolo.match(v));
+  const vacunasAnimal = (_vacIdxSan?(_vacIdxSan.get(animal.rp)||[]):(DB.vacunas||[]).filter(v=>v.rp===animal.rp)).filter(v=>protocolo.match(v));
   if(!vacunasAnimal.length){
     if(protocolo.edadMaxMeses && edadMeses > protocolo.edadMaxMeses){
       return { estado:'fuera_ventana', ultima:null };
@@ -11750,6 +11751,7 @@ function renderCalendarioSanitario(){
 
   const activos = DB.animales.filter(a=>a.activo);
   const filas = [];
+  _vacIdxSan=new Map(); (DB.vacunas||[]).forEach(v=>{ let l=_vacIdxSan.get(v.rp); if(!l) _vacIdxSan.set(v.rp,l=[]); l.push(v); });
   PROTOCOLOS_SANITARIOS.forEach(protocolo=>{
     if(filtroProtocolo && protocolo.id!==filtroProtocolo) return;
     activos.forEach(a=>{
@@ -11758,6 +11760,7 @@ function renderCalendarioSanitario(){
       filas.push({ a, protocolo, ...r });
     });
   });
+  _vacIdxSan=null;
 
   const nunca = filas.filter(f=>f.estado==='nunca').length;
   const vencidos = filas.filter(f=>f.estado==='vencido').length;
@@ -11779,6 +11782,7 @@ function renderCalendarioSanitario(){
   mostrar.sort((x,y)=>(ordenEstado[x.estado]-ordenEstado[y.estado]));
 
   if(!mostrar.length){ tbody.innerHTML = emptyRow(7); return; }
+  const totalMostrar = mostrar.length; if(totalMostrar>500) mostrar = mostrar.slice(0,500);
   tbody.innerHTML = mostrar.map(f=>{
     const edad = edadMesesAnimal(f.a);
     const edadTxt = edad!==null ? (edad<12 ? `${Math.floor(edad)}m` : `${(edad/12).toFixed(1)}a`) : '--';
@@ -11799,7 +11803,7 @@ function renderCalendarioSanitario(){
       <td style="color:${color};font-weight:600">${estadoTxt}</td>
       <td><button class="btn-primary" style="padding:2px 10px;font-size:12px" onclick="abrirModalVacunaDesdeCalendario(${rfJs(f.a.rp)},${rfJs(f.protocolo.nombre)})">＋ Vacunar</button></td>
     </tr>`;
-  }).join('');
+  }).join('') + (totalMostrar>500 ? `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:12px">Mostrando los primeros 500 de ${totalMostrar}. Filtrá por protocolo o estado para ver el resto.</td></tr>` : '');
 }
 
 function abrirModalVacunaDesdeCalendario(rp, nombreVacuna){
@@ -16690,7 +16694,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-22.4';
+const RF_VERSION = '2026-11-25.1';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
