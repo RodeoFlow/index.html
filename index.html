@@ -9434,6 +9434,7 @@ const GEN_PLANTILLAS={
   'Braford':['Largo de gestación','Peso al nacer','Peso al destete','Peso al final','Leche','Circunferencia escrotal','Área de ojo de bife','Grasa dorsal','Grasa de cadera','Grasa intramuscular'],
   'Brangus':['Largo de gestación','Peso al nacer','Peso al destete','Peso al final','Leche','Circunferencia escrotal','Área de ojo de bife','Grasa dorsal','Grasa de cadera','Grasa intramuscular'],
   'Brahman':['Peso al nacer','Peso al destete','Peso al final','Leche','Circunferencia escrotal','Área de ojo de bife','Grasa dorsal','Días a parto'],
+  'Holando':['Leche (kg)','Grasa (kg)','Proteína (kg)','Grasa (%)','Proteína (%)','Sólidos útiles','Recuento de células somáticas','Vida productiva','Fertilidad de hijas (DPR)','Facilidad de parto directa','Facilidad de parto hijas','Mortinatos','Tipo / conformación','Ubre','Patas y pezuñas','Mérito neto'],
   'Charolais':['Facilidad de parto directa','Peso al nacer','Peso al destete','Peso al final','Leche','Circunferencia escrotal','Área de ojo de bife','Grasa dorsal','Desarrollo muscular']
 };
 // Carga todas las filas de la raza de una vez (solo queda escribir los números)
@@ -9441,7 +9442,7 @@ function genPlantilla(raza){
   const ya=new Set([...document.querySelectorAll('#gen-valores .gen-v-c')].map(i=>i.value.trim()));
   (GEN_PLANTILLAS[raza]||[]).forEach(n=>{ if(!ya.has(n)) genAddValor(n,'','','',''); });
 }
-const GEN_ENFS_COMUNES=['Artrogriposis múltiple (AM)','Hidrocefalia neuropática (NH)','Aracnodactilia contractural (CA)','Osteopetrosis (OS)'];
+const GEN_ENFS_COMUNES=['Artrogriposis múltiple (AM)','Hidrocefalia neuropática (NH)','Aracnodactilia contractural (CA)','Osteopetrosis (OS)','CVM (malformación vertebral compleja)','BLAD (deficiencia de adhesión leucocitaria)','Brachyspina (BY)','Deficiencia de citrulina (citrulinemia)','Haplotipo HH1','Haplotipo HH3','Haplotipo HH5'];
 const GEN_ESTADOS=['Libre','Portador','Afectado'];
 function genBadgeEstado(e){ return e==='Libre'?'badge-green':e==='Portador'?'badge-amber':e==='Afectado'?'badge-red':'badge-gray'; }
 function genFilaValor(c,v,p,per,prom){
@@ -9466,7 +9467,7 @@ function genChips(){
   const mk=(id,lista,fn)=>{const c=document.getElementById(id); if(!c) return; c.innerHTML=''; lista.forEach(n=>{const b=document.createElement('button'); b.type='button'; b.className='btn-secondary'; b.style.cssText='padding:2px 8px;font-size:12px;margin:2px'; b.textContent='＋ '+n; b.onclick=()=>fn(n); c.appendChild(b);});};
   const cv=document.getElementById('gen-chips-v');
   if(cv){
-    const col={Angus:'background:#111827;color:#fff;border:2px solid #f5c542',Hereford:'background:#b3261e;color:#fff;border:2px solid #ffd7d2',Limangus:'background:#166534;color:#fff;border:2px solid #bbf7d0',Limousin:'background:#c2410c;color:#fff;border:2px solid #fed7aa',Shorthorn:'background:#9a3412;color:#fff;border:2px solid #fdba74',Braford:'background:#7f1d1d;color:#fff;border:2px solid #fecaca',Brangus:'background:#1f2937;color:#fff;border:2px solid #9ca3af',Brahman:'background:#6b7280;color:#fff;border:2px solid #e5e7eb',Charolais:'background:#a16207;color:#fff;border:2px solid #fef08a'};
+    const col={Angus:'background:#111827;color:#fff;border:2px solid #f5c542',Hereford:'background:#b3261e;color:#fff;border:2px solid #ffd7d2',Limangus:'background:#166534;color:#fff;border:2px solid #bbf7d0',Limousin:'background:#c2410c;color:#fff;border:2px solid #fed7aa',Shorthorn:'background:#9a3412;color:#fff;border:2px solid #fdba74',Braford:'background:#7f1d1d;color:#fff;border:2px solid #fecaca',Brangus:'background:#1f2937;color:#fff;border:2px solid #9ca3af',Brahman:'background:#6b7280;color:#fff;border:2px solid #e5e7eb',Charolais:'background:#a16207;color:#fff;border:2px solid #fef08a',Holando:'background:#111827;color:#fff;border:2px solid #f9fafb'};
     cv.innerHTML='';
     Object.keys(GEN_PLANTILLAS).forEach(r=>{const b=document.createElement('button'); b.type='button'; b.className='btn-primary'; b.style.cssText='padding:12px 20px;font-size:15px;font-weight:700;border-radius:10px;cursor:pointer;flex:1;min-width:150px;box-shadow:0 2px 6px rgba(0,0,0,.35);'+(col[r]||''); b.textContent='📋 Planilla '+r; b.onclick=()=>genPlantilla(r); cv.appendChild(b);});
   }
@@ -16694,7 +16695,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-25.1';
+const RF_VERSION = '2026-11-25.2';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
