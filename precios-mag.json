@@ -90,5 +90,6 @@
     }
   },
   "indice_arrendamiento_novillo_kg_ha": 4104.707,
-  "ok": true
+  "ok": true,
+  "ultimo_intento_fallido": "2026-11-26T22:01:24.734Z"
 }
