@@ -11,6 +11,9 @@
 <meta property="og:description" content="Hacienda, balanza, reproducción, genómica, sanidad, potreros y rentabilidad en un solo sistema. Funciona sin señal. Probá la demo.">
 <meta property="og:image" content="https://rodeoflow.com.ar/web/dashboard.jpg">
 <meta property="og:url" content="https://rodeoflow.com.ar/inicio.html">
+<link rel="canonical" href="https://rodeoflow.com.ar/inicio.html">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Rodeo Flow","applicationCategory":"BusinessApplication","operatingSystem":"Web, Android, iOS","description":"Sistema de gestión ganadera para productores argentinos: hacienda, balanza y RFID, sanidad, reproducción, genómica, potreros, nutrición y rentabilidad. Funciona sin señal.","url":"https://rodeoflow.com.ar/inicio.html","inLanguage":"es-AR","offers":{"@type":"AggregateOffer","priceCurrency":"USD","lowPrice":"46","highPrice":"260","offerCount":"6"},"publisher":{"@type":"Organization","name":"Rodeo Flow","url":"https://rodeoflow.com.ar/","telephone":"+54 9 2314 446643"}}</script>
+
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0f1218">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -183,7 +186,7 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
   <p class="sub">Hacienda, balanza, reproducción, genómica, sanidad, potreros, nutrición, compra-venta y rentabilidad en un solo sistema. Creado por un periodista agropecuario que recorre el campo hace 17 años y conoce las necesidades de cada productor ganadero de Argentina y la región.</p>
   <div class="cta">
     <a class="btn gold" href="https://rodeoflow.com.ar/?demo=1" target="_blank" rel="noopener">▶ Probar la demo</a>
-    <a class="btn line" href="https://rodeoflow.com.ar/" target="_blank" rel="noopener">Entrar a la app</a>
+    <a class="btn line" href="https://rodeoflow.com.ar/?app=1" target="_blank" rel="noopener">Entrar a la app</a>
   </div>
   <div class="pills"><span>📶 Funciona sin señal</span><span>📱 Celular, tablet y PC</span><span>🎙️ Carga por voz con IA</span><span>🧬 Genómica para cabañas</span></div>
   <div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="web/dashboard.jpg" alt="Panel principal de Rodeo Flow" width="1440" height="900"></div>
@@ -274,7 +277,7 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
     <div class="step"><div class="n">🍎</div><h4>iPhone</h4><p>Abrí la app en Safari, tocá <b>Compartir</b> (el cuadrado con la flecha) y elegí <b>Agregar a pantalla de inicio</b>.</p></div>
     <div class="step"><div class="n">💻</div><h4>Computadora</h4><p>Abrí la app en Chrome o Edge y tocá el ícono de instalar que aparece a la derecha de la barra de direcciones.</p></div>
   </div>
-  <div class="cta" style="text-align:center;margin-top:26px"><a class="btn gold" href="https://rodeoflow.com.ar/" target="_blank" rel="noopener">📲 Abrir e instalar la app</a></div>
+  <div class="cta" style="text-align:center;margin-top:26px"><a class="btn gold" href="https://rodeoflow.com.ar/?app=1" target="_blank" rel="noopener">📲 Abrir e instalar la app</a></div>
 </div></section>
 
 <section class="alt" id="historia"><div class="wrap">
@@ -292,7 +295,7 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
   <div class="demo">
     <div><h2>Probá la app ahora</h2>
       <p>Recorrela con datos de ejemplo, sin registrarte. O escaneá el código con tu celular y entrá directo.</p>
-      <div class="cta"><a class="btn dark" href="https://rodeoflow.com.ar/?demo=1" target="_blank" rel="noopener">▶ Abrir la demo</a><a class="btn dark2" href="https://rodeoflow.com.ar/" target="_blank" rel="noopener">Entrar a la app</a></div></div>
+      <div class="cta"><a class="btn dark" href="https://rodeoflow.com.ar/?demo=1" target="_blank" rel="noopener">▶ Abrir la demo</a><a class="btn dark2" href="https://rodeoflow.com.ar/?app=1" target="_blank" rel="noopener">Entrar a la app</a></div></div>
     <div class="qrbox"><img src="web/qr.png" alt="Código QR para abrir Rodeo Flow" width="214" height="214"><b>Escaneá y entrá</b><span>rodeoflow.com.ar</span></div>
   </div>
 </div></section>
@@ -365,7 +368,7 @@ footer .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
 /* ═══════ CONFIGURACIÓN (lo único que hay que tocar) ═══════ */
 // Pegá el link de cada video (YouTube, Vimeo o un .mp4). Si dejás la url vacía, queda el espacio "Tu video acá".
 var VIDEOS=[
-  {titulo:'Rodeo Flow en 60 segundos',  texto:'Qué es, para quién es y cómo se usa. La mejor manera de empezar.', url:''},
+  {titulo:'Rodeo Flow en 60 segundos',  texto:'Qué es, para quién es y cómo se usa. La mejor manera de empezar.', url:'web/spot.mp4', poster:'web/spot_portada.jpg'},
   {titulo:'Pesada y balanza en el corral', texto:'Pesá con bastón y balanza, aunque no haya señal, y mirá la ganancia diaria.', url:''},
   {titulo:'Genómica para cabañas',         texto:'Subí el certificado, cargá las fotos y exportá la ficha del reproductor.', url:''}
 ];
@@ -455,7 +458,7 @@ var MOSTRAR_PRECIOS=true;    // true = muestra la sección de planes y precios; 
     var p=document.createElement('div'); p.className='player';
     var e=embed(v.url);
     if(e&&e.t==='i'){ var f=document.createElement('iframe'); f.src=e.s; f.loading='lazy'; f.allow='accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen'; f.allowFullscreen=true; f.title=v.titulo; p.appendChild(f); }
-    else if(e&&e.t==='v'){ var vi=document.createElement('video'); vi.src=e.s; vi.controls=true; vi.preload='metadata'; vi.playsInline=true; p.appendChild(vi); }
+    else if(e&&e.t==='v'){ var vi=document.createElement('video'); vi.src=e.s; vi.controls=true; vi.preload='metadata'; vi.playsInline=true; if(v.poster) vi.poster=v.poster; p.appendChild(vi); }
     else { p.innerHTML='<div class="ph"><div class="play">▶</div>Tu video acá</div>'; }
     var t=document.createElement('div'); t.className='txt';
     var h=document.createElement('h3'); h.textContent=v.titulo;
