@@ -7,7 +7,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RodeoFlow v3 – Gestión Ganadera</title>
+<title>Rodeo Flow · Software de gestión ganadera para cría y engorde</title>
+<meta name="description" content="Rodeo Flow: sistema de gestión ganadera para productores argentinos. Hacienda, balanza y RFID, sanidad, reproducción, genómica, potreros y rentabilidad. Funciona sin señal. Probalo 30 días gratis.">
+<link rel="canonical" href="https://rodeoflow.com.ar/inicio.html">
 
 <!-- ═══ PWA / Modo Offline ═══ -->
 <link rel="manifest" href="manifest.json">
@@ -15,6 +17,16 @@
 <script>
 // Si la app se carga dentro de otra página (clickjacking: engañar para que toquen "Aprobar" sin verlo), se oculta y se abre sola
 if (window.top !== window.self) { document.documentElement.style.display = 'none'; try { window.top.location = window.self.location; } catch (e) {} }
+</script>
+<script>
+// Visitante nuevo (y buscadores) que entra por la raíz: se lo lleva a la web de presentación. La app abre directo si está instalada, ya se usó en este navegador o se entra con ?app=1 / ?demo=1.
+(function(){ try {
+  var instalada = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  var yaUsada = !!localStorage.getItem('rf_device_id') || !!localStorage.getItem('rf_app_usada');
+  var conParametros = location.search.length > 1 || location.hash.length > 1;
+  if (!instalada && !yaUsada && !conParametros && /\/(index\.html)?$/.test(location.pathname)) { location.replace('inicio.html'); }
+  else if (conParametros && /(^|[?&])app=1/.test(location.search)) { localStorage.setItem('rf_app_usada','1'); }
+} catch(e) {} })();
 </script>
 <meta name="theme-color" content="#0e1117">
 <meta name="mobile-web-app-capable" content="yes">
@@ -16695,7 +16707,7 @@ function initBaston() {
 
 // ─── VERSIÓN DE LA APP + AVISO DE VERSIÓN NUEVA ───
 // Cambiar este valor en cada publicación: los dispositivos con una copia vieja (tablet, celular, app instalada) lo detectan y ofrecen actualizar.
-const RF_VERSION = '2026-11-25.2';
+const RF_VERSION = '2026-11-27.1';
 console.log('RodeoFlow versión', RF_VERSION);
 let _rfUltimaBusqueda = 0;
 async function rfBuscarActualizacion(){
